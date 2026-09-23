@@ -14,6 +14,12 @@ test('local HTTP API restricts origin, host and inputs and has no broker endpoin
     const home=await fetch(base+'/');assert.equal(home.status,200);assert.match(await home.text(),/EDUCATIONAL SIMULATION/);
     const state=await (await fetch(base+'/api/state')).json();assert.equal(state.cursor,29);assert.equal(state.mode,'SYNTHETIC_ONLY');
     assert.equal((await fetch(base+'/api/broker/orders')).status,404);
+    const researchPage=await fetch(base+'/research.html');
+    assert.equal(researchPage.status,200);
+    assert.match(await researchPage.text(),/UNVERIFIED DATA/);
+    assert.equal((await fetch(base+'/research-core.mjs')).status,200);
+    assert.equal((await fetch(base+'/research.js')).status,200);
+    assert.equal((await fetch(base+'/api/upload')).status,404);
     const badOrigin=await fetch(base+'/api/step',{method:'POST',headers:{'Content-Type':'application/json','Origin':'https://evil.example'},body:'{}'});assert.equal(badOrigin.status,403);
     const missingOrigin=await fetch(base+'/api/step',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});assert.equal(missingOrigin.status,403);
     const invalid=await fetch(base+'/api/run',{method:'POST',headers:{'Content-Type':'application/json','Origin':base},body:JSON.stringify({count:100})});assert.equal(invalid.status,400);
