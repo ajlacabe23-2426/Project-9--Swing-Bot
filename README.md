@@ -22,6 +22,16 @@ Open **http://127.0.0.1:4179** on the same computer. The HTTP server binds to lo
 - Independent whole-scenario in-sample replay on generated data. This is NOT an out-of-sample backtest and has no predictive validity for financial markets.
 - Optional AI-generated synthetic-data commentary is disabled by default and requested only by clicking its button after a provider key is separately configured. API use may incur charges. Model output never decides or dispatches even simulated orders.
 
+## Browser-only uploaded CSV research (experimental)
+
+The synthetic paper dashboard now links to a separate **Historical research lab** at `http://127.0.0.1:4179/research.html`. You may optionally select a local CSV that you are permitted to use. The file is parsed and analyzed in browser memory, with no server upload, model submission or modification of the synthetic paper ledger. File contents are not retained when you reload the page.
+
+Expected header: `date,open,high,low,close,volume`, followed by 100–3000 unique ascending daily weekday rows (ISO date, positive consistent OHLC, integer volume). File size limit: 550 KB. Use raw numeric decimal fields and preserve the data source outside the app. The source field is **self-declared, not verified**. Do not import confidential brokerage statements, customer records or account identifiers.
+
+For a no-data-provider test, run `node scripts/create-example-csv.mjs` and select `.data/example-SYNTHETIC-not-real-market.csv`. Label its declared source as **Project 9 generated synthetic example**. Despite appearing on the historical research page, this sample is invented prices, not real history or evidence of real-market performance.
+
+The lab uses an unoptimized 5/20 moving-average rule. It separates the earlier 70% (in-sample) and later 30% (held-out) observations into independent hypothetical portfolios. The later window uses only earlier completed bars for indicator warmup. Model outputs show simulated fills and returns separately from raw input observations. **A holdout does not validate a dataset's authenticity, predictive quality or ability to earn actual returns.** Price adjustments, splits, dividends, delistings, coverage, corporate actions and user rights are not independently checked. Informational flags identify large gaps and zero-volume sessions. Results stay on the device until the page is closed.
+
 ## Security and verification
 
 Run `npm run check` for syntax checks and the offline unit/HTTP integration suite. GitHub Actions runs the same suite on Node 22. Local Host and Origin checks, bounded JSON, no public broker routes, and ignored local state are starting boundaries, **not** an independent security audit. No real customer or financial records belong in this prototype.
