@@ -3,7 +3,7 @@
  * Browser-only import; never writes data to the paper ledger or a backend.
  * Source and rights declarations are unverified; not investment guidance.
  */
-export const RESEARCH_VERSION='historical-csv-v1';
+export const RESEARCH_VERSION='historical-csv-v2-cost-stress';
 export const MAX_BYTES=550_000,MAX_ROWS=3000,MIN_ROWS=100;
 const money=value=>Math.round(value*1e8)/1e8;
 const pct=value=>Math.round(value*10000)/100;
@@ -81,8 +81,11 @@ function signal(bars,index){
   if(p5>=p20&&n5<n20)return 'EXIT';
   return null;
 }
-export function evaluateSlice(bars,start,end){
-  if(!Array.isArray(bars)||start<20||end>=bars.length||end-start<2)throw new Error('Invalid research window');
+export function evaluateSlice(bars,start,end,{costMultiplier=1}={}){
+  if(!Array.isArray(bars)||!Number.isInteger(start)||!Number.isInteger(end)||start<20||end>=bars.length||end-start<2)
+    throw new Error('Invalid research window');
+  if(![1,2,4].includes(costMultiplier))throw new Error('Invalid modeled cost multiplier');
+  const feeRate=0.001*costMultiplier,slippage=0.0005*costMultiplier,minFee=0.5*costMultiplier;
   let cash=10_000,units=0,pending=null,peak=10_000,drawdown=0;
   let paidFees=0,blocked=0;const fills=[],curve=[];
   for(let i=start;i<=end;i++){
@@ -91,15 +94,15 @@ export function evaluateSlice(bars,start,end){
       const prior=pending;pending=null;
       if(bar.volume===0){blocked++;}
       else if(prior.side==='ENTER'&&units===0){
-        const fill=bar.open*1.0005,notionalLimit=Math.min(cash*0.1,cash*0.25);
-        const preliminaryFee=Math.max(0.5,notionalLimit*0.001);
+        const fill=bar.open*(1+slippage),notionalLimit=Math.min(cash*0.1,cash*0.25);
+        const preliminaryFee=Math.max(minFee,notionalLimit*feeRate);
         const quantity=Math.floor((notionalLimit-preliminaryFee)/fill*1000)/1000;
-        const notional=quantity*fill,fee=Math.max(0.5,notional*0.001);
+        const notional=quantity*fill,fee=Math.max(minFee,notional*feeRate);
         if(quantity>0&&notional+fee<=cash){cash=money(cash-notional-fee);units=quantity;paidFees+=fee;
           fills.push({kind:'SIMULATED_BUY',signalDate:prior.date,fillDate:bar.date,quantity,price:money(fill),fee:money(fee)});}
         else blocked++;
       }else if(prior.side==='EXIT'&&units>0){
-        const fill=bar.open*0.9995,quantity=units,fee=Math.max(0.5,quantity*fill*0.001);
+        const fill=bar.open*(1-slippage),quantity=units,fee=Math.max(minFee,quantity*fill*feeRate);
         cash=money(cash+quantity*fill-fee);paidFees+=fee;units=0;
         fills.push({kind:'SIMULATED_SELL',signalDate:prior.date,fillDate:bar.date,quantity,price:money(fill),fee:money(fee)});
       }
@@ -116,7 +119,8 @@ export function evaluateSlice(bars,start,end){
     simulatedEndValue:money(value),simulatedReturnPct:pct(value/10_000-1),
     comparisonReturnPct:pct(benchmark/10_000-1),simulatedMaxDrawdownPct:pct(drawdown),
     simulatedFees:money(paidFees),fillCount:fills.length,blockedCount:blocked,
-    openUnits:units,markToMarket:true,fills,curve};
+    openUnits:units,markToMarket:true,
+    modelCosts:{multiplier:costMultiplier,feeRate,slippage,minFee},fills,curve};
 }
 export function analyzeHistoricalResearch({bars,warnings,kind},source){
   if(kind!=='USER_SUPPLIED_UNVERIFIED_CSV'||!Array.isArray(bars)||bars.length<MIN_ROWS||bars.length>MAX_ROWS)
@@ -126,12 +130,14 @@ export function analyzeHistoricalResearch({bars,warnings,kind},source){
   const cut=Math.floor(bars.length*.7);
   if(cut<30||bars.length-cut<20)throw new Error('Dataset is too short for a separate holdout');
   const train=evaluateSlice(bars,20,cut-1),holdout=evaluateSlice(bars,cut,bars.length-1);
+  const holdoutStress=[2,4].map(multiplier=>({multiplier,...evaluateSlice(bars,cut,bars.length-1,{costMultiplier:multiplier})}));
   return {engine:RESEARCH_VERSION,mode:'UPLOADED_UNVERIFIED_HISTORICAL_CSV',sourceDeclaredByUser:source.trim(),
-    fileNeverSentToServer:true,split:'CHRONOLOGICAL_70_30_FIXED',train,holdout,rows:bars.length,
+    fileNeverSentToServer:true,split:'CHRONOLOGICAL_70_30_FIXED',train,holdout,holdoutStress,rows:bars.length,
     earliest:bars[0].date,latest:bars.at(-1).date,warnings,
     limitations:['Historical bars supplied by a user are not authenticated or independently verified.',
       'Strategy uses fixed 5/20 crossover rules; no optimization or selection of the holdout.',
       'Holdout simulates a fresh paper portfolio at the partition date, using earlier completed bars for moving-average warmup.',
       'Next-open fills are modeled at available OHLC prices with fixed costs. Market impact, order book and execution uncertainty are not reproduced.',
+      'The 2× and 4× modeled-cost stress runs replay the same fixed rule on the same held-out dates with independent virtual balances. They are not confidence intervals, predictions or independently verified execution prices.',
       'Unadjusted data may misstate performance around splits and dividends; this is not evidence of attainable real returns.']};
 }
