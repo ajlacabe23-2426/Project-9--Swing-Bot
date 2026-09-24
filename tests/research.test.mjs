@@ -89,7 +89,8 @@ test('held-out cost stress keeps the strategy and time boundary fixed while chan
     assert.equal(stress.modelCosts.feeRate,result.holdout.modelCosts.feeRate*stress.multiplier);
     assert.equal(stress.modelCosts.slippage,result.holdout.modelCosts.slippage*stress.multiplier);
     assert.equal(stress.modelCosts.minFee,result.holdout.modelCosts.minFee*stress.multiplier);
-    assert.deepEqual(stress,evaluateSlice(dataset.bars,133,189,{costMultiplier:stress.multiplier}));
+    const {multiplier,...metrics}=stress;
+    assert.deepEqual(metrics,evaluateSlice(dataset.bars,133,189,{costMultiplier:multiplier}));
     for(const fill of stress.fills){
       assert.ok(fill.signalDate<fill.fillDate);
       assert.ok(fill.fee>=stress.modelCosts.minFee);
