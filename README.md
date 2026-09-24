@@ -30,6 +30,8 @@ Expected header: `date,open,high,low,close,volume`, followed by 100–3000 uniqu
 
 For a no-data-provider test, run `node scripts/create-example-csv.mjs` and select `.data/example-SYNTHETIC-not-real-market.csv`. Label its declared source as **Project 9 generated synthetic example**. Despite appearing on the historical research page, this sample is invented prices, not real history or evidence of real-market performance.
 
+The lab also shows two additional **held-out cost-stress scenarios** with 2× and 4× the base modeled fee, minimum fee and adverse slippage. These are independent replays of the same frozen rule and held-out dates, not confidence intervals or evidence of executable prices. The experiment does not optimize its rule based on any of the three outcomes.
+
 The lab uses an unoptimized 5/20 moving-average rule. It separates the earlier 70% (in-sample) and later 30% (held-out) observations into independent hypothetical portfolios. The later window uses only earlier completed bars for indicator warmup. Model outputs show simulated fills and returns separately from raw input observations. **A holdout does not validate a dataset's authenticity, predictive quality or ability to earn actual returns.** Price adjustments, splits, dividends, delistings, coverage, corporate actions and user rights are not independently checked. Informational flags identify large gaps and zero-volume sessions. Results stay on the device until the page is closed.
 
 ## Security and verification
