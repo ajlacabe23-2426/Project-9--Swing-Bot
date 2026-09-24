@@ -77,6 +77,33 @@ test('warns on gaps and zero trading volume rather than silently treating them a
   const evaluation=analyzeHistoricalResearch(value,'Example dataset');
   assert.ok(evaluation.holdout.simulatedFees>=0);
 });
+test('held-out cost stress keeps the strategy and time boundary fixed while changing only modeled friction',()=>{
+  const dataset=uploaded(),result=analyzeHistoricalResearch(dataset,'Example data');
+  assert.equal(result.engine,'historical-csv-v2-cost-stress');
+  assert.deepEqual(result.holdoutStress.map(s=>s.multiplier),[2,4]);
+  assert.equal(result.holdout.modelCosts.multiplier,1);
+  for(const stress of result.holdoutStress){
+    assert.equal(stress.start,result.holdout.start);
+    assert.equal(stress.end,result.holdout.end);
+    assert.equal(stress.bars,result.holdout.bars);
+    assert.equal(stress.modelCosts.feeRate,result.holdout.modelCosts.feeRate*stress.multiplier);
+    assert.equal(stress.modelCosts.slippage,result.holdout.modelCosts.slippage*stress.multiplier);
+    assert.equal(stress.modelCosts.minFee,result.holdout.modelCosts.minFee*stress.multiplier);
+    assert.deepEqual(stress,evaluateSlice(dataset.bars,133,189,{costMultiplier:stress.multiplier}));
+    for(const fill of stress.fills){
+      assert.ok(fill.signalDate<fill.fillDate);
+      assert.ok(fill.fee>=stress.modelCosts.minFee);
+    }
+  }
+  assert.throws(()=>evaluateSlice(dataset.bars,133,189,{costMultiplier:0}),/cost multiplier/);
+  assert.throws(()=>evaluateSlice(dataset.bars,133.5,189),/Invalid research window/);
+});
+test('later-data changes cannot alter any earlier-period cost-stress calculation',()=>{
+  const before=uploaded().bars,after=structuredClone(before);
+  after[180].close*=0.8;after[180].low=Math.min(after[180].low,after[180].close);
+  for(const costMultiplier of [1,2,4])assert.deepEqual(
+    evaluateSlice(before,20,132,{costMultiplier}),evaluateSlice(after,20,132,{costMultiplier}));
+});
 test('deterministic holdout results are reproducible across independent runs',()=>{
   const dataset=uploaded();
   assert.deepEqual(analyzeHistoricalResearch(dataset,'Example'),analyzeHistoricalResearch(dataset,'Example'));
