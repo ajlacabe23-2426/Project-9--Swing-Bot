@@ -24,7 +24,7 @@ Open **http://127.0.0.1:4179** on the same computer. The HTTP server binds to lo
 
 ## Browser-only uploaded CSV research (experimental)
 
-The synthetic paper dashboard now links to a separate **Historical research lab** at `http://127.0.0.1:4179/research.html`. You may optionally select a local CSV that you are permitted to use. The file is parsed and analyzed in browser memory, with no server upload, model submission or modification of the synthetic paper ledger. File contents are not retained when you reload the page.
+The synthetic paper dashboard now links to a separate **Historical research lab** at `http://127.0.0.1:4179/research.html`. You may optionally select a local CSV that you are permitted to use. The file is parsed and analyzed in browser memory, with no server upload, model submission or modification of the synthetic paper ledger. File contents are not retained when you reload the page. The browser displays a local SHA-256 fingerprint of the imported file bytes so two runs can be compared without sending the file or fingerprint to a server; matching fingerprints do not prove source authenticity or licensing.
 
 Expected header: `date,open,high,low,close,volume`, followed by 100–3000 unique ascending daily weekday rows (ISO date, positive consistent OHLC, integer volume). File size limit: 550 KB. Use raw numeric decimal fields and preserve the data source outside the app. The source field is **self-declared, not verified**. Do not import confidential brokerage statements, customer records or account identifiers.
 
