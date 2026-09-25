@@ -5,6 +5,16 @@
  */
 export const RESEARCH_VERSION='historical-csv-v3-chronological-consistency';
 export const MAX_BYTES=550_000,MAX_ROWS=3000,MIN_ROWS=100;
+/** Stable local-data fingerprint for reproducible research; no upload or storage. */
+export async function datasetFingerprint(csv){
+  if(typeof csv!=='string'||!csv.trim()||new TextEncoder().encode(csv).byteLength>MAX_BYTES)
+    throw new Error('Fingerprint requires a bounded local CSV');
+  if(!globalThis.crypto?.subtle)throw new Error('Local SHA-256 is unavailable in this browser');
+  const bytes=new TextEncoder().encode(csv);
+  const digest=await globalThis.crypto.subtle.digest('SHA-256',bytes);
+  return [...new Uint8Array(digest)].map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
 const money=value=>Math.round(value*1e8)/1e8;
 const pct=value=>Math.round(value*10000)/100;
 const required=['date','open','high','low','close','volume'];
