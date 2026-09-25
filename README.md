@@ -11,7 +11,7 @@ npm run check
 npm start
 ```
 
-Open **http://127.0.0.1:4179** on the same computer. The HTTP server binds to loopback only and checks Host and Origin for state mutations. Do not deploy publicly or behind a reverse proxy: the project is NOT authenticated or multi-tenant. Paper state is stored under `.data/paper.json`, which is Git-ignored. Set `PORT=4180 npm start` for a different local port, or `PROJECT9_DATA_FILE=/absolute/path/to/paper.json npm start` for another local state file. Only run one instance against a state file.
+Open **http://127.0.0.1:4179** on the same computer. The HTTP server binds to loopback only and checks Host and Origin for state mutations. Do not deploy publicly or behind a reverse proxy: the project is NOT authenticated or multi-tenant. Paper state is stored under `.data/paper.json`, which is Git-ignored. Set `PORT=4180 npm start` for a different local port, or `PROJECT9_DATA_FILE=/absolute/path/to/paper.json npm start` for another local state file. Only run one instance against a state file. On restart, the paper ledger is checked against a fresh replay of its fixed synthetic scenario; an inconsistent or corrupt local file prevents startup instead of being silently overwritten. For recovery, preserve a copy of the failed file, restore a previously saved valid copy, and restart. Do not hand-edit virtual cash or simulated fills. This check detects inconsistent local state, not real-world trading or data authenticity.
 
 ## Research features
 
