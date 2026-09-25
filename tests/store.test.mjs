@@ -21,3 +21,25 @@ test('corrupt paper state is rejected instead of silently reset',async()=>{
   try{const file=join(dir,'paper.json');await writeFile(file,'{"version":9000}');await assert.rejects(()=>new PaperStore(file).init(),/Invalid state/);}
   finally{await rm(dir,{recursive:true,force:true});}
 });
+
+test('a plausible but inconsistent persisted ledger fails closed and original data is not overwritten',async()=>{
+  const dir=await mkdtemp(join(tmpdir(),'project9-'));
+  try{
+    const file=join(dir,'paper.json'),store=new PaperStore(file);
+    await store.init();
+    await store.mutate(state=>step(state).state);
+    const original=JSON.parse(await readFile(file,'utf8'));
+    const tampered=structuredClone(original);
+    tampered.cash+=100;
+    await writeFile(file,JSON.stringify(tampered));
+    await assert.rejects(()=>new PaperStore(file).init(),/Invalid state/);
+    assert.deepEqual(JSON.parse(await readFile(file,'utf8')),tampered,'Failed load must never overwrite state');
+    const invented=structuredClone(original);
+    invented.events.push({id:1,date:'2024-01-01',kind:'FILL',message:'Invented event'});
+    await writeFile(file,JSON.stringify(invented));
+    await assert.rejects(()=>new PaperStore(file).init(),/Invalid state/);
+    await writeFile(file,JSON.stringify(original));
+    const restored=new PaperStore(file);await restored.init();
+    assert.deepEqual(restored.state,original,'Valid replay should survive restart');
+  }finally{await rm(dir,{recursive:true,force:true});}
+});
