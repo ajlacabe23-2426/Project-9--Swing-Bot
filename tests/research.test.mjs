@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {generateScenario,initialState,report} from '../src/engine.mjs';
-import {parseHistoricalCsv,analyzeHistoricalResearch,evaluateSlice,MAX_BYTES} from '../public/research-core.mjs';
+import {parseHistoricalCsv,analyzeHistoricalResearch,evaluateSlice,datasetFingerprint,MAX_BYTES} from '../public/research-core.mjs';
 const columns='date,open,high,low,close,volume\n';
 const bars=generateScenario(73,190);
 const csvOf=(rows)=>columns+rows.map(b=>[b.date,b.open,b.high,b.low,b.close,b.volume].join(',')).join('\n')+'\n';
@@ -128,4 +128,14 @@ test('three chronological consistency segments are disjoint, reproducible and de
   later.bars[180].low=Math.min(later.bars[180].low,later.bars[180].close);
   assert.deepEqual(checks[0],analyzeHistoricalResearch(later,'Example synthetic observations').chronologicalChecks[0],
     'A later price must not change an earlier segment');
+});
+
+test('a locally computed SHA-256 fingerprint distinguishes source bytes reproducibly',async()=>{
+  const first=csvOf(bars),second=first.replace(bars[3].date,bars[4].date);
+  const a=await datasetFingerprint(first);
+  assert.match(a,/^[0-9a-f]{64}$/);
+  assert.equal(await datasetFingerprint(first),a);
+  assert.notEqual(await datasetFingerprint(second),a);
+  await assert.rejects(()=>datasetFingerprint(''),/bounded local CSV/);
+  await assert.rejects(()=>datasetFingerprint('x'.repeat(MAX_BYTES+1)),/bounded local CSV/);
 });
