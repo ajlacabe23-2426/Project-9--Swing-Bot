@@ -1,11 +1,12 @@
 import {readFile,mkdir,writeFile,rename} from 'node:fs/promises';
 import {dirname,resolve} from 'node:path';
-import {initialState,VERSION,START_CURSOR} from './engine.mjs';
+import {isDeepStrictEqual} from 'node:util';
+import {initialState,generateScenario,step,VERSION,START_CURSOR} from './engine.mjs';
 // One local process; not a remotely accessible multi-user account database.
 export class PaperStore {
   constructor(file=resolve('.data/paper.json')){this.file=resolve(file);this.state=null;this.queue=Promise.resolve();}
   async init(){
-    try{const state=JSON.parse(await readFile(this.file,'utf8'));if(!isValid(state))throw new Error('Invalid state: refuse to overwrite');this.state=state;}
+    try{const state=JSON.parse(await readFile(this.file,'utf8'));if(!isValid(state)||!matchesDeterministicReplay(state))throw new Error('Invalid state: refuse to overwrite');this.state=state;}
     catch(error){if(error.code!=='ENOENT')throw error;this.state=initialState();await this.save(this.state);}
     return this.state;
   }
@@ -33,4 +34,19 @@ export function isValid(s){
     (s.pending===null||(['ENTER','EXIT'].includes(s.pending?.side)&&typeof s.pending.signalDate==='string'))&&
     Array.isArray(s.trades)&&s.trades.length<=190&&Array.isArray(s.events)&&s.events.length<=380&&
     Array.isArray(s.equity)&&s.equity.length===s.cursor-START_CURSOR+1;
+}
+
+/**
+ * Verify a restored paper ledger against the entire fixed synthetic replay.
+ * A well-formed JSON object can still contain invented cash, trades or equity.
+ * This is a local corruption/tamper check, not evidence of real trading.
+ */
+export function matchesDeterministicReplay(saved){
+  if(!isValid(saved))return false;
+  try{
+    const bars=generateScenario(saved.seed);
+    let expected=initialState(saved.seed);
+    while(expected.cursor<saved.cursor)expected=step(expected,bars).state;
+    return isDeepStrictEqual(saved,expected);
+  }catch{return false;}
 }
