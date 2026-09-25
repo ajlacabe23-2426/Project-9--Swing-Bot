@@ -33,6 +33,7 @@ $('dataset-form').addEventListener('submit',async e=>{
     $('provenance').textContent='DECLARED SOURCE: '+result.sourceDeclaredByUser+' · '+result.rows+' BARS · '+result.earliest+' → '+result.latest+' · '+result.mode+' · FILE STAYS IN YOUR BROWSER';
     metricRows($('training-metrics'),result.train);metricRows($('holdout-metrics'),result.holdout);
     for(const stress of result.holdoutStress)metricRows($('stress-'+stress.multiplier+'x'),stress);
+    for(const check of result.chronologicalChecks)metricRows($('segment-'+check.segment),check);
     $('warnings').replaceChildren();
     for(const message of [...result.warnings,...result.limitations]){
       const item=document.createElement('li');item.textContent=message;$('warnings').append(item);
