@@ -54,9 +54,14 @@ async function request(path,body){
 async function action(path,body){
   if(busy)return;busy=true;$('step').disabled=true;$('run').disabled=true;$('reset').disabled=true;$('experiment-button').disabled=true;
   $('status').textContent='Processing synthetic research session…';
+  let failure=null;
   try{const state=await request(path,body);render(state);$('experiment-result').textContent='Scenario changed. Run the experiment for independent full-replay results.';}
-  catch(error){$('status').textContent='Could not complete local simulation: '+error.message;}
-  finally{busy=false;$('reset').disabled=false;$('experiment-button').disabled=false;if(latest)render(latest);}
+  catch(error){failure=error instanceof Error?error.message:'Unknown local error';}
+  finally{
+    busy=false;$('reset').disabled=false;$('experiment-button').disabled=false;
+    if(latest)render(latest);
+    if(failure)$('status').textContent='Could not complete local simulation: '+failure;
+  }
 }
 $('step').addEventListener('click',()=>action('/api/step',{}));
 $('run').addEventListener('click',()=>action('/api/run',{count:20}));
