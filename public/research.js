@@ -1,4 +1,4 @@
-import {MAX_BYTES,parseHistoricalCsv,analyzeHistoricalResearch} from './research-core.mjs';
+import {MAX_BYTES,parseHistoricalCsv,analyzeHistoricalResearch,datasetFingerprint} from './research-core.mjs';
 const $=id=>document.getElementById(id);
 const format=n=>new Intl.NumberFormat('en-US',{maximumFractionDigits:2,minimumFractionDigits:2}).format(n);
 function metricRows(target,period){
@@ -30,7 +30,8 @@ $('dataset-form').addEventListener('submit',async e=>{
     if(file.size>MAX_BYTES)throw new Error('CSV exceeds 550 KB');
     status.textContent='Validating locally selected CSV…';
     const content=await file.text(),parsed=parseHistoricalCsv(content),result=analyzeHistoricalResearch(parsed,source);
-    $('provenance').textContent='DECLARED SOURCE: '+result.sourceDeclaredByUser+' · '+result.rows+' BARS · '+result.earliest+' → '+result.latest+' · '+result.mode+' · FILE STAYS IN YOUR BROWSER';
+    const fingerprint=await datasetFingerprint(content);
+    $('provenance').textContent='DECLARED SOURCE: '+result.sourceDeclaredByUser+' · '+result.rows+' BARS · '+result.earliest+' → '+result.latest+' · '+result.mode+' · LOCAL SHA-256 '+fingerprint+' · FILE STAYS IN YOUR BROWSER';
     metricRows($('training-metrics'),result.train);metricRows($('holdout-metrics'),result.holdout);
     for(const stress of result.holdoutStress)metricRows($('stress-'+stress.multiplier+'x'),stress);
     for(const check of result.chronologicalChecks)metricRows($('segment-'+check.segment),check);
