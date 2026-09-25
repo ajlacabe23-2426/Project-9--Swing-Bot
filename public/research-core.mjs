@@ -3,7 +3,7 @@
  * Browser-only import; never writes data to the paper ledger or a backend.
  * Source and rights declarations are unverified; not investment guidance.
  */
-export const RESEARCH_VERSION='historical-csv-v2-cost-stress';
+export const RESEARCH_VERSION='historical-csv-v3-chronological-consistency';
 export const MAX_BYTES=550_000,MAX_ROWS=3000,MIN_ROWS=100;
 const money=value=>Math.round(value*1e8)/1e8;
 const pct=value=>Math.round(value*10000)/100;
@@ -131,13 +131,23 @@ export function analyzeHistoricalResearch({bars,warnings,kind},source){
   if(cut<30||bars.length-cut<20)throw new Error('Dataset is too short for a separate holdout');
   const train=evaluateSlice(bars,20,cut-1),holdout=evaluateSlice(bars,cut,bars.length-1);
   const holdoutStress=[2,4].map(multiplier=>({multiplier,...evaluateSlice(bars,cut,bars.length-1,{costMultiplier:multiplier})}));
+  // Three nonoverlapping chronological segments provide a descriptive stability check.
+  // Each starts with independent paper cash; prior completed bars are used only for indicator warmup.
+  // This is NOT a third held-out experiment, statistical confidence bound, or evidence of profitability.
+  const available=bars.length-20;
+  const boundaries=[20,20+Math.floor(available/3),20+Math.floor(available*2/3),bars.length];
+  const chronologicalChecks=boundaries.slice(0,3).map((start,index)=>({
+    segment:index+1,
+    ...evaluateSlice(bars,start,boundaries[index+1]-1)
+  }));
   return {engine:RESEARCH_VERSION,mode:'UPLOADED_UNVERIFIED_HISTORICAL_CSV',sourceDeclaredByUser:source.trim(),
-    fileNeverSentToServer:true,split:'CHRONOLOGICAL_70_30_FIXED',train,holdout,holdoutStress,rows:bars.length,
+    fileNeverSentToServer:true,split:'CHRONOLOGICAL_70_30_FIXED',train,holdout,holdoutStress,chronologicalChecks,rows:bars.length,
     earliest:bars[0].date,latest:bars.at(-1).date,warnings,
     limitations:['Historical bars supplied by a user are not authenticated or independently verified.',
       'Strategy uses fixed 5/20 crossover rules; no optimization or selection of the holdout.',
       'Holdout simulates a fresh paper portfolio at the partition date, using earlier completed bars for moving-average warmup.',
       'Next-open fills are modeled at available OHLC prices with fixed costs. Market impact, order book and execution uncertainty are not reproduced.',
+      'Three nonoverlapping chronological consistency segments use independent hypothetical balances; prior completed bars may warm up indicators. They are descriptive checks, not independent market regimes, statistical validation, or additional untouched holdouts.',
       'The 2× and 4× modeled-cost stress runs replay the same fixed rule on the same held-out dates with independent virtual balances. They are not confidence intervals, predictions or independently verified execution prices.',
       'Unadjusted data may misstate performance around splits and dividends; this is not evidence of attainable real returns.']};
 }
