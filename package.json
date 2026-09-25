@@ -1,0 +1,15 @@
+{
+  "name": "project-9-research-lab",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node --watch server.mjs",
+    "test": "node --test",
+    "check": "node --check server.mjs && node --check src/engine.mjs && node --check src/store.mjs && node --check src/ai.mjs && node --check public/app.js && node --check public/research-core.mjs && node --check public/research.js && node --test"
+  }
+}
