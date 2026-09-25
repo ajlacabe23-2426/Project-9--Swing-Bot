@@ -79,7 +79,7 @@ test('warns on gaps and zero trading volume rather than silently treating them a
 });
 test('held-out cost stress keeps the strategy and time boundary fixed while changing only modeled friction',()=>{
   const dataset=uploaded(),result=analyzeHistoricalResearch(dataset,'Example data');
-  assert.equal(result.engine,'historical-csv-v2-cost-stress');
+  assert.equal(result.engine,'historical-csv-v3-chronological-consistency');
   assert.deepEqual(result.holdoutStress.map(s=>s.multiplier),[2,4]);
   assert.equal(result.holdout.modelCosts.multiplier,1);
   for(const stress of result.holdoutStress){
@@ -108,4 +108,24 @@ test('later-data changes cannot alter any earlier-period cost-stress calculation
 test('deterministic holdout results are reproducible across independent runs',()=>{
   const dataset=uploaded();
   assert.deepEqual(analyzeHistoricalResearch(dataset,'Example'),analyzeHistoricalResearch(dataset,'Example'));
+});
+
+test('three chronological consistency segments are disjoint, reproducible and descriptive only',()=>{
+  const data=uploaded(),result=analyzeHistoricalResearch(data,'Example synthetic observations');
+  const checks=result.chronologicalChecks;
+  assert.deepEqual(checks.map(c=>c.segment),[1,2,3]);
+  assert.equal(checks[0].start,bars[20].date);
+  assert.equal(checks[2].end,bars.at(-1).date);
+  assert.ok(result.limitations.some(s=>s.includes('not independent market regimes')));
+  for(let i=0;i<checks.length;i++){
+    assert.ok(checks[i].bars>=3);
+    assert.ok(checks[i].simulatedEndValue>=0);
+    if(i)assert.ok(checks[i-1].end<checks[i].start,'Segments overlap');
+  }
+  assert.deepEqual(checks,analyzeHistoricalResearch(data,'Example synthetic observations').chronologicalChecks);
+  const later=structuredClone(data);
+  later.bars[180].close*=0.9;
+  later.bars[180].low=Math.min(later.bars[180].low,later.bars[180].close);
+  assert.deepEqual(checks[0],analyzeHistoricalResearch(later,'Example synthetic observations').chronologicalChecks[0],
+    'A later price must not change an earlier segment');
 });
