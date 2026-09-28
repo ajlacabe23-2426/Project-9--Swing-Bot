@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {generateScenario,initialState,report} from '../src/engine.mjs';
-import {parseHistoricalCsv,analyzeHistoricalResearch,evaluateSlice,datasetFingerprint,buildExperimentManifest,MAX_BYTES} from '../public/research-core.mjs';
+import {parseHistoricalCsv,analyzeHistoricalResearch,evaluateSlice,datasetFingerprint,buildExperimentManifest,summarizeDataQuality,MAX_BYTES} from '../public/research-core.mjs';
 const columns='date,open,high,low,close,volume\n';
 const bars=generateScenario(73,190);
 const csvOf=(rows)=>columns+rows.map(b=>[b.date,b.open,b.high,b.low,b.close,b.volume].join(',')).join('\n')+'\n';
@@ -11,6 +11,8 @@ test('parses only complete ordered OHLCV and attaches unverified provenance',()=
   assert.equal(value.kind,'USER_SUPPLIED_UNVERIFIED_CSV');
   assert.equal(value.bars.length,190);
   assert.equal(value.priceAdjustment,'UNKNOWN');
+  assert.equal(value.dataQuality.observedBars,190);
+  assert.equal(value.dataQuality.zeroVolumeBars,0);
   assert.match(value.warnings.join(' '),/cannot be independently verified/);
 });
 test('training and later holdout are disjoint with fixed chronological boundary',()=>{
@@ -77,9 +79,22 @@ test('warns on gaps and zero trading volume rather than silently treating them a
   const evaluation=analyzeHistoricalResearch(value,'Example dataset');
   assert.ok(evaluation.holdout.simulatedFees>=0);
 });
+
+test('data-quality summary is deterministic and follows the imported observations',()=>{
+  const data=structuredClone(bars);data.splice(80,6);data[10].volume=0;
+  data[20].open=data[19].close*1.4;data[20].high=Math.max(data[20].high,data[20].open,data[20].close);
+  const parsed=parseHistoricalCsv(csvOf(data)),quality=parsed.dataQuality;
+  assert.deepEqual(quality,summarizeDataQuality(parsed.bars));
+  assert.equal(quality.observedBars,data.length);
+  assert.equal(quality.zeroVolumeBars,1);
+  assert.ok(quality.multiDayGaps>=1);
+  assert.ok(quality.largeAdjacentOpenGaps>=1);
+  assert.ok(quality.maxCalendarGapDays>5);
+});
+
 test('held-out cost stress keeps the strategy and time boundary fixed while changing only modeled friction',()=>{
   const dataset=uploaded(),result=analyzeHistoricalResearch(dataset,'Example data');
-  assert.equal(result.engine,'historical-csv-v4-reproducible-manifest');
+  assert.equal(result.engine,'historical-csv-v5-data-quality-manifest');
   assert.deepEqual(result.holdoutStress.map(s=>s.multiplier),[2,4]);
   assert.equal(result.holdout.modelCosts.multiplier,1);
   for(const stress of result.holdoutStress){
@@ -149,6 +164,7 @@ test('experiment manifest is deterministic, compact and explicitly non-executabl
   assert.equal(first.dataset.sha256,fingerprint);
   assert.equal(first.dataset.fileIncluded,false);
   assert.equal(first.dataset.independentlyVerified,false);
+  assert.deepEqual(first.dataset.dataQuality,result.dataQuality);
   assert.equal(first.safety.realOrders,false);
   assert.equal(first.safety.brokerageConnected,false);
   assert.equal(first.safety.investmentRecommendation,false);
