@@ -3,7 +3,7 @@
  * Browser-only import; never writes data to the paper ledger or a backend.
  * Source and rights declarations are unverified; not investment guidance.
  */
-export const RESEARCH_VERSION='historical-csv-v3-chronological-consistency';
+export const RESEARCH_VERSION='historical-csv-v4-reproducible-manifest';
 export const MAX_BYTES=550_000,MAX_ROWS=3000,MIN_ROWS=100;
 /** Stable local-data fingerprint for reproducible research; no upload or storage. */
 export async function datasetFingerprint(csv){
@@ -160,4 +160,60 @@ export function analyzeHistoricalResearch({bars,warnings,kind},source){
       'Three nonoverlapping chronological consistency segments use independent hypothetical balances; prior completed bars may warm up indicators. They are descriptive checks, not independent market regimes, statistical validation, or additional untouched holdouts.',
       'The 2× and 4× modeled-cost stress runs replay the same fixed rule on the same held-out dates with independent virtual balances. They are not confidence intervals, predictions or independently verified execution prices.',
       'Unadjusted data may misstate performance around splits and dividends; this is not evidence of attainable real returns.']};
+}
+
+function manifestPeriod(period){
+  return {
+    start:period.start,end:period.end,bars:period.bars,
+    simulatedEndValue:period.simulatedEndValue,
+    simulatedReturnPct:period.simulatedReturnPct,
+    comparisonReturnPct:period.comparisonReturnPct,
+    simulatedMaxDrawdownPct:period.simulatedMaxDrawdownPct,
+    simulatedFees:period.simulatedFees,
+    fillCount:period.fillCount,blockedCount:period.blockedCount,
+    openUnits:period.openUnits,markToMarket:period.markToMarket,
+    modelCosts:{...period.modelCosts}
+  };
+}
+/**
+ * Deterministic, browser-local experiment record. It intentionally excludes raw
+ * bars, curves and individual fills so the record is compact and cannot be
+ * mistaken for redistribution of the source dataset.
+ */
+export function buildExperimentManifest(result,fingerprint){
+  if(!result||result.engine!==RESEARCH_VERSION||!result.fileNeverSentToServer)
+    throw new Error('Invalid research result for manifest');
+  if(typeof fingerprint!=='string'||!/^[0-9a-f]{64}$/.test(fingerprint))
+    throw new Error('Invalid dataset fingerprint');
+  return {
+    schema:'project9-research-manifest-v1',
+    engine:result.engine,
+    mode:result.mode,
+    dataset:{
+      sha256:fingerprint,
+      sourceDeclaredByUser:result.sourceDeclaredByUser,
+      rows:result.rows,earliest:result.earliest,latest:result.latest,
+      independentlyVerified:false,
+      fileIncluded:false
+    },
+    experiment:{
+      split:result.split,
+      development:manifestPeriod(result.train),
+      holdout:manifestPeriod(result.holdout),
+      holdoutCostStress:result.holdoutStress.map(item=>({
+        multiplier:item.multiplier,...manifestPeriod(item)
+      })),
+      chronologicalChecks:result.chronologicalChecks.map(item=>({
+        segment:item.segment,...manifestPeriod(item)
+      }))
+    },
+    warnings:[...result.warnings],
+    limitations:[...result.limitations],
+    safety:{
+      realOrders:false,
+      brokerageConnected:false,
+      investmentRecommendation:false,
+      resultType:'HYPOTHETICAL_SIMULATION'
+    }
+  };
 }
