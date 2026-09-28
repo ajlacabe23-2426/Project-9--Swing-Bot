@@ -1,6 +1,7 @@
-import {MAX_BYTES,parseHistoricalCsv,analyzeHistoricalResearch,datasetFingerprint} from './research-core.mjs';
+import {MAX_BYTES,parseHistoricalCsv,analyzeHistoricalResearch,datasetFingerprint,buildExperimentManifest} from './research-core.mjs';
 const $=id=>document.getElementById(id);
 const format=n=>new Intl.NumberFormat('en-US',{maximumFractionDigits:2,minimumFractionDigits:2}).format(n);
+let currentManifest=null;
 function metricRows(target,period){
   target.replaceChildren();
   const values=[
@@ -23,7 +24,7 @@ function metricRows(target,period){
 $('dataset-form').addEventListener('submit',async e=>{
   e.preventDefault();
   const file=$('csv').files?.[0],source=$('source').value.trim(),status=$('import-status');
-  $('results').hidden=true;
+  $('results').hidden=true;currentManifest=null;$('download-manifest').disabled=true;
   try{
     if(!file)throw new Error('Select a CSV file first');
     if(!$('rights').checked)throw new Error('Confirm you have permission for local research');
@@ -31,6 +32,7 @@ $('dataset-form').addEventListener('submit',async e=>{
     status.textContent='Validating locally selected CSV…';
     const content=await file.text(),parsed=parseHistoricalCsv(content),result=analyzeHistoricalResearch(parsed,source);
     const fingerprint=await datasetFingerprint(content);
+    currentManifest=buildExperimentManifest(result,fingerprint);
     $('provenance').textContent='DECLARED SOURCE: '+result.sourceDeclaredByUser+' · '+result.rows+' BARS · '+result.earliest+' → '+result.latest+' · '+result.mode+' · LOCAL SHA-256 '+fingerprint+' · FILE STAYS IN YOUR BROWSER';
     metricRows($('training-metrics'),result.train);metricRows($('holdout-metrics'),result.holdout);
     for(const stress of result.holdoutStress)metricRows($('stress-'+stress.multiplier+'x'),stress);
@@ -49,7 +51,16 @@ $('dataset-form').addEventListener('submit',async e=>{
     if(result.holdout.fills.length===0){
       const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=5;td.textContent='No hypothetical fills in the held-out window.';tr.append(td);$('holdout-fills').append(tr);
     }
-    $('results').hidden=false;
+    $('results').hidden=false;$('download-manifest').disabled=false;
     status.textContent='Browser-only experiment complete. No file sent to a server or model. No synthetic paper portfolio state changed.';
   }catch(error){status.textContent='Research import rejected: '+(error instanceof Error?error.message:'Unknown error');}
+});
+
+$('download-manifest').addEventListener('click',()=>{
+  if(!currentManifest)return;
+  const blob=new Blob([JSON.stringify(currentManifest,null,2)+'\n'],{type:'application/json'});
+  const url=URL.createObjectURL(blob),link=document.createElement('a');
+  link.href=url;link.download='project9-experiment-'+currentManifest.dataset.sha256.slice(0,12)+'.json';
+  document.body.appendChild(link);link.click();link.remove();
+  URL.revokeObjectURL(url);
 });
