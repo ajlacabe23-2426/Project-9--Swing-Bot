@@ -21,6 +21,20 @@ function metricRows(target,period){
     name.textContent=label;number.textContent=value;row.append(name,number);target.append(row);
   }
 }
+function qualityRows(target,quality){
+  target.replaceChildren();
+  const values=[
+    ['Observed bars',String(quality.observedBars)],
+    ['Multi-day gaps',String(quality.multiDayGaps)],
+    ['Zero-volume bars',String(quality.zeroVolumeBars)],
+    ['Large adjacent open gaps',String(quality.largeAdjacentOpenGaps)],
+    ['Largest calendar gap',String(quality.maxCalendarGapDays)+' days']
+  ];
+  for(const [label,value] of values){
+    const row=document.createElement('div'),name=document.createElement('span'),number=document.createElement('strong');
+    name.textContent=label;number.textContent=value;row.append(name,number);target.append(row);
+  }
+}
 $('dataset-form').addEventListener('submit',async e=>{
   e.preventDefault();
   const file=$('csv').files?.[0],source=$('source').value.trim(),status=$('import-status');
@@ -34,7 +48,7 @@ $('dataset-form').addEventListener('submit',async e=>{
     const fingerprint=await datasetFingerprint(content);
     currentManifest=buildExperimentManifest(result,fingerprint);
     $('provenance').textContent='DECLARED SOURCE: '+result.sourceDeclaredByUser+' · '+result.rows+' BARS · '+result.earliest+' → '+result.latest+' · '+result.mode+' · LOCAL SHA-256 '+fingerprint+' · FILE STAYS IN YOUR BROWSER';
-    metricRows($('training-metrics'),result.train);metricRows($('holdout-metrics'),result.holdout);
+    qualityRows($('quality-metrics'),result.dataQuality);metricRows($('training-metrics'),result.train);metricRows($('holdout-metrics'),result.holdout);
     for(const stress of result.holdoutStress)metricRows($('stress-'+stress.multiplier+'x'),stress);
     for(const check of result.chronologicalChecks)metricRows($('segment-'+check.segment),check);
     $('warnings').replaceChildren();
