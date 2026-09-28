@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {generateScenario,initialState,report} from '../src/engine.mjs';
-import {parseHistoricalCsv,analyzeHistoricalResearch,evaluateSlice,datasetFingerprint,MAX_BYTES} from '../public/research-core.mjs';
+import {parseHistoricalCsv,analyzeHistoricalResearch,evaluateSlice,datasetFingerprint,buildExperimentManifest,MAX_BYTES} from '../public/research-core.mjs';
 const columns='date,open,high,low,close,volume\n';
 const bars=generateScenario(73,190);
 const csvOf=(rows)=>columns+rows.map(b=>[b.date,b.open,b.high,b.low,b.close,b.volume].join(',')).join('\n')+'\n';
@@ -79,7 +79,7 @@ test('warns on gaps and zero trading volume rather than silently treating them a
 });
 test('held-out cost stress keeps the strategy and time boundary fixed while changing only modeled friction',()=>{
   const dataset=uploaded(),result=analyzeHistoricalResearch(dataset,'Example data');
-  assert.equal(result.engine,'historical-csv-v3-chronological-consistency');
+  assert.equal(result.engine,'historical-csv-v4-reproducible-manifest');
   assert.deepEqual(result.holdoutStress.map(s=>s.multiplier),[2,4]);
   assert.equal(result.holdout.modelCosts.multiplier,1);
   for(const stress of result.holdoutStress){
@@ -138,4 +138,23 @@ test('a locally computed SHA-256 fingerprint distinguishes source bytes reproduc
   assert.notEqual(await datasetFingerprint(second),a);
   await assert.rejects(()=>datasetFingerprint(''),/bounded local CSV/);
   await assert.rejects(()=>datasetFingerprint('x'.repeat(MAX_BYTES+1)),/bounded local CSV/);
+});
+
+test('experiment manifest is deterministic, compact and explicitly non-executable',async()=>{
+  const csv=csvOf(bars),parsed=uploaded(),result=analyzeHistoricalResearch(parsed,'Example permitted data');
+  const fingerprint=await datasetFingerprint(csv);
+  const first=buildExperimentManifest(result,fingerprint),second=buildExperimentManifest(result,fingerprint);
+  assert.deepEqual(first,second);
+  assert.equal(first.schema,'project9-research-manifest-v1');
+  assert.equal(first.dataset.sha256,fingerprint);
+  assert.equal(first.dataset.fileIncluded,false);
+  assert.equal(first.dataset.independentlyVerified,false);
+  assert.equal(first.safety.realOrders,false);
+  assert.equal(first.safety.brokerageConnected,false);
+  assert.equal(first.safety.investmentRecommendation,false);
+  assert.equal(first.safety.resultType,'HYPOTHETICAL_SIMULATION');
+  assert.equal('fills' in first.experiment.holdout,false);
+  assert.equal('curve' in first.experiment.holdout,false);
+  assert.equal(JSON.stringify(first).includes(csv.slice(0,80)),false);
+  assert.throws(()=>buildExperimentManifest(result,'not-a-hash'),/fingerprint/);
 });
