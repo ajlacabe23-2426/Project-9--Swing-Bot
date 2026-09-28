@@ -3,7 +3,7 @@
  * Browser-only import; never writes data to the paper ledger or a backend.
  * Source and rights declarations are unverified; not investment guidance.
  */
-export const RESEARCH_VERSION='historical-csv-v4-reproducible-manifest';
+export const RESEARCH_VERSION='historical-csv-v5-data-quality-manifest';
 export const MAX_BYTES=550_000,MAX_ROWS=3000,MIN_ROWS=100;
 /** Stable local-data fingerprint for reproducible research; no upload or storage. */
 export async function datasetFingerprint(csv){
@@ -42,6 +42,27 @@ function cells(csv){
   if(current!==''||row.length){row.push(current);result.push([...row]);}
   return result.filter((r,i)=>i===0||r.some(v=>v.trim()!==''));
 }
+export function summarizeDataQuality(bars){
+  if(!Array.isArray(bars)||bars.length===0)throw new Error('Data-quality summary requires bars');
+  let multiDayGaps=0,zeroVolumeBars=0,largeAdjacentOpenGaps=0,maxCalendarGapDays=0;
+  for(let i=0;i<bars.length;i++){
+    const bar=bars[i];
+    if(bar.volume===0)zeroVolumeBars++;
+    if(i===0)continue;
+    const previous=bars[i-1];
+    const gapDays=(Date.parse(bar.date+'T00:00:00.000Z')-Date.parse(previous.date+'T00:00:00.000Z'))/86400000;
+    maxCalendarGapDays=Math.max(maxCalendarGapDays,gapDays);
+    if(gapDays>5)multiDayGaps++;
+    if(bar.open/previous.close>1.3||bar.open/previous.close<0.7)largeAdjacentOpenGaps++;
+  }
+  return {
+    observedBars:bars.length,
+    multiDayGaps,
+    zeroVolumeBars,
+    largeAdjacentOpenGaps,
+    maxCalendarGapDays
+  };
+}
 export function parseHistoricalCsv(input){
   if(typeof input!=='string'||!input.trim())throw new Error('Provide a nonempty CSV file');
   if(new TextEncoder().encode(input).byteLength>MAX_BYTES)throw new Error('CSV is too large (550 KB maximum)');
@@ -76,7 +97,7 @@ export function parseHistoricalCsv(input){
     previous=day;previousClose=values.close;
     return {date:record.date,...values,volume:Number(record.volume)};
   });
-  return {bars,warnings:[...warnings],kind:'USER_SUPPLIED_UNVERIFIED_CSV',priceAdjustment:'UNKNOWN'};
+  return {bars,warnings:[...warnings],kind:'USER_SUPPLIED_UNVERIFIED_CSV',priceAdjustment:'UNKNOWN',dataQuality:summarizeDataQuality(bars)};
 }
 function mean(bars,end,period){
   if(end-period+1<0)return null;
@@ -132,7 +153,7 @@ export function evaluateSlice(bars,start,end,{costMultiplier=1}={}){
     openUnits:units,markToMarket:true,
     modelCosts:{multiplier:costMultiplier,feeRate,slippage,minFee},fills,curve};
 }
-export function analyzeHistoricalResearch({bars,warnings,kind},source){
+export function analyzeHistoricalResearch({bars,warnings,kind,dataQuality},source){
   if(kind!=='USER_SUPPLIED_UNVERIFIED_CSV'||!Array.isArray(bars)||bars.length<MIN_ROWS||bars.length>MAX_ROWS)
     throw new Error('Invalid imported research dataset');
   if(typeof source!=='string'||source.trim().length<3||source.trim().length>140)
@@ -152,7 +173,7 @@ export function analyzeHistoricalResearch({bars,warnings,kind},source){
   }));
   return {engine:RESEARCH_VERSION,mode:'UPLOADED_UNVERIFIED_HISTORICAL_CSV',sourceDeclaredByUser:source.trim(),
     fileNeverSentToServer:true,split:'CHRONOLOGICAL_70_30_FIXED',train,holdout,holdoutStress,chronologicalChecks,rows:bars.length,
-    earliest:bars[0].date,latest:bars.at(-1).date,warnings,
+    earliest:bars[0].date,latest:bars.at(-1).date,warnings,dataQuality:dataQuality||summarizeDataQuality(bars),
     limitations:['Historical bars supplied by a user are not authenticated or independently verified.',
       'Strategy uses fixed 5/20 crossover rules; no optimization or selection of the holdout.',
       'Holdout simulates a fresh paper portfolio at the partition date, using earlier completed bars for moving-average warmup.',
@@ -194,7 +215,8 @@ export function buildExperimentManifest(result,fingerprint){
       sourceDeclaredByUser:result.sourceDeclaredByUser,
       rows:result.rows,earliest:result.earliest,latest:result.latest,
       independentlyVerified:false,
-      fileIncluded:false
+      fileIncluded:false,
+      dataQuality:{...result.dataQuality}
     },
     experiment:{
       split:result.split,
