@@ -1,0 +1,43 @@
+name: Security monitor
+
+on:
+  pull_request:
+  push:
+  schedule:
+    - cron: "53 11 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-monitor-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repository-security:
+    name: Repository security
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Check out full repository history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Use Node.js 22
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+      - name: Scan reachable history for credential material
+        run: npm run security:secrets
+      - name: Validate repository security baseline
+        run: npm run security:baseline
+      - name: Audit dependency advisories when a lockfile exists
+        shell: bash
+        run: |
+          if [ -f package-lock.json ]; then
+            npm audit --audit-level=high --package-lock-only
+          else
+            echo "No dependency lockfile present; baseline confirms package.json has no dependencies."
+          fi
