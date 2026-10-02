@@ -21,14 +21,21 @@ function metricRows(target,period){
     name.textContent=label;number.textContent=value;row.append(name,number);target.append(row);
   }
 }
-function qualityRows(target,quality){
+function qualityRows(target,quality,readiness){
   target.replaceChildren();
   const values=[
+    ['Research readiness',readiness.status.replaceAll('_',' ')],
     ['Observed bars',String(quality.observedBars)],
+    ['Calendar span',String(quality.calendarSpanDays)+' days'],
+    ['Weekday coverage',format(quality.weekdayCoveragePct)+'%'],
     ['Multi-day gaps',String(quality.multiDayGaps)],
     ['Zero-volume bars',String(quality.zeroVolumeBars)],
     ['Large adjacent open gaps',String(quality.largeAdjacentOpenGaps)],
-    ['Largest calendar gap',String(quality.maxCalendarGapDays)+' days']
+    ['Close-return outliers (>20%)',String(quality.closeReturnOutliers)],
+    ['Extreme intraday ranges (>30%)',String(quality.extremeIntradayRanges)],
+    ['Flat close transitions',String(quality.flatCloseTransitions)],
+    ['Largest calendar gap',String(quality.maxCalendarGapDays)+' days'],
+    ['Review reasons',readiness.reviewReasons.length?readiness.reviewReasons.join(', '):'None from structural checks']
   ];
   for(const [label,value] of values){
     const row=document.createElement('div'),name=document.createElement('span'),number=document.createElement('strong');
@@ -37,18 +44,25 @@ function qualityRows(target,quality){
 }
 $('dataset-form').addEventListener('submit',async e=>{
   e.preventDefault();
-  const file=$('csv').files?.[0],source=$('source').value.trim(),status=$('import-status');
+  const file=$('csv').files?.[0],status=$('import-status');
+  const provenance={
+    source:$('source').value.trim(),
+    instrument:$('instrument').value.trim(),
+    currency:$('currency').value.trim(),
+    priceAdjustment:$('price-adjustment').value,
+    asOfDate:$('source-as-of').value
+  };
   $('results').hidden=true;currentManifest=null;$('download-manifest').disabled=true;
   try{
     if(!file)throw new Error('Select a CSV file first');
     if(!$('rights').checked)throw new Error('Confirm you have permission for local research');
     if(file.size>MAX_BYTES)throw new Error('CSV exceeds 550 KB');
     status.textContent='Validating locally selected CSV…';
-    const content=await file.text(),parsed=parseHistoricalCsv(content),result=analyzeHistoricalResearch(parsed,source);
+    const content=await file.text(),parsed=parseHistoricalCsv(content),result=analyzeHistoricalResearch(parsed,provenance);
     const fingerprint=await datasetFingerprint(content);
     currentManifest=buildExperimentManifest(result,fingerprint);
-    $('provenance').textContent='DECLARED SOURCE: '+result.sourceDeclaredByUser+' · '+result.rows+' BARS · '+result.earliest+' → '+result.latest+' · '+result.mode+' · LOCAL SHA-256 '+fingerprint+' · FILE STAYS IN YOUR BROWSER';
-    qualityRows($('quality-metrics'),result.dataQuality);metricRows($('training-metrics'),result.train);metricRows($('holdout-metrics'),result.holdout);
+    $('provenance').textContent='DECLARED SOURCE: '+result.sourceDeclaredByUser+' · INSTRUMENT '+result.instrumentDeclaredByUser+' · '+result.currencyDeclaredByUser+' · ADJUSTMENT '+result.priceAdjustmentDeclaredByUser+' · SOURCE AS OF '+result.sourceAsOfDate+' · '+result.rows+' BARS · '+result.earliest+' → '+result.latest+' · '+result.mode+' · LOCAL SHA-256 '+fingerprint+' · FILE STAYS IN YOUR BROWSER';
+    qualityRows($('quality-metrics'),result.dataQuality,result.researchReadiness);metricRows($('training-metrics'),result.train);metricRows($('holdout-metrics'),result.holdout);
     for(const stress of result.holdoutStress)metricRows($('stress-'+stress.multiplier+'x'),stress);
     for(const check of result.chronologicalChecks)metricRows($('segment-'+check.segment),check);
     $('warnings').replaceChildren();
