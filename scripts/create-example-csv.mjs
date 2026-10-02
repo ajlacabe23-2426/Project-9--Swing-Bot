@@ -1,0 +1,10 @@
+import {mkdir,writeFile} from 'node:fs/promises';
+import {resolve} from 'node:path';
+import {generateScenario} from '../src/engine.mjs';
+const output=resolve('.data','example-SYNTHETIC-not-real-market.csv');
+const fields=['date','open','high','low','close','volume'];
+const rows=generateScenario(73,190);
+await mkdir(resolve('.data'),{recursive:true,mode:0o700});
+await writeFile(output,[fields.join(','),...rows.map(bar=>fields.map(key=>bar[key]).join(','))].join('\n')+'\n',{mode:0o600});
+console.log('Created an entirely synthetic example CSV at '+output);
+console.log('In the lab, enter source: Project 9 generated synthetic example. Never present these figures as actual historical market data.');
