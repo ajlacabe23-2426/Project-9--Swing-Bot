@@ -122,7 +122,7 @@ export function parseHistoricalCsv(input){
   if(header.length!==required.length||new Set(header).size!==required.length||required.some(k=>!header.includes(k)))
     throw new Error('CSV headers must contain exactly date,open,high,low,close,volume');
   let previous=null,previousClose=null;
-  const warnings=new Set(['User-supplied source, licensing and price adjustments cannot be independently verified.','Raw OHLC prices may omit splits, dividends, delistings and other corporate actions.']);
+  const warnings=new Set(['User-supplied source, licensing, instrument identity and adjustment declarations cannot be independently verified.']);
   const bars=rows.slice(1).map((row,index)=>{
     const line=index+2;
     if(row.length!==header.length)throw new Error('Line '+line+': wrong number of CSV fields');
@@ -225,6 +225,8 @@ export function analyzeHistoricalResearch({bars,warnings,kind,dataQuality},prove
   const provenanceWarnings=[];
   if(provenance.priceAdjustmentDeclaredByUser==='UNKNOWN')provenanceWarnings.push('Price-adjustment status is unknown; splits and distributions may distort both the strategy and the comparison return.');
   if(provenance.priceAdjustmentDeclaredByUser==='RAW_UNADJUSTED')provenanceWarnings.push('Prices are declared raw/unadjusted; corporate actions can create discontinuities that are not investment returns.');
+  if(provenance.priceAdjustmentDeclaredByUser==='VENDOR_ADJUSTED')provenanceWarnings.push('Prices are declared vendor-adjusted, but the adjustment methodology and corporate-action coverage are not independently verified.');
+  if(researchReadiness.status==='REVIEW_REQUIRED')provenanceWarnings.push('Structural data review required before interpreting simulated results: '+researchReadiness.reviewReasons.join(', ')+'.');
   return {engine:RESEARCH_VERSION,mode:'UPLOADED_UNVERIFIED_HISTORICAL_CSV',...provenance,
     provenance,fileNeverSentToServer:true,split:'CHRONOLOGICAL_70_30_FIXED',train,holdout,holdoutStress,chronologicalChecks,rows:bars.length,
     earliest:bars[0].date,latest:bars.at(-1).date,warnings:[...warnings,...provenanceWarnings],dataQuality:quality,researchReadiness,
