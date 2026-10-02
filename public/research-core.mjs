@@ -3,7 +3,7 @@
  * Browser-only import; never writes data to the paper ledger or a backend.
  * Source and rights declarations are unverified; not investment guidance.
  */
-export const RESEARCH_VERSION='historical-csv-v5-data-quality-manifest';
+export const RESEARCH_VERSION='historical-csv-v6-data-contract';
 export const MAX_BYTES=550_000,MAX_ROWS=3000,MIN_ROWS=100;
 /** Stable local-data fingerprint for reproducible research; no upload or storage. */
 export async function datasetFingerprint(csv){
@@ -18,6 +18,9 @@ export async function datasetFingerprint(csv){
 const money=value=>Math.round(value*1e8)/1e8;
 const pct=value=>Math.round(value*10000)/100;
 const required=['date','open','high','low','close','volume'];
+export const PRICE_ADJUSTMENT_STATUSES=['UNKNOWN','RAW_UNADJUSTED','VENDOR_ADJUSTED'];
+const instrumentPattern=/^[A-Z0-9][A-Z0-9._-]{0,31}$/;
+const currencyPattern=/^[A-Z]{3}$/;
 const exactDay=text=>{
   if(!/^\d{4}-\d{2}-\d{2}$/.test(text))return null;
   const parsed=new Date(text+'T00:00:00.000Z');
@@ -45,22 +48,69 @@ function cells(csv){
 export function summarizeDataQuality(bars){
   if(!Array.isArray(bars)||bars.length===0)throw new Error('Data-quality summary requires bars');
   let multiDayGaps=0,zeroVolumeBars=0,largeAdjacentOpenGaps=0,maxCalendarGapDays=0;
+  let closeReturnOutliers=0,extremeIntradayRanges=0,flatCloseTransitions=0;
+  const firstDay=Date.parse(bars[0].date+'T00:00:00.000Z');
+  const lastDay=Date.parse(bars.at(-1).date+'T00:00:00.000Z');
+  let expectedWeekdays=0;
+  for(let day=firstDay;day<=lastDay;day+=86400000){
+    const weekday=new Date(day).getUTCDay();
+    if(weekday!==0&&weekday!==6)expectedWeekdays++;
+  }
   for(let i=0;i<bars.length;i++){
     const bar=bars[i];
     if(bar.volume===0)zeroVolumeBars++;
+    if(bar.high/bar.low>1.3)extremeIntradayRanges++;
     if(i===0)continue;
     const previous=bars[i-1];
     const gapDays=(Date.parse(bar.date+'T00:00:00.000Z')-Date.parse(previous.date+'T00:00:00.000Z'))/86400000;
     maxCalendarGapDays=Math.max(maxCalendarGapDays,gapDays);
     if(gapDays>5)multiDayGaps++;
     if(bar.open/previous.close>1.3||bar.open/previous.close<0.7)largeAdjacentOpenGaps++;
+    if(Math.abs(bar.close/previous.close-1)>0.2)closeReturnOutliers++;
+    if(bar.close===previous.close)flatCloseTransitions++;
   }
   return {
     observedBars:bars.length,
+    calendarSpanDays:Math.round((lastDay-firstDay)/86400000)+1,
+    expectedWeekdays,
+    weekdayCoveragePct:pct(bars.length/Math.max(expectedWeekdays,1)),
     multiDayGaps,
     zeroVolumeBars,
     largeAdjacentOpenGaps,
+    closeReturnOutliers,
+    extremeIntradayRanges,
+    flatCloseTransitions,
     maxCalendarGapDays
+  };
+}
+
+export function normalizeResearchProvenance(input,latestDate){
+  if(!input||typeof input!=='object')throw new Error('Research provenance is required');
+  const source=String(input.source??'').trim();
+  const instrument=String(input.instrument??'').trim().toUpperCase();
+  const currency=String(input.currency??'').trim().toUpperCase();
+  const priceAdjustment=String(input.priceAdjustment??'').trim().toUpperCase();
+  const asOfDate=String(input.asOfDate??'').trim();
+  if(source.length<3||source.length>140)throw new Error('A source label of 3–140 characters is required');
+  if(!instrumentPattern.test(instrument))throw new Error('Instrument label must be 1–32 uppercase letters, numbers, dot, dash or underscore');
+  if(!currencyPattern.test(currency))throw new Error('Currency must be a 3-letter code');
+  if(!PRICE_ADJUSTMENT_STATUSES.includes(priceAdjustment))throw new Error('Price adjustment status is required');
+  if(!exactDay(asOfDate))throw new Error('Source as-of date must be YYYY-MM-DD');
+  if(latestDate&&asOfDate<latestDate)throw new Error('Source as-of date cannot be earlier than the latest imported bar');
+  return {sourceDeclaredByUser:source,instrumentDeclaredByUser:instrument,currencyDeclaredByUser:currency,priceAdjustmentDeclaredByUser:priceAdjustment,sourceAsOfDate:asOfDate,independentlyVerified:false};
+}
+
+export function assessResearchReadiness(dataQuality,priceAdjustment){
+  const reviewReasons=[];
+  if(priceAdjustment==='UNKNOWN')reviewReasons.push('PRICE_ADJUSTMENT_UNKNOWN');
+  if(dataQuality.multiDayGaps>0)reviewReasons.push('MULTI_DAY_GAPS');
+  if(dataQuality.zeroVolumeBars>0)reviewReasons.push('ZERO_VOLUME_BARS');
+  if(dataQuality.largeAdjacentOpenGaps>0||dataQuality.closeReturnOutliers>0)reviewReasons.push('PRICE_DISCONTINUITY');
+  if(dataQuality.extremeIntradayRanges>0)reviewReasons.push('EXTREME_INTRADAY_RANGE');
+  if(dataQuality.weekdayCoveragePct<90)reviewReasons.push('LOW_WEEKDAY_COVERAGE');
+  return {
+    status:reviewReasons.length?'REVIEW_REQUIRED':'STRUCTURALLY_CLEAN_UNVERIFIED',
+    reviewReasons
   };
 }
 export function parseHistoricalCsv(input){
@@ -153,11 +203,12 @@ export function evaluateSlice(bars,start,end,{costMultiplier=1}={}){
     openUnits:units,markToMarket:true,
     modelCosts:{multiplier:costMultiplier,feeRate,slippage,minFee},fills,curve};
 }
-export function analyzeHistoricalResearch({bars,warnings,kind,dataQuality},source){
+export function analyzeHistoricalResearch({bars,warnings,kind,dataQuality},provenanceInput){
   if(kind!=='USER_SUPPLIED_UNVERIFIED_CSV'||!Array.isArray(bars)||bars.length<MIN_ROWS||bars.length>MAX_ROWS)
     throw new Error('Invalid imported research dataset');
-  if(typeof source!=='string'||source.trim().length<3||source.trim().length>140)
-    throw new Error('A source label of 3–140 characters is required');
+  const provenance=normalizeResearchProvenance(provenanceInput,bars.at(-1).date);
+  const quality=dataQuality||summarizeDataQuality(bars);
+  const researchReadiness=assessResearchReadiness(quality,provenance.priceAdjustmentDeclaredByUser);
   const cut=Math.floor(bars.length*.7);
   if(cut<30||bars.length-cut<20)throw new Error('Dataset is too short for a separate holdout');
   const train=evaluateSlice(bars,20,cut-1),holdout=evaluateSlice(bars,cut,bars.length-1);
@@ -171,9 +222,12 @@ export function analyzeHistoricalResearch({bars,warnings,kind,dataQuality},sourc
     segment:index+1,
     ...evaluateSlice(bars,start,boundaries[index+1]-1)
   }));
-  return {engine:RESEARCH_VERSION,mode:'UPLOADED_UNVERIFIED_HISTORICAL_CSV',sourceDeclaredByUser:source.trim(),
-    fileNeverSentToServer:true,split:'CHRONOLOGICAL_70_30_FIXED',train,holdout,holdoutStress,chronologicalChecks,rows:bars.length,
-    earliest:bars[0].date,latest:bars.at(-1).date,warnings,dataQuality:dataQuality||summarizeDataQuality(bars),
+  const provenanceWarnings=[];
+  if(provenance.priceAdjustmentDeclaredByUser==='UNKNOWN')provenanceWarnings.push('Price-adjustment status is unknown; splits and distributions may distort both the strategy and the comparison return.');
+  if(provenance.priceAdjustmentDeclaredByUser==='RAW_UNADJUSTED')provenanceWarnings.push('Prices are declared raw/unadjusted; corporate actions can create discontinuities that are not investment returns.');
+  return {engine:RESEARCH_VERSION,mode:'UPLOADED_UNVERIFIED_HISTORICAL_CSV',...provenance,
+    provenance,fileNeverSentToServer:true,split:'CHRONOLOGICAL_70_30_FIXED',train,holdout,holdoutStress,chronologicalChecks,rows:bars.length,
+    earliest:bars[0].date,latest:bars.at(-1).date,warnings:[...warnings,...provenanceWarnings],dataQuality:quality,researchReadiness,
     limitations:['Historical bars supplied by a user are not authenticated or independently verified.',
       'Strategy uses fixed 5/20 crossover rules; no optimization or selection of the holdout.',
       'Holdout simulates a fresh paper portfolio at the partition date, using earlier completed bars for moving-average warmup.',
@@ -207,16 +261,21 @@ export function buildExperimentManifest(result,fingerprint){
   if(typeof fingerprint!=='string'||!/^[0-9a-f]{64}$/.test(fingerprint))
     throw new Error('Invalid dataset fingerprint');
   return {
-    schema:'project9-research-manifest-v1',
+    schema:'project9-research-manifest-v2',
     engine:result.engine,
     mode:result.mode,
     dataset:{
       sha256:fingerprint,
       sourceDeclaredByUser:result.sourceDeclaredByUser,
+      instrumentDeclaredByUser:result.instrumentDeclaredByUser,
+      currencyDeclaredByUser:result.currencyDeclaredByUser,
+      priceAdjustmentDeclaredByUser:result.priceAdjustmentDeclaredByUser,
+      sourceAsOfDate:result.sourceAsOfDate,
       rows:result.rows,earliest:result.earliest,latest:result.latest,
       independentlyVerified:false,
       fileIncluded:false,
-      dataQuality:{...result.dataQuality}
+      dataQuality:{...result.dataQuality},
+      researchReadiness:{status:result.researchReadiness.status,reviewReasons:[...result.researchReadiness.reviewReasons]}
     },
     experiment:{
       split:result.split,
