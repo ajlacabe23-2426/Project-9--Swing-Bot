@@ -3,7 +3,7 @@
  * Browser-only import; never writes data to the paper ledger or a backend.
  * Source and rights declarations are unverified; not investment guidance.
  */
-export const RESEARCH_VERSION='historical-csv-v6-data-contract';
+export const RESEARCH_VERSION='historical-csv-v7-walk-forward';
 export const MAX_BYTES=550_000,MAX_ROWS=3000,MIN_ROWS=100;
 /** Stable local-data fingerprint for reproducible research; no upload or storage. */
 export async function datasetFingerprint(csv){
@@ -48,7 +48,8 @@ function cells(csv){
 export function summarizeDataQuality(bars){
   if(!Array.isArray(bars)||bars.length===0)throw new Error('Data-quality summary requires bars');
   let multiDayGaps=0,zeroVolumeBars=0,largeAdjacentOpenGaps=0,maxCalendarGapDays=0;
-  let closeReturnOutliers=0,extremeIntradayRanges=0,flatCloseTransitions=0;
+  let closeReturnOutliers=0,extremeIntradayRanges=0,flatCloseTransitions=0,duplicateOhlcvTransitions=0;
+  let currentFlatCloseRun=1,longestFlatCloseRun=1;
   const firstDay=Date.parse(bars[0].date+'T00:00:00.000Z');
   const lastDay=Date.parse(bars.at(-1).date+'T00:00:00.000Z');
   let expectedWeekdays=0;
@@ -67,7 +68,9 @@ export function summarizeDataQuality(bars){
     if(gapDays>5)multiDayGaps++;
     if(bar.open/previous.close>1.3||bar.open/previous.close<0.7)largeAdjacentOpenGaps++;
     if(Math.abs(bar.close/previous.close-1)>0.2)closeReturnOutliers++;
-    if(bar.close===previous.close)flatCloseTransitions++;
+    if(bar.open===previous.open&&bar.high===previous.high&&bar.low===previous.low&&bar.close===previous.close&&bar.volume===previous.volume)duplicateOhlcvTransitions++;
+    if(bar.close===previous.close){flatCloseTransitions++;currentFlatCloseRun++;longestFlatCloseRun=Math.max(longestFlatCloseRun,currentFlatCloseRun);}
+    else currentFlatCloseRun=1;
   }
   return {
     observedBars:bars.length,
@@ -80,6 +83,8 @@ export function summarizeDataQuality(bars){
     closeReturnOutliers,
     extremeIntradayRanges,
     flatCloseTransitions,
+    duplicateOhlcvTransitions,
+    longestFlatCloseRun,
     maxCalendarGapDays
   };
 }
@@ -107,6 +112,8 @@ export function assessResearchReadiness(dataQuality,priceAdjustment){
   if(dataQuality.zeroVolumeBars>0)reviewReasons.push('ZERO_VOLUME_BARS');
   if(dataQuality.largeAdjacentOpenGaps>0||dataQuality.closeReturnOutliers>0)reviewReasons.push('PRICE_DISCONTINUITY');
   if(dataQuality.extremeIntradayRanges>0)reviewReasons.push('EXTREME_INTRADAY_RANGE');
+  if(dataQuality.duplicateOhlcvTransitions>0)reviewReasons.push('DUPLICATE_OHLCV_TRANSITION');
+  if(dataQuality.longestFlatCloseRun>=3)reviewReasons.push('STALE_CLOSE_RUN');
   if(dataQuality.weekdayCoveragePct<90)reviewReasons.push('LOW_WEEKDAY_COVERAGE');
   return {
     status:reviewReasons.length?'REVIEW_REQUIRED':'STRUCTURALLY_CLEAN_UNVERIFIED',
@@ -168,6 +175,7 @@ export function evaluateSlice(bars,start,end,{costMultiplier=1}={}){
   if(![1,2,4].includes(costMultiplier))throw new Error('Invalid modeled cost multiplier');
   const feeRate=0.001*costMultiplier,slippage=0.0005*costMultiplier,minFee=0.5*costMultiplier;
   let cash=10_000,units=0,pending=null,peak=10_000,drawdown=0;
+  let comparisonPeak=10_000,comparisonDrawdown=0;
   let paidFees=0,blocked=0;const fills=[],curve=[];
   for(let i=start;i<=end;i++){
     const bar=bars[i];
@@ -189,6 +197,7 @@ export function evaluateSlice(bars,start,end,{costMultiplier=1}={}){
       }
     }
     const value=cash+units*bar.close;peak=Math.max(peak,value);drawdown=Math.min(drawdown,value/peak-1);
+    const comparisonValue=10_000*bar.close/bars[start].close;comparisonPeak=Math.max(comparisonPeak,comparisonValue);comparisonDrawdown=Math.min(comparisonDrawdown,comparisonValue/comparisonPeak-1);
     curve.push({date:bar.date,value:money(value)});
     if(i<end){
       const found=signal(bars,i);
@@ -198,11 +207,36 @@ export function evaluateSlice(bars,start,end,{costMultiplier=1}={}){
   const value=cash+units*bars[end].close,benchmark=bars[end].close/bars[start].close*10_000;
   return {start:bars[start].date,end:bars[end].date,bars:end-start+1,
     simulatedEndValue:money(value),simulatedReturnPct:pct(value/10_000-1),
-    comparisonReturnPct:pct(benchmark/10_000-1),simulatedMaxDrawdownPct:pct(drawdown),
+    comparisonEndValue:money(benchmark),comparisonReturnPct:pct(benchmark/10_000-1),
+    excessReturnVsComparisonPct:pct(value/10_000-benchmark/10_000),
+    simulatedMaxDrawdownPct:pct(drawdown),comparisonMaxDrawdownPct:pct(comparisonDrawdown),
     simulatedFees:money(paidFees),fillCount:fills.length,blockedCount:blocked,
     openUnits:units,markToMarket:true,
     modelCosts:{multiplier:costMultiplier,feeRate,slippage,minFee},fills,curve};
 }
+export function buildWalkForwardEvaluation(bars,developmentEnd,{folds=4}={}){
+  if(!Array.isArray(bars)||!Number.isInteger(developmentEnd)||developmentEnd>=bars.length||developmentEnd<60||!Number.isInteger(folds)||folds<2||folds>6)
+    throw new Error('Invalid walk-forward configuration');
+  const firstEvaluationStart=Math.max(40,Math.floor((developmentEnd+1)*0.45));
+  const available=developmentEnd-firstEvaluationStart+1;
+  if(available<folds*3)throw new Error('Development window is too short for walk-forward evaluation');
+  const baseSize=Math.floor(available/folds),remainder=available%folds;
+  const result=[];let start=firstEvaluationStart;
+  for(let index=0;index<folds;index++){
+    const size=baseSize+(index<remainder?1:0),end=start+size-1;
+    const evaluation=evaluateSlice(bars,start,end);
+    result.push({
+      fold:index+1,
+      trainingStart:bars[0].date,
+      trainingEnd:bars[start-1].date,
+      trainingBars:start,
+      ...evaluation
+    });
+    start=end+1;
+  }
+  return result;
+}
+
 export function analyzeHistoricalResearch({bars,warnings,kind,dataQuality},provenanceInput){
   if(kind!=='USER_SUPPLIED_UNVERIFIED_CSV'||!Array.isArray(bars)||bars.length<MIN_ROWS||bars.length>MAX_ROWS)
     throw new Error('Invalid imported research dataset');
@@ -212,6 +246,7 @@ export function analyzeHistoricalResearch({bars,warnings,kind,dataQuality},prove
   const cut=Math.floor(bars.length*.7);
   if(cut<30||bars.length-cut<20)throw new Error('Dataset is too short for a separate holdout');
   const train=evaluateSlice(bars,20,cut-1),holdout=evaluateSlice(bars,cut,bars.length-1);
+  const walkForward=buildWalkForwardEvaluation(bars,cut-1,{folds:4});
   const holdoutStress=[2,4].map(multiplier=>({multiplier,...evaluateSlice(bars,cut,bars.length-1,{costMultiplier:multiplier})}));
   // Three nonoverlapping chronological segments provide a descriptive stability check.
   // Each starts with independent paper cash; prior completed bars are used only for indicator warmup.
@@ -228,11 +263,12 @@ export function analyzeHistoricalResearch({bars,warnings,kind,dataQuality},prove
   if(provenance.priceAdjustmentDeclaredByUser==='VENDOR_ADJUSTED')provenanceWarnings.push('Prices are declared vendor-adjusted, but the adjustment methodology and corporate-action coverage are not independently verified.');
   if(researchReadiness.status==='REVIEW_REQUIRED')provenanceWarnings.push('Structural data review required before interpreting simulated results: '+researchReadiness.reviewReasons.join(', ')+'.');
   return {engine:RESEARCH_VERSION,mode:'UPLOADED_UNVERIFIED_HISTORICAL_CSV',...provenance,
-    provenance,fileNeverSentToServer:true,split:'CHRONOLOGICAL_70_30_FIXED',train,holdout,holdoutStress,chronologicalChecks,rows:bars.length,
+    provenance,fileNeverSentToServer:true,split:'CHRONOLOGICAL_70_30_FIXED',train,holdout,walkForward,holdoutStress,chronologicalChecks,rows:bars.length,
     earliest:bars[0].date,latest:bars.at(-1).date,warnings:[...warnings,...provenanceWarnings],dataQuality:quality,researchReadiness,
     limitations:['Historical bars supplied by a user are not authenticated or independently verified.',
       'Strategy uses fixed 5/20 crossover rules; no optimization or selection of the holdout.',
       'Holdout simulates a fresh paper portfolio at the partition date, using earlier completed bars for moving-average warmup.',
+      'Four walk-forward folds are confined to the development period. Each uses expanding prior history for context and a fresh virtual balance for the next nonoverlapping evaluation block; the fixed rule is not retuned between folds and the untouched holdout is never used.',
       'Next-open fills are modeled at available OHLC prices with fixed costs. Market impact, order book and execution uncertainty are not reproduced.',
       'Three nonoverlapping chronological consistency segments use independent hypothetical balances; prior completed bars may warm up indicators. They are descriptive checks, not independent market regimes, statistical validation, or additional untouched holdouts.',
       'The 2× and 4× modeled-cost stress runs replay the same fixed rule on the same held-out dates with independent virtual balances. They are not confidence intervals, predictions or independently verified execution prices.',
@@ -244,8 +280,11 @@ function manifestPeriod(period){
     start:period.start,end:period.end,bars:period.bars,
     simulatedEndValue:period.simulatedEndValue,
     simulatedReturnPct:period.simulatedReturnPct,
+    comparisonEndValue:period.comparisonEndValue,
     comparisonReturnPct:period.comparisonReturnPct,
+    excessReturnVsComparisonPct:period.excessReturnVsComparisonPct,
     simulatedMaxDrawdownPct:period.simulatedMaxDrawdownPct,
+    comparisonMaxDrawdownPct:period.comparisonMaxDrawdownPct,
     simulatedFees:period.simulatedFees,
     fillCount:period.fillCount,blockedCount:period.blockedCount,
     openUnits:period.openUnits,markToMarket:period.markToMarket,
@@ -263,7 +302,7 @@ export function buildExperimentManifest(result,fingerprint){
   if(typeof fingerprint!=='string'||!/^[0-9a-f]{64}$/.test(fingerprint))
     throw new Error('Invalid dataset fingerprint');
   return {
-    schema:'project9-research-manifest-v2',
+    schema:'project9-research-manifest-v3',
     engine:result.engine,
     mode:result.mode,
     dataset:{
@@ -283,6 +322,7 @@ export function buildExperimentManifest(result,fingerprint){
       split:result.split,
       development:manifestPeriod(result.train),
       holdout:manifestPeriod(result.holdout),
+      walkForward:result.walkForward.map(item=>({fold:item.fold,trainingStart:item.trainingStart,trainingEnd:item.trainingEnd,trainingBars:item.trainingBars,...manifestPeriod(item)})),
       holdoutCostStress:result.holdoutStress.map(item=>({
         multiplier:item.multiplier,...manifestPeriod(item)
       })),
