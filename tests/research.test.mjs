@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {generateScenario,initialState,report} from '../src/engine.mjs';
-import {parseHistoricalCsv,analyzeHistoricalResearch,evaluateSlice,datasetFingerprint,buildExperimentManifest,summarizeDataQuality,normalizeResearchProvenance,assessResearchReadiness,MAX_BYTES} from '../public/research-core.mjs';
+import {parseHistoricalCsv,analyzeHistoricalResearch,evaluateSlice,buildWalkForwardEvaluation,datasetFingerprint,buildExperimentManifest,summarizeDataQuality,normalizeResearchProvenance,assessResearchReadiness,MAX_BYTES} from '../public/research-core.mjs';
 const columns='date,open,high,low,close,volume\n';
 const bars=generateScenario(73,190);
 const csvOf=(rows)=>columns+rows.map(b=>[b.date,b.open,b.high,b.low,b.close,b.volume].join(',')).join('\n')+'\n';
@@ -42,6 +42,7 @@ test('later-price revisions do not alter earlier experiment results',()=>{
   const before=analyzeHistoricalResearch({kind:'USER_SUPPLIED_UNVERIFIED_CSV',bars:baseline,warnings:[]},provenance({source:'Example export'}));
   const after=analyzeHistoricalResearch({kind:'USER_SUPPLIED_UNVERIFIED_CSV',bars:future,warnings:[]},provenance({source:'Example export'}));
   assert.deepEqual(before.train,after.train);
+  assert.deepEqual(before.walkForward,after.walkForward);
   assert.notEqual(before.holdout.comparisonReturnPct,after.holdout.comparisonReturnPct);
 });
 test('hypothetical fills require the following bar and do not mutate synthetic ledger',()=>{
@@ -102,7 +103,7 @@ test('data-quality summary is deterministic and follows the imported observation
 
 test('held-out cost stress keeps the strategy and time boundary fixed while changing only modeled friction',()=>{
   const dataset=uploaded(),result=analyzeHistoricalResearch(dataset,provenance({source:'Example data'}));
-  assert.equal(result.engine,'historical-csv-v6-data-contract');
+  assert.equal(result.engine,'historical-csv-v7-walk-forward');
   assert.deepEqual(result.holdoutStress.map(s=>s.multiplier),[2,4]);
   assert.equal(result.holdout.modelCosts.multiplier,1);
   for(const stress of result.holdoutStress){
@@ -131,6 +132,54 @@ test('later-data changes cannot alter any earlier-period cost-stress calculation
 test('deterministic holdout results are reproducible across independent runs',()=>{
   const dataset=uploaded();
   assert.deepEqual(analyzeHistoricalResearch(dataset,provenance({source:'Example'})),analyzeHistoricalResearch(dataset,provenance({source:'Example'})));
+});
+
+
+test('walk-forward folds use expanding development history and never enter the untouched holdout',()=>{
+  const dataset=uploaded(),result=analyzeHistoricalResearch(dataset,provenance({source:'Example'}));
+  assert.equal(result.walkForward.length,4);
+  assert.equal(result.walkForward.at(-1).end,result.train.end);
+  for(let i=0;i<result.walkForward.length;i++){
+    const fold=result.walkForward[i];
+    assert.ok(fold.trainingEnd<fold.start);
+    assert.ok(fold.end<=result.train.end);
+    assert.ok(fold.end<result.holdout.start);
+    assert.ok(fold.trainingBars>=40);
+    assert.ok(Number.isFinite(fold.excessReturnVsComparisonPct));
+    assert.ok(fold.comparisonMaxDrawdownPct<=0);
+    if(i){
+      assert.ok(result.walkForward[i-1].end<fold.start);
+      assert.ok(result.walkForward[i-1].trainingBars<fold.trainingBars);
+    }
+  }
+  assert.throws(()=>buildWalkForwardEvaluation(dataset.bars,30),/walk-forward configuration/);
+});
+
+test('benchmark diagnostics are explicit and deterministic for every research period',()=>{
+  const result=analyzeHistoricalResearch(uploaded(),provenance({source:'Example'}));
+  for(const period of [result.train,result.holdout,...result.walkForward,...result.holdoutStress]){
+    assert.ok(period.comparisonEndValue>0);
+    assert.ok(Number.isFinite(period.comparisonReturnPct));
+    assert.ok(Number.isFinite(period.excessReturnVsComparisonPct));
+    assert.ok(period.comparisonMaxDrawdownPct<=0);
+    assert.ok(Math.abs(period.excessReturnVsComparisonPct-(period.simulatedReturnPct-period.comparisonReturnPct))<0.02);
+  }
+});
+
+test('data quality flags duplicate OHLCV transitions and stale close runs without inventing provenance',()=>{
+  const data=structuredClone(bars);
+  data[31]={...data[30],date:data[31].date};
+  for(const index of [41,42]){
+    data[index].close=data[40].close;
+    data[index].high=Math.max(data[index].high,data[index].open,data[index].close);
+    data[index].low=Math.min(data[index].low,data[index].open,data[index].close);
+  }
+  const quality=summarizeDataQuality(data);
+  assert.ok(quality.duplicateOhlcvTransitions>=1);
+  assert.ok(quality.longestFlatCloseRun>=3);
+  const readiness=assessResearchReadiness(quality,'VENDOR_ADJUSTED');
+  assert.ok(readiness.reviewReasons.includes('DUPLICATE_OHLCV_TRANSITION'));
+  assert.ok(readiness.reviewReasons.includes('STALE_CLOSE_RUN'));
 });
 
 test('three chronological consistency segments are disjoint, reproducible and descriptive only',()=>{
@@ -168,7 +217,7 @@ test('experiment manifest is deterministic, compact and explicitly non-executabl
   const fingerprint=await datasetFingerprint(csv);
   const first=buildExperimentManifest(result,fingerprint),second=buildExperimentManifest(result,fingerprint);
   assert.deepEqual(first,second);
-  assert.equal(first.schema,'project9-research-manifest-v2');
+  assert.equal(first.schema,'project9-research-manifest-v3');
   assert.equal(first.dataset.sha256,fingerprint);
   assert.equal(first.dataset.fileIncluded,false);
   assert.equal(first.dataset.independentlyVerified,false);
@@ -184,6 +233,10 @@ test('experiment manifest is deterministic, compact and explicitly non-executabl
   assert.equal(first.safety.resultType,'HYPOTHETICAL_SIMULATION');
   assert.equal('fills' in first.experiment.holdout,false);
   assert.equal('curve' in first.experiment.holdout,false);
+  assert.equal(first.experiment.walkForward.length,4);
+  assert.equal(first.experiment.walkForward.at(-1).end,first.experiment.development.end);
+  assert.equal('fills' in first.experiment.walkForward[0],false);
+  assert.equal('curve' in first.experiment.walkForward[0],false);
   assert.equal(JSON.stringify(first).includes(csv.slice(0,80)),false);
   assert.throws(()=>buildExperimentManifest(result,'not-a-hash'),/fingerprint/);
 });
