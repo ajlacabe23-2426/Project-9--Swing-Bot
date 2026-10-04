@@ -11,13 +11,17 @@ function metricRows(target,period){
     ['Simulated change',format(period.simulatedReturnPct)+'%'],
     ['Unadjusted price comparison',format(period.comparisonReturnPct)+'%'],
     ['Difference vs comparison',format(period.excessReturnVsComparisonPct)+'%'],
-    ['Comparison end value','
+    ['Comparison end value','$'+format(period.comparisonEndValue)],
+    ['Max hypothetical drawdown',format(period.simulatedMaxDrawdownPct)+'%'],
+    ['Comparison max drawdown',format(period.comparisonMaxDrawdownPct)+'%'],
     ['Modeled fees','$'+format(period.simulatedFees)],
     ['Simulated fills',String(period.fillCount)],
     ['Blocked fills',String(period.blockedCount)],
     ['Open paper units',String(period.openUnits)]
   ];
-  if(period.trainingBars){values.unshift(['Prior development history',period.trainingStart+' – '+period.trainingEnd+' · '+period.trainingBars+' bars']);}
+  if(period.trainingBars){
+    values.unshift(['Prior development history',period.trainingStart+' – '+period.trainingEnd+' · '+period.trainingBars+' bars']);
+  }
   for(const [label,value] of values){
     const row=document.createElement('div'),name=document.createElement('span'),number=document.createElement('strong');
     name.textContent=label;number.textContent=value;row.append(name,number);target.append(row);
