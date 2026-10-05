@@ -118,7 +118,7 @@ function renderStatus(){
     $('workstation-status').textContent='Refresh completed with '+errors.length+' issue'+(errors.length===1?'':'s')+': '+errors.slice(0,3).map(item=>item.symbol+' — '+item.message).join(' | ');
     return;
   }
-  $('workstation-status').textContent=state?.lastRefresh?'Last completed-bar refresh: '+new Date(state.lastRefresh).toLocaleString()+'.':'Watchlist saved locally. Refresh requires a local read-only market-data key.';
+  $('workstation-status').textContent=state?.lastRefresh?'Last completed-bar refresh: '+new Date(state.lastRefresh).toLocaleString()+'.':'Watchlist saved locally. Refresh uses a matching .data/SYMBOL.json cache when no provider key is active; otherwise it fetches read-only provider data.';
 }
 function render(){
   if(!state)return;
