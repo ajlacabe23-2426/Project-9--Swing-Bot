@@ -86,7 +86,11 @@ export async function createApp({
           for(const symbol of current.watchlist){
             try{
               const dataset=await marketFetcher({symbol,from,to});
-              entries.push({dataset,evaluation:evaluateSwingSetup(dataset)});
+              const evaluation=evaluateSwingSetup(dataset);
+              evaluation.chartBars=dataset.bars.slice(-60).map(bar=>({
+                date:bar.date,open:bar.open,high:bar.high,low:bar.low,close:bar.close,volume:bar.volume
+              }));
+              entries.push({dataset,evaluation});
             }catch(error){
               errors.push({symbol,message:String(error.message||'Market-data refresh failed')});
             }
