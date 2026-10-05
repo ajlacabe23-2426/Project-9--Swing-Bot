@@ -35,9 +35,26 @@ function completedMarketWindow(){
   start.setUTCDate(start.getUTCDate()-420);
   return {from:isoDate(start),to:isoDate(end)};
 }
-async function defaultMarketFetcher({symbol,from,to}){
-  if(!process.env.MASSIVE_API_KEY)throw new Error('MASSIVE_API_KEY is not configured. Add a local read-only market-data key before refreshing.');
-  return fetchMassiveDailyDataset({symbol,from,to,apiKey:process.env.MASSIVE_API_KEY});
+export async function fetchWorkstationDataset({
+  symbol,
+  from,
+  to,
+  dataDir=resolve(root,'.data'),
+  apiKey=process.env.MASSIVE_API_KEY
+}){
+  if(apiKey)return fetchMassiveDailyDataset({symbol,from,to,apiKey});
+  const file=resolve(dataDir,symbol+'.json');
+  try{
+    const contents=await readFile(file,'utf8');
+    return JSON.parse(contents);
+  }catch(error){
+    if(error?.code==='ENOENT')throw new Error('No local dataset for '+symbol+' and MASSIVE_API_KEY is not configured. Fetch '+symbol+' to .data/'+symbol+'.json or configure a local read-only market-data key.');
+    if(error instanceof SyntaxError)throw new Error('Cached market dataset for '+symbol+' is not valid JSON.');
+    throw new Error('Cached market dataset for '+symbol+' could not be read.');
+  }
+}
+async function defaultMarketFetcher(args){
+  return fetchWorkstationDataset(args);
 }
 
 export async function createApp({
