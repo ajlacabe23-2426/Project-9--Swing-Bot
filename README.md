@@ -56,7 +56,16 @@ npm run scan:watchlist -- path/to/SYMBOL.json path/to/OTHER.json
 
 The command returns a ranked JSON research report. It does not contact a market-data provider, broker, exchange, or AI model, and it cannot place orders. The paper risk plan uses a fixed virtual balance by default and explicitly records `realOrders: false`, `brokerageConnected: false`, and `executionAllowed: false`.
 
-The next milestone is a licensed/authorized historical or delayed data adapter that maps provider metadata into this contract. Provider selection must preserve source timestamps, adjustment methodology, licensing/redistribution limits, and fail-closed behavior for stale or malformed data.
+A first read-only provider adapter now targets Massive's adjusted daily stock aggregate endpoint. The API key is accepted only from the local `MASSIVE_API_KEY` environment variable and is never written into the dataset. Fetch a permitted local dataset with:
+
+```bash
+MASSIVE_API_KEY=your_local_key npm run fetch:market -- AAPL 2026-01-01 2026-10-01 .data/AAPL.json
+npm run scan:watchlist -- .data/AAPL.json
+```
+
+The adapter maps provider OHLCV into the Project 9 contract and fails closed on HTTP errors, malformed payloads, short history, or invalid bars. It does **not** fetch trades/quotes, connect a brokerage account, or place orders. Current individual market-data access must not be assumed to authorize commercial redistribution; business licensing and data rights require a separate review before a commercial release.
+
+The next provider milestone is broader historical coverage plus explicit corporate-action and survivorship handling while preserving source timestamps, adjustment methodology, licensing/redistribution limits, and fail-closed behavior.
 
 ## Security and verification
 
