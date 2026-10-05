@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,rm} from 'node:fs/promises';
+import {mkdtemp,rm,writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {createApp} from '../server.mjs';
+import {createApp,fetchWorkstationDataset} from '../server.mjs';
 import {PaperStore} from '../src/store.mjs';
 import {MARKET_DATA_SCHEMA} from '../src/market-intelligence.mjs';
 
@@ -20,6 +20,29 @@ function marketDataset(symbol='TEST'){
   latest.close=priorHigh*1.01;latest.high=latest.close*1.004;latest.low=Math.min(latest.low,latest.open,latest.close);latest.volume=190000;
   return {schema:MARKET_DATA_SCHEMA,symbol,currency:'USD',source:'Injected permitted test fixture',mode:'HISTORICAL',sourceAsOf:latest.date,priceAdjustment:'VENDOR_ADJUSTED',bars};
 }
+
+
+test('workstation can reuse a previously fetched local dataset when no provider key is active',async()=>{
+  const dir=await mkdtemp(join(tmpdir(),'project9-market-cache-'));
+  try{
+    const input=marketDataset('CACHE');
+    await writeFile(join(dir,'CACHE.json'),JSON.stringify(input),'utf8');
+    const loaded=await fetchWorkstationDataset({
+      symbol:'CACHE',
+      from:'2026-01-01',
+      to:'2026-10-05',
+      dataDir:dir,
+      apiKey:null
+    });
+    assert.deepEqual(loaded,input);
+    await assert.rejects(
+      ()=>fetchWorkstationDataset({symbol:'MISSING',from:'2026-01-01',to:'2026-10-05',dataDir:dir,apiKey:null}),
+      /No local dataset for MISSING/
+    );
+  }finally{
+    await rm(dir,{recursive:true,force:true});
+  }
+});
 
 test('local HTTP API restricts origin, host and inputs and has no broker endpoint',async()=>{
   const dir=await mkdtemp(join(tmpdir(),'project9-')),port=49000+Math.floor(Math.random()*1000);
