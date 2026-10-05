@@ -85,7 +85,7 @@ The workstation supports:
 
 The workstation persists only local research state under the same private `.data` directory as the synthetic paper ledger. It has no brokerage routes, order-routing capability, account credentials, leverage, short-selling execution or real-money position state.
 
-When `MASSIVE_API_KEY` is configured locally, **Refresh completed bars** fetches adjusted daily data for the saved watchlist. Provider failures are recorded per symbol so one bad response does not fabricate a successful scan. API keys are read only from the process environment and are not copied into workstation state.
+When `MASSIVE_API_KEY` is configured locally, **Refresh completed bars** fetches adjusted daily data for the saved watchlist. If no provider key is active, the workstation can reuse a previously fetched `.data/SYMBOL.json` dataset for that symbol, matching the verified CLI workflow. Provider failures are recorded per symbol so one bad response does not fabricate a successful scan. API keys are read only from the process environment and are not copied into workstation state.
 
 Paper tickets are intentionally constrained to a current watch/strong research classification and cannot exceed the engine's virtual risk reference. These controls are research guardrails, not individualized investment advice or a claim that the risk model is appropriate for real capital.
 
