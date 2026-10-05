@@ -5,8 +5,16 @@ import {dirname,join,resolve} from 'node:path';
 import {generateScenario,historicalExperiment,initialState,report,run,step} from './src/engine.mjs';
 import {PaperStore} from './src/store.mjs';
 import {modelCommentary} from './src/ai.mjs';
+import {evaluateSwingSetup} from './src/market-intelligence.mjs';
+import {fetchMassiveDailyDataset} from './src/providers/massive.mjs';
+import {WorkstationStore} from './src/workstation-store.mjs';
+
 const root=dirname(fileURLToPath(import.meta.url));
-const staticFiles=new Map([['/','index.html'],['/index.html','index.html'],['/styles.css','styles.css'],['/app.js','app.js'],['/research.html','research.html'],['/research.js','research.js'],['/research-core.mjs','research-core.mjs']]);
+const staticFiles=new Map([
+  ['/','index.html'],['/index.html','index.html'],['/styles.css','styles.css'],['/app.js','app.js'],
+  ['/research.html','research.html'],['/research.js','research.js'],['/research-core.mjs','research-core.mjs'],
+  ['/workstation.html','workstation.html'],['/workstation.js','workstation.js']
+]);
 const types={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.mjs':'text/javascript; charset=utf-8'};
 const headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer',
   'X-Frame-Options':'DENY','Permissions-Policy':'camera=(), microphone=(), geolocation=()',
@@ -19,25 +27,83 @@ async function parseBody(req){
 }
 const allowedHost=(value,port)=>value==='127.0.0.1:'+port||value==='localhost:'+port;
 const allowedOrigin=(origin,port)=>origin==='http://127.0.0.1:'+port||origin==='http://localhost:'+port;
-export async function createApp({port=4179,store=new PaperStore(resolve(root,'.data/paper.json'))}={}){
+const isoDate=date=>date.toISOString().slice(0,10);
+function completedMarketWindow(){
+  const end=new Date();
+  end.setUTCDate(end.getUTCDate()-1);
+  const start=new Date(end);
+  start.setUTCDate(start.getUTCDate()-420);
+  return {from:isoDate(start),to:isoDate(end)};
+}
+async function defaultMarketFetcher({symbol,from,to}){
+  if(!process.env.MASSIVE_API_KEY)throw new Error('MASSIVE_API_KEY is not configured. Add a local read-only market-data key before refreshing.');
+  return fetchMassiveDailyDataset({symbol,from,to,apiKey:process.env.MASSIVE_API_KEY});
+}
+
+export async function createApp({
+  port=4179,
+  store=new PaperStore(resolve(root,'.data/paper.json')),
+  workstationStore=null,
+  marketFetcher=defaultMarketFetcher
+}={}){
   if(!Number.isInteger(port)||port<1024||port>65535)throw new Error('Port must be between 1024 and 65535');
-  await store.init();let lastModelRequestAt=0;
+  await store.init();
+  const workstation=workstationStore||new WorkstationStore(resolve(dirname(store.file),'workstation.json'));
+  await workstation.init();
+  let lastModelRequestAt=0;
   const server=http.createServer(async(req,res)=>{
     try{
       if(!allowedHost(req.headers.host,port))return json(res,403,{error:'Host not allowed'});
       const url=new URL(req.url,'http://127.0.0.1:'+port);
       if(req.method==='GET'&&url.pathname==='/api/state')return json(res,200,report(store.state,generateScenario(store.state.seed)));
       if(req.method==='GET'&&url.pathname==='/api/experiment')return json(res,200,historicalExperiment(store.state.seed));
+      if(req.method==='GET'&&url.pathname==='/api/workstation')return json(res,200,workstation.snapshot());
       if(req.method==='GET'&&staticFiles.has(url.pathname)){
         const file=staticFiles.get(url.pathname),contents=await readFile(join(root,'public',file));
         res.writeHead(200,{...headers,'Content-Type':types[file.slice(file.lastIndexOf('.'))]});return res.end(contents);
       }
-      if(req.method==='POST'&&['/api/step','/api/run','/api/reset','/api/ai-report'].includes(url.pathname)){
+      const postRoutes=[
+        '/api/step','/api/run','/api/reset','/api/ai-report',
+        '/api/workstation/watchlist','/api/workstation/refresh','/api/workstation/tickets'
+      ];
+      if(req.method==='POST'&&postRoutes.includes(url.pathname)){
         if(!allowedOrigin(req.headers.origin,port)||
           (req.headers['sec-fetch-site']&&!['same-origin','none'].includes(req.headers['sec-fetch-site'])))
           return json(res,403,{error:'Local same-origin request required'});
         const body=await parseBody(req);
         if(!body||typeof body!=='object'||Array.isArray(body))return json(res,400,{error:'JSON object required'});
+
+        if(url.pathname==='/api/workstation/watchlist'){
+          if(Object.keys(body).length!==1||!('symbols' in body)||!Array.isArray(body.symbols))
+            return json(res,400,{error:'symbols array required'});
+          return json(res,200,await workstation.setWatchlist(body.symbols));
+        }
+        if(url.pathname==='/api/workstation/refresh'){
+          if(Object.keys(body).length)return json(res,400,{error:'Refresh accepts no parameters'});
+          const current=workstation.snapshot();
+          if(!current.watchlist.length)return json(res,400,{error:'Add at least one watchlist symbol before refreshing'});
+          const {from,to}=completedMarketWindow(),entries=[],errors=[];
+          for(const symbol of current.watchlist){
+            try{
+              const dataset=await marketFetcher({symbol,from,to});
+              const evaluation=evaluateSwingSetup(dataset);
+              evaluation.chartBars=dataset.bars.slice(-60).map(bar=>({
+                date:bar.date,open:bar.open,high:bar.high,low:bar.low,close:bar.close,volume:bar.volume
+              }));
+              entries.push({dataset,evaluation});
+            }catch(error){
+              errors.push({symbol,message:String(error.message||'Market-data refresh failed')});
+            }
+          }
+          const next=await workstation.applyRefresh(entries,{refreshedAt:new Date().toISOString(),errors});
+          return json(res,200,{...next,refreshWindow:{from,to}});
+        }
+        if(url.pathname==='/api/workstation/tickets'){
+          if(Object.keys(body).length!==2||!('symbol' in body)||!('paperUnits' in body))
+            return json(res,400,{error:'symbol and paperUnits required'});
+          return json(res,200,await workstation.createTicket(body.symbol,body.paperUnits,{createdAt:new Date().toISOString()}));
+        }
+
         const keys=Object.keys(body),expected=url.pathname==='/api/reset'?['seed']:url.pathname==='/api/run'?['count']:[];
         if(keys.some(key=>!expected.includes(key))||expected.some(key=>!keys.includes(key)))
           return json(res,400,{error:'Invalid request parameters'});
@@ -60,12 +126,12 @@ export async function createApp({port=4179,store=new PaperStore(resolve(root,'.d
     }catch(error){
       const status=error.status||500;
       if(status>=500)console.error('Local request failed:',error.message);
-      return json(res,status,{error:status>=500?'Local simulation failed; inspect server console.':error.message});
+      return json(res,status,{error:status>=500?'Local research request failed; inspect server console.':error.message});
     }
   });return server;
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   const port=Number(process.env.PORT||4179);
   const store=new PaperStore(process.env.PROJECT9_DATA_FILE||resolve(root,'.data/paper.json'));
-  createApp({port,store}).then(server=>server.listen(port,'127.0.0.1',()=>console.log('Project 9 local-only synthetic research at http://127.0.0.1:'+port))).catch(error=>{console.error(error);process.exitCode=1;});
+  createApp({port,store}).then(server=>server.listen(port,'127.0.0.1',()=>console.log('Project 9 local-only research platform at http://127.0.0.1:'+port))).catch(error=>{console.error(error);process.exitCode=1;});
 }

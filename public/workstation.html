@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Project 09 · Swing Workstation</title><meta name="description" content="Local read-only market scanner and paper swing-trade research workstation."><link rel="stylesheet" href="/styles.css"></head>
+<body>
+<div class="frame"><aside class="rail"><a class="brand" href="/" aria-label="Project nine home"><span class="symbol">09<span>.</span></span><span>PROJECT<br><b>NINE</b></span></a><div class="rail-sep"></div><div class="rail-label">WORKSPACE</div><a class="nav" href="/">◫ &nbsp; Synthetic command center</a><a class="nav selected" href="/workstation.html">⌁ &nbsp; Swing workstation</a><a class="nav" href="/research.html">⌗ &nbsp; Historical research lab</a><div class="rail-bottom"><div class="shield">◉ &nbsp; READ-ONLY MARKET RESEARCH</div><p>Market data may be real. Orders are not. No brokerage connection or real-money execution exists.</p><div class="rail-version">WORKSTATION · V1</div></div></aside>
+<main class="main"><header class="topbar"><div>PROJECT 09 <span>/ SWING WORKSTATION</span></div><div class="top-right"><span class="live"></span> LOCAL RESEARCH <span class="top-sep">|</span> NO BROKER</div></header>
+<section class="content"><div class="eyebrow">MARKET INTELLIGENCE <span class="dot"></span> COMPLETED DAILY BARS</div><div class="title-row"><div><h1>Swing workstation<span class="period">.</span></h1><p>Rank setups, inspect evidence, freeze paper plans, and measure what happened next.</p></div><div class="status-chip">◉ &nbsp; PAPER DECISION SUPPORT</div></div>
+<div class="notice"><b>READ-ONLY RESEARCH</b><span>This screen may use real historical/delayed market data. Setup labels and risk references are research outputs, not recommendations. Nothing here can place or route a real order.</span></div>
+
+<div class="workstation-grid">
+<article class="panel watchlist-panel"><div class="panel-head"><div><div class="panel-kicker">01 / WATCHLIST</div><h2>Market scanner</h2></div><button id="refresh" class="button main-button">Refresh completed bars ↗</button></div>
+<label class="mini-label" for="watchlist">SYMBOLS · COMMA SEPARATED · MAX 20</label>
+<div class="workstation-controls"><input id="watchlist" autocomplete="off" spellcheck="false" placeholder="AAPL, MSFT, NVDA"><button id="save-watchlist" class="button secondary-button">Save watchlist</button></div>
+<div id="workstation-status" class="status-line" role="status">Loading local workstation…</div>
+<div class="scanner-scroll"><table class="scanner-table"><thead><tr><th>SYMBOL</th><th>SCORE</th><th>CLASSIFICATION</th><th>CLOSE</th><th>RSI</th><th>REL VOL</th><th>AS OF</th></tr></thead><tbody id="scanner-body"><tr><td colspan="7" class="empty">No scanned symbols yet.</td></tr></tbody></table></div>
+</article>
+
+<article class="panel setup-panel"><div class="panel-head"><div><div class="panel-kicker">02 / SETUP DETAIL</div><h2 id="setup-title">Select a scanned symbol</h2></div><span id="setup-tag" class="tag">NO SETUP</span></div>
+<div class="setup-score"><strong id="setup-score">—</strong><span>deterministic setup score / 100</span></div>
+<div class="chart-wrap workstation-chart"><svg id="setup-chart" role="img" aria-label="Completed daily closing prices with frozen paper references" viewBox="0 0 760 284" preserveAspectRatio="none"></svg></div>
+<div id="setup-source" class="research-provenance">Refresh a symbol to inspect source-bound evidence.</div>
+<div class="detail-grid">
+<div><span class="mini-label">OBSERVED</span><div id="setup-observed" class="metrics-list"></div></div>
+<div><span class="mini-label">RULE CHECKS</span><div id="setup-checks" class="metrics-list"></div></div>
+</div>
+<div class="paper-plan"><span class="mini-label">FROZEN PAPER RISK REFERENCES</span><div id="paper-plan" class="metrics-list"></div>
+<div class="ticket-controls"><label for="paper-units">Virtual units</label><input id="paper-units" type="number" min="0.001" step="0.001" value="1"><button id="create-ticket" class="button secondary-button" disabled>Create paper ticket</button></div>
+<p class="supporting">A paper ticket freezes the current research snapshot. It does not represent a recommendation, brokerage order, or real position.</p></div>
+</article>
+</div>
+
+<div class="secondary-grid workstation-lower">
+<article class="panel"><div class="panel-head"><div><div class="panel-kicker">03 / CHANGE DETECTION</div><h2>Classification alerts</h2></div><span class="tag" id="alert-count">0 ALERTS</span></div><div id="alerts" class="alert-list"><div class="empty">No classification changes recorded.</div></div></article>
+<article class="panel ledger"><div class="panel-head"><div><div class="panel-kicker">04 / PAPER OUTCOME JOURNAL</div><h2>Expected vs observed</h2></div><span class="tag mint" id="ticket-count">0 TICKETS</span></div>
+<div class="ledger-scroll"><table><thead><tr><th>ID</th><th>SYMBOL</th><th>OPENED</th><th>ENTRY REF</th><th>STOP REF</th><th>TARGET REF</th><th>STATUS</th><th>PAPER P/L</th><th>R</th></tr></thead><tbody id="ticket-body"><tr><td colspan="9" class="empty">No paper tickets yet.</td></tr></tbody></table></div>
+<div class="ledger-foot">Outcomes use completed daily OHLC bars. If stop and target both appear in one bar, the result is marked ambiguous rather than inventing intraday order.</div></article>
+</div>
+<footer>PROJECT 09 / SWING WORKSTATION <span>READ-ONLY DATA · PAPER JOURNAL · NO REAL ORDERS</span></footer>
+</section></main></div><script type="module" src="/workstation.js"></script></body></html>

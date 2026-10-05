@@ -67,6 +67,29 @@ The adapter maps provider OHLCV into the Project 9 contract and fails closed on 
 
 The next provider milestone is broader historical coverage plus explicit corporate-action and survivorship handling while preserving source timestamps, adjustment methodology, licensing/redistribution limits, and fail-closed behavior.
 
+## Swing workstation v1
+
+The local app now includes `/workstation.html`, a read-only swing-trade research workstation built on the provider-neutral market-data contract.
+
+The workstation supports:
+
+- a configurable local watchlist of up to 20 symbols;
+- completed-daily-bar refresh through the read-only market-data adapter;
+- deterministic ranking into `PAPER_SETUP_STRONG`, `PAPER_SETUP_WATCH`, and `NO_PAPER_SETUP`;
+- setup detail with 20/50-session trend, RSI, ATR, prior-high, relative-volume and explicit rule checks;
+- a bounded completed-bar chart with paper entry/stop/target references;
+- persistent classification-change alerts;
+- frozen paper tickets that preserve the original score, classification and risk references;
+- outcome tracking against later completed bars, including paper P/L and R-multiple;
+- an explicit `AMBIGUOUS_SAME_BAR` outcome when a daily bar touches both frozen stop and target references, rather than inventing intraday ordering.
+
+The workstation persists only local research state under the same private `.data` directory as the synthetic paper ledger. It has no brokerage routes, order-routing capability, account credentials, leverage, short-selling execution or real-money position state.
+
+When `MASSIVE_API_KEY` is configured locally, **Refresh completed bars** fetches adjusted daily data for the saved watchlist. Provider failures are recorded per symbol so one bad response does not fabricate a successful scan. API keys are read only from the process environment and are not copied into workstation state.
+
+Paper tickets are intentionally constrained to a current watch/strong research classification and cannot exceed the engine's virtual risk reference. These controls are research guardrails, not individualized investment advice or a claim that the risk model is appropriate for real capital.
+
+
 ## Security and verification
 
 Run `npm run check` for syntax checks and the offline unit/HTTP integration suite. GitHub Actions runs the same suite on Node 22. Local Host and Origin checks, bounded JSON, no public broker routes, and ignored local state are starting boundaries, **not** an independent security audit. No real customer or financial records belong in this prototype.
