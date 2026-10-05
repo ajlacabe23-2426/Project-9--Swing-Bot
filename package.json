@@ -12,7 +12,7 @@
     "test": "node --test",
     "security:secrets": "node scripts/security/scan-git-history.mjs",
     "security:baseline": "node scripts/security/check-repository-baseline.mjs",
-    "check": "node --check server.mjs && node --check src/engine.mjs && node --check src/store.mjs && node --check src/ai.mjs && node --check src/market-intelligence.mjs && node --check src/providers/massive.mjs && node --check scripts/scan-watchlist.mjs && node --check scripts/fetch-market-dataset.mjs && node --check public/app.js && node --check public/research-core.mjs && node --check public/research.js && node --test",
+    "check": "node --check server.mjs && node --check src/engine.mjs && node --check src/store.mjs && node --check src/ai.mjs && node --check src/market-intelligence.mjs && node --check src/workstation-store.mjs && node --check src/providers/massive.mjs && node --check scripts/scan-watchlist.mjs && node --check scripts/fetch-market-dataset.mjs && node --check public/app.js && node --check public/research-core.mjs && node --check public/research.js && node --test",
     "scan:watchlist": "node scripts/scan-watchlist.mjs",
     "fetch:market": "node scripts/fetch-market-dataset.mjs"
   }
