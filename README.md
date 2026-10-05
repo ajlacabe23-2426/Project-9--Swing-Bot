@@ -40,6 +40,33 @@ The compact **reproducible experiment record** is now manifest schema v3. It rec
 
 The lab uses an unoptimized 5/20 moving-average rule. It separates the earlier 70% (development) and later 30% (untouched held-out) observations into independent hypothetical portfolios. Walk-forward folds are computed only inside the earlier development window. The later window uses only earlier completed bars for indicator warmup. Model outputs show simulated fills and returns separately from raw input observations. **A holdout does not validate a dataset's authenticity, predictive quality or ability to earn actual returns.** Price adjustments, splits, dividends, delistings, coverage, corporate actions and user rights are not independently checked. Informational flags identify large gaps and zero-volume sessions. Results stay on the device until the page is closed.
 
+## Live market intelligence foundation (v1 branch)
+
+Project 9 now has a provider-neutral **completed-bar market-data contract** and deterministic watchlist scanner. This is the first step toward real-market swing-trade decision support without adding brokerage execution.
+
+A market dataset is a local JSON object with schema `project9-market-data-v1`, a declared symbol/currency/source/mode, a source-as-of date, a price-adjustment declaration, and 60–3000 strictly ascending completed daily OHLCV bars. The validator rejects malformed symbols, stale provenance, duplicate/out-of-order dates, invalid volume, and inconsistent OHLC values.
+
+The scanner computes only from completed observations through the requested evaluation date. It reports a 20-session mean, 50-session mean, 14-session RSI, 14-session ATR, prior-20-session high, relative volume, explicit rule checks, and a bounded **paper-only** ATR risk reference. Results are labeled `PAPER_SETUP_STRONG`, `PAPER_SETUP_WATCH`, or `NO_PAPER_SETUP`; these labels are deterministic research classifications, not investment recommendations.
+
+Run one or more permitted local datasets with:
+
+```bash
+npm run scan:watchlist -- path/to/SYMBOL.json path/to/OTHER.json
+```
+
+The command returns a ranked JSON research report. It does not contact a market-data provider, broker, exchange, or AI model, and it cannot place orders. The paper risk plan uses a fixed virtual balance by default and explicitly records `realOrders: false`, `brokerageConnected: false`, and `executionAllowed: false`.
+
+A first read-only provider adapter now targets Massive's adjusted daily stock aggregate endpoint. The API key is accepted only from the local `MASSIVE_API_KEY` environment variable and is never written into the dataset. Fetch a permitted local dataset with:
+
+```bash
+MASSIVE_API_KEY=your_local_key npm run fetch:market -- AAPL 2026-01-01 2026-10-01 .data/AAPL.json
+npm run scan:watchlist -- .data/AAPL.json
+```
+
+The adapter maps provider OHLCV into the Project 9 contract and fails closed on HTTP errors, malformed payloads, short history, or invalid bars. It does **not** fetch trades/quotes, connect a brokerage account, or place orders. Current individual market-data access must not be assumed to authorize commercial redistribution; business licensing and data rights require a separate review before a commercial release.
+
+The next provider milestone is broader historical coverage plus explicit corporate-action and survivorship handling while preserving source timestamps, adjustment methodology, licensing/redistribution limits, and fail-closed behavior.
+
 ## Security and verification
 
 Run `npm run check` for syntax checks and the offline unit/HTTP integration suite. GitHub Actions runs the same suite on Node 22. Local Host and Origin checks, bounded JSON, no public broker routes, and ignored local state are starting boundaries, **not** an independent security audit. No real customer or financial records belong in this prototype.
