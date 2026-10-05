@@ -10,12 +10,18 @@ function metricRows(target,period){
     ['Simulated end value','$'+format(period.simulatedEndValue)],
     ['Simulated change',format(period.simulatedReturnPct)+'%'],
     ['Unadjusted price comparison',format(period.comparisonReturnPct)+'%'],
+    ['Difference vs comparison',format(period.excessReturnVsComparisonPct)+'%'],
+    ['Comparison end value','$'+format(period.comparisonEndValue)],
     ['Max hypothetical drawdown',format(period.simulatedMaxDrawdownPct)+'%'],
+    ['Comparison max drawdown',format(period.comparisonMaxDrawdownPct)+'%'],
     ['Modeled fees','$'+format(period.simulatedFees)],
     ['Simulated fills',String(period.fillCount)],
     ['Blocked fills',String(period.blockedCount)],
     ['Open paper units',String(period.openUnits)]
   ];
+  if(period.trainingBars){
+    values.unshift(['Prior development history',period.trainingStart+' – '+period.trainingEnd+' · '+period.trainingBars+' bars']);
+  }
   for(const [label,value] of values){
     const row=document.createElement('div'),name=document.createElement('span'),number=document.createElement('strong');
     name.textContent=label;number.textContent=value;row.append(name,number);target.append(row);
@@ -34,6 +40,8 @@ function qualityRows(target,quality,readiness){
     ['Close-return outliers (>20%)',String(quality.closeReturnOutliers)],
     ['Extreme intraday ranges (>30%)',String(quality.extremeIntradayRanges)],
     ['Flat close transitions',String(quality.flatCloseTransitions)],
+    ['Duplicate OHLCV transitions',String(quality.duplicateOhlcvTransitions)],
+    ['Longest flat-close run',String(quality.longestFlatCloseRun)+' bars'],
     ['Largest calendar gap',String(quality.maxCalendarGapDays)+' days'],
     ['Review reasons',readiness.reviewReasons.length?readiness.reviewReasons.join(', '):'None from structural checks']
   ];
@@ -63,6 +71,7 @@ $('dataset-form').addEventListener('submit',async e=>{
     currentManifest=buildExperimentManifest(result,fingerprint);
     $('provenance').textContent='DECLARED SOURCE: '+result.sourceDeclaredByUser+' · INSTRUMENT '+result.instrumentDeclaredByUser+' · '+result.currencyDeclaredByUser+' · ADJUSTMENT '+result.priceAdjustmentDeclaredByUser+' · SOURCE AS OF '+result.sourceAsOfDate+' · '+result.rows+' BARS · '+result.earliest+' → '+result.latest+' · '+result.mode+' · LOCAL SHA-256 '+fingerprint+' · FILE STAYS IN YOUR BROWSER';
     qualityRows($('quality-metrics'),result.dataQuality,result.researchReadiness);metricRows($('training-metrics'),result.train);metricRows($('holdout-metrics'),result.holdout);
+    for(const fold of result.walkForward)metricRows($('walk-'+fold.fold),fold);
     for(const stress of result.holdoutStress)metricRows($('stress-'+stress.multiplier+'x'),stress);
     for(const check of result.chronologicalChecks)metricRows($('segment-'+check.segment),check);
     $('warnings').replaceChildren();
