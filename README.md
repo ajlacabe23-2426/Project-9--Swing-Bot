@@ -56,6 +56,8 @@ npm run scan:watchlist -- path/to/SYMBOL.json path/to/OTHER.json
 
 The command returns a ranked JSON research report. It does not contact a market-data provider, broker, exchange, or AI model, and it cannot place orders. The paper risk plan uses a fixed virtual balance by default and explicitly records `realOrders: false`, `brokerageConnected: false`, and `executionAllowed: false`.
 
+Each scan also carries a provider-neutral **market-data readiness summary**. It counts zero-volume bars, large calendar gaps, >20% adjacent close moves, >30% intraday ranges, and unknown adjustment status. `STRUCTURALLY_CLEAN_UNVERIFIED` means only that these bounded structural checks found no configured anomaly; `REVIEW_REQUIRED` identifies reasons for manual review. The summary explicitly does **not** verify data authenticity, corporate actions, survivorship bias, licensing, or redistribution rights, and it does not alter setup scores or classifications.
+
 A first read-only provider adapter now targets Massive's adjusted daily stock aggregate endpoint. The API key is accepted only from the local `MASSIVE_API_KEY` environment variable and is never written into the dataset. Fetch a permitted local dataset with:
 
 ```bash

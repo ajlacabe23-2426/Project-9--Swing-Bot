@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {MARKET_DATA_SCHEMA,atr,evaluateSwingSetup,normalizeMarketDataset,rankWatchlist} from '../src/market-intelligence.mjs';
+import {MARKET_DATA_SCHEMA,assessMarketDataQuality,atr,evaluateSwingSetup,normalizeMarketDataset,rankWatchlist} from '../src/market-intelligence.mjs';
 
 function bars(count=90,{drift=0.002,volume=100_000,breakout=false}={}){
   const output=[];let previous=100;const date=new Date('2026-01-01T00:00:00.000Z');
@@ -53,6 +53,24 @@ test('normalizes a bounded provider-neutral completed-bar dataset',()=>{
   assert.notEqual(value.bars,dataset().bars);
 });
 
+test('market-data readiness stays explicitly unverified and flags structural review conditions',()=>{
+  const clean=assessMarketDataQuality(dataset());
+  assert.equal(clean.status,'STRUCTURALLY_CLEAN_UNVERIFIED');
+  assert.deepEqual(clean.reasons,[]);
+  assert.equal(clean.verification.dataAuthenticityVerified,false);
+  assert.equal(clean.verification.corporateActionsVerified,false);
+  assert.equal(clean.verification.survivorshipBiasControlled,false);
+  assert.equal(clean.verification.licensingVerified,false);
+
+  const review=dataset();
+  review.priceAdjustment='UNKNOWN';
+  review.bars[20].volume=0;
+  const flagged=assessMarketDataQuality(review);
+  assert.equal(flagged.status,'REVIEW_REQUIRED');
+  assert.ok(flagged.reasons.includes('UNKNOWN_PRICE_ADJUSTMENT'));
+  assert.ok(flagged.reasons.includes('ZERO_VOLUME_BARS'));
+});
+
 test('rejects malformed symbols, stale provenance and inconsistent bars',()=>{
   assert.throws(()=>normalizeMarketDataset({...dataset(),symbol:'bad symbol'}),/symbol/);
   assert.throws(()=>normalizeMarketDataset({...dataset(),sourceAsOf:'2025-01-01'}),/as-of/);
@@ -74,6 +92,7 @@ test('swing evaluation is deterministic, paper-only and evidence-linked',()=>{
   assert.equal(first.safety.brokerageConnected,false);
   assert.equal(first.safety.executionAllowed,false);
   assert.equal(first.safety.futureBarsUsed,false);
+  assert.equal(first.dataQuality.status,'STRUCTURALLY_CLEAN_UNVERIFIED');
   assert.equal(first.evidence.every(item=>item.date===first.asOf),true);
 });
 

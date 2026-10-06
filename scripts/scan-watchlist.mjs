@@ -27,6 +27,7 @@ else{
         score:result.score,
         classification:result.classification,
         source:result.source,
+        dataQuality:result.dataQuality,
         observed:result.observed,
         checks:result.checks,
         paperRiskPlan:result.paperRiskPlan,
