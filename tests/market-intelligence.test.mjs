@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {MARKET_DATA_SCHEMA,assessMarketDataQuality,atr,evaluateSwingSetup,normalizeMarketDataset,rankWatchlist} from '../src/market-intelligence.mjs';
+import {MARKET_DATA_SCHEMA,MARKET_DATA_SCHEMA_V2,assessMarketDataQuality,atr,evaluateSwingSetup,normalizeMarketDataset,rankWatchlist} from '../src/market-intelligence.mjs';
 
 function bars(count=90,{drift=0.002,volume=100_000,breakout=false}={}){
   const output=[];let previous=100;const date=new Date('2026-01-01T00:00:00.000Z');
@@ -51,6 +51,8 @@ test('normalizes a bounded provider-neutral completed-bar dataset',()=>{
   assert.equal(value.symbol,'TEST');
   assert.equal(value.bars.length,90);
   assert.notEqual(value.bars,dataset().bars);
+  assert.equal(value.provenance.contract,'LEGACY_V1_INFERRED');
+  assert.equal(value.provenance.retrievedAt,null);
 });
 
 test('market-data readiness stays explicitly unverified and flags structural review conditions',()=>{
@@ -61,6 +63,8 @@ test('market-data readiness stays explicitly unverified and flags structural rev
   assert.equal(clean.verification.corporateActionsVerified,false);
   assert.equal(clean.verification.survivorshipBiasControlled,false);
   assert.equal(clean.verification.licensingVerified,false);
+  assert.equal(clean.provenanceReview.status,'REVIEW_REQUIRED');
+  assert.ok(clean.provenanceReview.reasons.includes('LEGACY_V1_PROVENANCE'));
 
   const review=dataset();
   review.priceAdjustment='UNKNOWN';
@@ -69,6 +73,27 @@ test('market-data readiness stays explicitly unverified and flags structural rev
   assert.equal(flagged.status,'REVIEW_REQUIRED');
   assert.ok(flagged.reasons.includes('UNKNOWN_PRICE_ADJUSTMENT'));
   assert.ok(flagged.reasons.includes('ZERO_VOLUME_BARS'));
+});
+
+test('accepts explicit provenance v2 and rejects contradictory adjustment metadata',()=>{
+  const input=dataset('V2');
+  input.schema=MARKET_DATA_SCHEMA_V2;
+  input.provenance={
+    retrievedAt:'2026-10-06T15:00:00.000Z',
+    adjustmentMethod:'PROVIDER_ADJUSTED_DOCUMENTED',
+    corporateActions:'PROVIDER_ADJUSTED_NOT_INDEPENDENTLY_VERIFIED',
+    survivorship:'NOT_ASSESSED',
+    licensing:'USER_ASSERTED_PERMITTED'
+  };
+  const value=normalizeMarketDataset(input);
+  assert.equal(value.schema,MARKET_DATA_SCHEMA_V2);
+  assert.equal(value.provenance.contract,'V2_DECLARED');
+  assert.equal(value.provenance.retrievedAt,'2026-10-06T15:00:00.000Z');
+  assert.equal(assessMarketDataQuality(input).provenanceReview.status,'REVIEW_REQUIRED');
+
+  const contradictory=structuredClone(input);
+  contradictory.provenance.adjustmentMethod='RAW_UNADJUSTED';
+  assert.throws(()=>normalizeMarketDataset(contradictory),/provider-adjusted methodology/);
 });
 
 test('rejects malformed symbols, stale provenance and inconsistent bars',()=>{
