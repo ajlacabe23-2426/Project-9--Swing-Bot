@@ -57,19 +57,20 @@ function calendarGapDays(previousDate,currentDate){
   return Math.round((Date.parse(currentDate+'T00:00:00.000Z')-Date.parse(previousDate+'T00:00:00.000Z'))/86_400_000);
 }
 
-function summarizeMarketDataQuality(dataset){
+function summarizeMarketDataQuality(dataset,endIndex=dataset.bars.length-1){
+  const bars=dataset.bars.slice(0,endIndex+1);
   let zeroVolumeBars=0;
   let largeCalendarGaps=0;
   let largestCalendarGapDays=0;
   let closeMovesOver20Pct=0;
   let intradayRangesOver30Pct=0;
 
-  for(let index=0;index<dataset.bars.length;index++){
-    const bar=dataset.bars[index];
+  for(let index=0;index<bars.length;index++){
+    const bar=bars[index];
     if(bar.volume===0)zeroVolumeBars+=1;
     if((bar.high-bar.low)/bar.close>0.30)intradayRangesOver30Pct+=1;
     if(index===0)continue;
-    const previous=dataset.bars[index-1];
+    const previous=bars[index-1];
     const gap=calendarGapDays(previous.date,bar.date);
     largestCalendarGapDays=Math.max(largestCalendarGapDays,gap);
     if(gap>4)largeCalendarGaps+=1;
@@ -85,7 +86,7 @@ function summarizeMarketDataQuality(dataset){
 
   return {
     status:reasons.length?'REVIEW_REQUIRED':'STRUCTURALLY_CLEAN_UNVERIFIED',
-    observedBars:dataset.bars.length,
+    observedBars:bars.length,
     zeroVolumeBars,
     largeCalendarGaps,
     largestCalendarGapDays,
@@ -123,9 +124,9 @@ function average(values){
 
 export function evaluateSwingSetup(input,{asOfIndex=null,paperCapital=10_000,paperRiskFraction=0.01}={}){
   const dataset=normalizeMarketDataset(input),bars=dataset.bars;
-  const dataQuality=summarizeMarketDataQuality(dataset);
   const end=asOfIndex===null?bars.length-1:asOfIndex;
   if(!Number.isInteger(end)||end<50||end>=bars.length)throw new Error('Swing evaluation requires at least 51 completed bars');
+  const dataQuality=summarizeMarketDataQuality(dataset,end);
   if(!Number.isFinite(paperCapital)||paperCapital<=0||paperCapital>10_000_000)throw new Error('Invalid paper capital');
   if(!Number.isFinite(paperRiskFraction)||paperRiskFraction<=0||paperRiskFraction>0.05)throw new Error('Invalid paper risk fraction');
 
