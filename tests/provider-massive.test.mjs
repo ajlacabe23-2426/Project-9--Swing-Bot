@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {buildMassiveDailyUrl,fetchMassiveDailyDataset} from '../src/providers/massive.mjs';
+import {MARKET_DATA_SCHEMA_V2} from '../src/market-intelligence.mjs';
 
 function results(count=90){
   const out=[];let price=100;const date=new Date('2026-01-01T00:00:00.000Z');
@@ -33,9 +34,16 @@ test('maps Massive daily aggregates into the Project 9 market-data contract',asy
     symbol:'AAPL',from:'2026-01-01',to:'2026-06-30',apiKey:'test-key-123',fetchImpl
   });
   assert.match(requested,/api\.massive\.com/);
+  assert.equal(value.schema,MARKET_DATA_SCHEMA_V2);
   assert.equal(value.symbol,'AAPL');
   assert.equal(value.mode,'HISTORICAL');
   assert.equal(value.priceAdjustment,'VENDOR_ADJUSTED');
+  assert.equal(value.provenance.contract,'V2_DECLARED');
+  assert.equal(value.provenance.adjustmentMethod,'PROVIDER_ADJUSTED_UNVERIFIED');
+  assert.equal(value.provenance.corporateActions,'PROVIDER_ADJUSTED_NOT_INDEPENDENTLY_VERIFIED');
+  assert.equal(value.provenance.survivorship,'NOT_ASSESSED');
+  assert.equal(value.provenance.licensing,'PROVIDER_TERMS_REVIEW_REQUIRED');
+  assert.ok(Number.isFinite(Date.parse(value.provenance.retrievedAt)));
   assert.equal(value.bars.length,90);
   assert.equal(value.sourceAsOf,value.bars.at(-1).date);
 });
