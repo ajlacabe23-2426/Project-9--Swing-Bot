@@ -53,6 +53,59 @@ export function normalizeMarketDataset(input){
   };
 }
 
+function calendarGapDays(previousDate,currentDate){
+  return Math.round((Date.parse(currentDate+'T00:00:00.000Z')-Date.parse(previousDate+'T00:00:00.000Z'))/86_400_000);
+}
+
+function summarizeMarketDataQuality(dataset){
+  let zeroVolumeBars=0;
+  let largeCalendarGaps=0;
+  let largestCalendarGapDays=0;
+  let closeMovesOver20Pct=0;
+  let intradayRangesOver30Pct=0;
+
+  for(let index=0;index<dataset.bars.length;index++){
+    const bar=dataset.bars[index];
+    if(bar.volume===0)zeroVolumeBars+=1;
+    if((bar.high-bar.low)/bar.close>0.30)intradayRangesOver30Pct+=1;
+    if(index===0)continue;
+    const previous=dataset.bars[index-1];
+    const gap=calendarGapDays(previous.date,bar.date);
+    largestCalendarGapDays=Math.max(largestCalendarGapDays,gap);
+    if(gap>4)largeCalendarGaps+=1;
+    if(Math.abs(bar.close/previous.close-1)>0.20)closeMovesOver20Pct+=1;
+  }
+
+  const reasons=[];
+  if(dataset.priceAdjustment==='UNKNOWN')reasons.push('UNKNOWN_PRICE_ADJUSTMENT');
+  if(zeroVolumeBars>0)reasons.push('ZERO_VOLUME_BARS');
+  if(largeCalendarGaps>0)reasons.push('LARGE_CALENDAR_GAPS');
+  if(closeMovesOver20Pct>0)reasons.push('LARGE_CLOSE_MOVES');
+  if(intradayRangesOver30Pct>0)reasons.push('EXTREME_INTRADAY_RANGES');
+
+  return {
+    status:reasons.length?'REVIEW_REQUIRED':'STRUCTURALLY_CLEAN_UNVERIFIED',
+    observedBars:dataset.bars.length,
+    zeroVolumeBars,
+    largeCalendarGaps,
+    largestCalendarGapDays,
+    closeMovesOver20Pct,
+    intradayRangesOver30Pct,
+    priceAdjustment:dataset.priceAdjustment,
+    reasons,
+    verification:{
+      dataAuthenticityVerified:false,
+      corporateActionsVerified:false,
+      survivorshipBiasControlled:false,
+      licensingVerified:false
+    }
+  };
+}
+
+export function assessMarketDataQuality(input){
+  return summarizeMarketDataQuality(normalizeMarketDataset(input));
+}
+
 export function atr(bars,end,period=14){
   if(!Array.isArray(bars)||!Number.isInteger(end)||!Number.isInteger(period)||period<2||end<period||end>=bars.length)return null;
   let total=0;
@@ -70,6 +123,7 @@ function average(values){
 
 export function evaluateSwingSetup(input,{asOfIndex=null,paperCapital=10_000,paperRiskFraction=0.01}={}){
   const dataset=normalizeMarketDataset(input),bars=dataset.bars;
+  const dataQuality=summarizeMarketDataQuality(dataset);
   const end=asOfIndex===null?bars.length-1:asOfIndex;
   if(!Number.isInteger(end)||end<50||end>=bars.length)throw new Error('Swing evaluation requires at least 51 completed bars');
   if(!Number.isFinite(paperCapital)||paperCapital<=0||paperCapital>10_000_000)throw new Error('Invalid paper capital');
@@ -104,6 +158,7 @@ export function evaluateSwingSetup(input,{asOfIndex=null,paperCapital=10_000,pap
     symbol:dataset.symbol,
     asOf:current.date,
     source:{name:dataset.source,mode:dataset.mode,sourceAsOf:dataset.sourceAsOf,priceAdjustment:dataset.priceAdjustment},
+    dataQuality,
     observed:{
       close:round(current.close,6),
       sma20:round(fast,6),
