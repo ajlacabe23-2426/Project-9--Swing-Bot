@@ -1,0 +1,17 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "rm -rf dist-preview && mkdir -p dist-preview && cp -R public/. dist-preview/",
+  "outputDirectory": "dist-preview",
+  "rewrites": [
+    {"source": "/", "destination": "/preview.html"}
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {"key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive"},
+        {"key": "Cache-Control", "value": "no-store"}
+      ]
+    }
+  ]
+}
