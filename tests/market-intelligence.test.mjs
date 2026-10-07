@@ -94,6 +94,10 @@ test('accepts explicit provenance v2 and rejects contradictory adjustment metada
   const contradictory=structuredClone(input);
   contradictory.provenance.adjustmentMethod='RAW_UNADJUSTED';
   assert.throws(()=>normalizeMarketDataset(contradictory),/provider-adjusted methodology/);
+
+  const impossibleTimeline=structuredClone(input);
+  impossibleTimeline.provenance.retrievedAt='2025-12-31T23:59:59.000Z';
+  assert.throws(()=>normalizeMarketDataset(impossibleTimeline),/cannot precede source as-of date/);
 });
 
 test('rejects malformed symbols, stale provenance and inconsistent bars',()=>{
