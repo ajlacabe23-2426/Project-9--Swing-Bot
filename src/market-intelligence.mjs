@@ -1,8 +1,14 @@
 import {rsi,sma} from './engine.mjs';
 
-export const MARKET_DATA_SCHEMA='project9-market-data-v1';
+export const MARKET_DATA_SCHEMA='project9-market-data-v1'; // legacy compatibility alias
+export const MARKET_DATA_SCHEMA_V2='project9-market-data-v2';
+export const CURRENT_MARKET_DATA_SCHEMA=MARKET_DATA_SCHEMA_V2;
 export const MARKET_DATA_MODES=new Set(['HISTORICAL','DELAYED','REALTIME']);
 export const PRICE_ADJUSTMENTS=new Set(['RAW','VENDOR_ADJUSTED','UNKNOWN']);
+export const ADJUSTMENT_METHODS=new Set(['RAW_UNADJUSTED','PROVIDER_ADJUSTED_UNVERIFIED','PROVIDER_ADJUSTED_DOCUMENTED','UNKNOWN']);
+export const CORPORATE_ACTION_STATUSES=new Set(['NOT_VERIFIED','PROVIDER_ADJUSTED_NOT_INDEPENDENTLY_VERIFIED','INDEPENDENTLY_REVIEWED']);
+export const SURVIVORSHIP_STATUSES=new Set(['NOT_ASSESSED','POINT_IN_TIME_UNIVERSE_DECLARED','INDEPENDENTLY_REVIEWED']);
+export const LICENSING_STATUSES=new Set(['NOT_VERIFIED','USER_ASSERTED_PERMITTED','PROVIDER_TERMS_REVIEW_REQUIRED','COMMERCIAL_REDISTRIBUTION_VERIFIED']);
 
 const round=(value,places=4)=>Number(value.toFixed(places));
 const isObject=value=>value&&typeof value==='object'&&!Array.isArray(value);
@@ -25,11 +31,61 @@ function validateBar(bar,index,previousDate){
   return {date:bar.date,open:bar.open,high:bar.high,low:bar.low,close:bar.close,volume:bar.volume};
 }
 
+function normalizeMarketProvenance(input,schema,priceAdjustment){
+  if(schema===MARKET_DATA_SCHEMA){
+    const adjustmentMethod=priceAdjustment==='RAW'?'RAW_UNADJUSTED':
+      priceAdjustment==='VENDOR_ADJUSTED'?'PROVIDER_ADJUSTED_UNVERIFIED':'UNKNOWN';
+    return {
+      contract:'LEGACY_V1_INFERRED',
+      retrievedAt:null,
+      adjustmentMethod,
+      corporateActions:'NOT_VERIFIED',
+      survivorship:'NOT_ASSESSED',
+      licensing:'NOT_VERIFIED'
+    };
+  }
+  if(!isObject(input))throw new Error('Market-data v2 requires provenance');
+  const allowed=['retrievedAt','adjustmentMethod','corporateActions','survivorship','licensing'];
+  if(Object.keys(input).some(key=>!allowed.includes(key))||allowed.some(key=>!(key in input)))
+    throw new Error('Market-data provenance has invalid fields');
+  if(typeof input.retrievedAt!=='string'||!input.retrievedAt.includes('T')||!Number.isFinite(Date.parse(input.retrievedAt)))
+    throw new Error('Invalid market-data retrieval timestamp');
+  if(!ADJUSTMENT_METHODS.has(input.adjustmentMethod))throw new Error('Invalid adjustment methodology');
+  if(!CORPORATE_ACTION_STATUSES.has(input.corporateActions))throw new Error('Invalid corporate-action status');
+  if(!SURVIVORSHIP_STATUSES.has(input.survivorship))throw new Error('Invalid survivorship status');
+  if(!LICENSING_STATUSES.has(input.licensing))throw new Error('Invalid market-data licensing status');
+  if(priceAdjustment==='RAW'&&input.adjustmentMethod!=='RAW_UNADJUSTED')
+    throw new Error('Raw prices require RAW_UNADJUSTED methodology');
+  if(priceAdjustment==='UNKNOWN'&&input.adjustmentMethod!=='UNKNOWN')
+    throw new Error('Unknown price adjustment requires UNKNOWN methodology');
+  if(priceAdjustment==='VENDOR_ADJUSTED'&&!input.adjustmentMethod.startsWith('PROVIDER_ADJUSTED_'))
+    throw new Error('Vendor-adjusted prices require provider-adjusted methodology');
+  return {
+    contract:'V2_DECLARED',
+    retrievedAt:new Date(input.retrievedAt).toISOString(),
+    adjustmentMethod:input.adjustmentMethod,
+    corporateActions:input.corporateActions,
+    survivorship:input.survivorship,
+    licensing:input.licensing
+  };
+}
+
+function provenanceReview(provenance){
+  const reasons=[];
+  if(provenance.contract==='LEGACY_V1_INFERRED')reasons.push('LEGACY_V1_PROVENANCE');
+  if(!provenance.retrievedAt)reasons.push('MISSING_RETRIEVAL_TIMESTAMP');
+  if(provenance.adjustmentMethod==='PROVIDER_ADJUSTED_UNVERIFIED')reasons.push('ADJUSTMENT_METHOD_NOT_INDEPENDENTLY_VERIFIED');
+  if(provenance.corporateActions!=='INDEPENDENTLY_REVIEWED')reasons.push('CORPORATE_ACTIONS_NOT_INDEPENDENTLY_REVIEWED');
+  if(provenance.survivorship!=='INDEPENDENTLY_REVIEWED')reasons.push('SURVIVORSHIP_NOT_INDEPENDENTLY_REVIEWED');
+  if(provenance.licensing!=='COMMERCIAL_REDISTRIBUTION_VERIFIED')reasons.push('DATA_RIGHTS_NOT_VERIFIED_FOR_REDISTRIBUTION');
+  return {status:reasons.length?'REVIEW_REQUIRED':'VERIFIED_FOR_DECLARED_USE',reasons};
+}
+
 export function normalizeMarketDataset(input){
   if(!isObject(input))throw new Error('Market dataset must be an object');
-  const allowed=['schema','symbol','currency','source','mode','sourceAsOf','priceAdjustment','bars'];
+  const allowed=['schema','symbol','currency','source','mode','sourceAsOf','priceAdjustment','provenance','bars'];
   if(Object.keys(input).some(key=>!allowed.includes(key)))throw new Error('Market dataset has unsupported fields');
-  if(input.schema!==MARKET_DATA_SCHEMA)throw new Error('Unsupported market-data schema');
+  if(![MARKET_DATA_SCHEMA,MARKET_DATA_SCHEMA_V2].includes(input.schema))throw new Error('Unsupported market-data schema');
   if(typeof input.symbol!=='string'||!/^[A-Z0-9.\-]{1,15}$/.test(input.symbol))throw new Error('Invalid market symbol');
   if(typeof input.currency!=='string'||!/^[A-Z]{3}$/.test(input.currency))throw new Error('Invalid market currency');
   if(typeof input.source!=='string'||input.source.trim().length<2||input.source.trim().length>100)throw new Error('Invalid market-data source');
@@ -41,14 +97,16 @@ export function normalizeMarketDataset(input){
   let previous=null;
   const bars=input.bars.map((bar,index)=>{const normalized=validateBar(bar,index,previous);previous=normalized.date;return normalized;});
   if(input.sourceAsOf<bars.at(-1).date)throw new Error('Source as-of date cannot precede the latest market bar');
+  const provenance=normalizeMarketProvenance(input.provenance,input.schema,input.priceAdjustment);
   return {
-    schema:MARKET_DATA_SCHEMA,
+    schema:input.schema,
     symbol:input.symbol,
     currency:input.currency,
     source:input.source.trim(),
     mode:input.mode,
     sourceAsOf:input.sourceAsOf,
     priceAdjustment:input.priceAdjustment,
+    provenance,
     bars
   };
 }
@@ -94,11 +152,12 @@ function summarizeMarketDataQuality(dataset,endIndex=dataset.bars.length-1){
     intradayRangesOver30Pct,
     priceAdjustment:dataset.priceAdjustment,
     reasons,
+    provenanceReview:provenanceReview(dataset.provenance),
     verification:{
       dataAuthenticityVerified:false,
-      corporateActionsVerified:false,
-      survivorshipBiasControlled:false,
-      licensingVerified:false
+      corporateActionsVerified:dataset.provenance.corporateActions==='INDEPENDENTLY_REVIEWED',
+      survivorshipBiasControlled:dataset.provenance.survivorship==='INDEPENDENTLY_REVIEWED',
+      licensingVerified:dataset.provenance.licensing==='COMMERCIAL_REDISTRIBUTION_VERIFIED'
     }
   };
 }
@@ -158,7 +217,7 @@ export function evaluateSwingSetup(input,{asOfIndex=null,paperCapital=10_000,pap
     schema:'project9-swing-evaluation-v1',
     symbol:dataset.symbol,
     asOf:current.date,
-    source:{name:dataset.source,mode:dataset.mode,sourceAsOf:dataset.sourceAsOf,priceAdjustment:dataset.priceAdjustment},
+    source:{name:dataset.source,mode:dataset.mode,sourceAsOf:dataset.sourceAsOf,priceAdjustment:dataset.priceAdjustment,provenance:{...dataset.provenance}},
     dataQuality,
     observed:{
       close:round(current.close,6),

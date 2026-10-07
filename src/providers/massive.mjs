@@ -1,4 +1,4 @@
-import {normalizeMarketDataset,MARKET_DATA_SCHEMA} from '../market-intelligence.mjs';
+import {normalizeMarketDataset,CURRENT_MARKET_DATA_SCHEMA} from '../market-intelligence.mjs';
 
 const BASE_URL='https://api.massive.com';
 const isoDate=value=>typeof value==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(value)&&
@@ -51,13 +51,20 @@ export async function fetchMassiveDailyDataset({symbol,from,to,apiKey,fetchImpl=
   });
   if(bars.length<60)throw new Error('Massive response needs at least 60 completed daily bars for swing analysis');
   return normalizeMarketDataset({
-    schema:MARKET_DATA_SCHEMA,
+    schema:CURRENT_MARKET_DATA_SCHEMA,
     symbol:ticker,
     currency:'USD',
     source:'Massive Stocks adjusted daily aggregates',
     mode:'HISTORICAL',
     sourceAsOf:bars.at(-1).date,
     priceAdjustment:'VENDOR_ADJUSTED',
+    provenance:{
+      retrievedAt:new Date().toISOString(),
+      adjustmentMethod:'PROVIDER_ADJUSTED_UNVERIFIED',
+      corporateActions:'PROVIDER_ADJUSTED_NOT_INDEPENDENTLY_VERIFIED',
+      survivorship:'NOT_ASSESSED',
+      licensing:'PROVIDER_TERMS_REVIEW_REQUIRED'
+    },
     bars
   });
 }
