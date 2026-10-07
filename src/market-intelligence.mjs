@@ -98,6 +98,8 @@ export function normalizeMarketDataset(input){
   const bars=input.bars.map((bar,index)=>{const normalized=validateBar(bar,index,previous);previous=normalized.date;return normalized;});
   if(input.sourceAsOf<bars.at(-1).date)throw new Error('Source as-of date cannot precede the latest market bar');
   const provenance=normalizeMarketProvenance(input.provenance,input.schema,input.priceAdjustment);
+  if(provenance.retrievedAt&&provenance.retrievedAt.slice(0,10)<input.sourceAsOf)
+    throw new Error('Market-data retrieval timestamp cannot precede source as-of date');
   return {
     schema:input.schema,
     symbol:input.symbol,
