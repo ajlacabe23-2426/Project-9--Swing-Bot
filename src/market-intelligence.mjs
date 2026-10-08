@@ -12,15 +12,18 @@ export const LICENSING_STATUSES=new Set(['NOT_VERIFIED','USER_ASSERTED_PERMITTED
 
 const round=(value,places=4)=>Number(value.toFixed(places));
 const isObject=value=>value&&typeof value==='object'&&!Array.isArray(value);
-const isoDate=value=>typeof value==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(value)&&
-  Number.isFinite(Date.parse(value+'T00:00:00.000Z'));
+export function isStrictISODate(value){
+  if(typeof value!=='string'||!/^\\d{4}-\\d{2}-\\d{2}$/.test(value))return false;
+  const timestamp=Date.parse(value+'T00:00:00.000Z');
+  return Number.isFinite(timestamp)&&new Date(timestamp).toISOString().slice(0,10)===value;
+}
 
 function validateBar(bar,index,previousDate){
   if(!isObject(bar))throw new Error('Market bar '+index+' must be an object');
   const keys=['date','open','high','low','close','volume'];
   if(Object.keys(bar).some(key=>!keys.includes(key))||keys.some(key=>!(key in bar)))
     throw new Error('Market bar '+index+' has invalid fields');
-  if(!isoDate(bar.date))throw new Error('Market bar '+index+' has invalid date');
+  if(!isStrictISODate(bar.date))throw new Error('Market bar '+index+' has invalid date');
   if(previousDate&&bar.date<=previousDate)throw new Error('Market bars must be unique and strictly ascending');
   for(const key of ['open','high','low','close']){
     if(!Number.isFinite(bar[key])||bar[key]<=0)throw new Error('Market bar '+index+' has invalid '+key);
@@ -48,7 +51,8 @@ function normalizeMarketProvenance(input,schema,priceAdjustment){
   const allowed=['retrievedAt','adjustmentMethod','corporateActions','survivorship','licensing'];
   if(Object.keys(input).some(key=>!allowed.includes(key))||allowed.some(key=>!(key in input)))
     throw new Error('Market-data provenance has invalid fields');
-  if(typeof input.retrievedAt!=='string'||!input.retrievedAt.includes('T')||!Number.isFinite(Date.parse(input.retrievedAt)))
+  if(typeof input.retrievedAt!=='string'||!isStrictISODate(input.retrievedAt.slice(0,10))||
+    !input.retrievedAt.includes('T')||!Number.isFinite(Date.parse(input.retrievedAt)))
     throw new Error('Invalid market-data retrieval timestamp');
   if(!ADJUSTMENT_METHODS.has(input.adjustmentMethod))throw new Error('Invalid adjustment methodology');
   if(!CORPORATE_ACTION_STATUSES.has(input.corporateActions))throw new Error('Invalid corporate-action status');
@@ -90,7 +94,7 @@ export function normalizeMarketDataset(input){
   if(typeof input.currency!=='string'||!/^[A-Z]{3}$/.test(input.currency))throw new Error('Invalid market currency');
   if(typeof input.source!=='string'||input.source.trim().length<2||input.source.trim().length>100)throw new Error('Invalid market-data source');
   if(!MARKET_DATA_MODES.has(input.mode))throw new Error('Invalid market-data mode');
-  if(!isoDate(input.sourceAsOf))throw new Error('Invalid source as-of date');
+  if(!isStrictISODate(input.sourceAsOf))throw new Error('Invalid source as-of date');
   if(!PRICE_ADJUSTMENTS.has(input.priceAdjustment))throw new Error('Invalid price-adjustment declaration');
   if(!Array.isArray(input.bars)||input.bars.length<60||input.bars.length>3000)
     throw new Error('Market dataset requires 60–3000 completed daily bars');
