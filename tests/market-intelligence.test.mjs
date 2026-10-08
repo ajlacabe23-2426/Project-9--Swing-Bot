@@ -169,3 +169,25 @@ test('paper risk bounds are explicit and reject oversized risk settings',()=>{
   assert.throws(()=>evaluateSwingSetup(input,{paperRiskFraction:0.10}),/risk fraction/);
   assert.throws(()=>evaluateSwingSetup(input,{paperCapital:0}),/paper capital/);
 });
+
+
+test('market dates reject impossible leap and month-end days instead of silently rolling forward',()=>{
+  const invalidAsOf=dataset();
+  invalidAsOf.sourceAsOf='2026-02-30';
+  assert.throws(()=>normalizeMarketDataset(invalidAsOf),/Invalid source as-of date/);
+
+  const invalidBar=dataset();
+  invalidBar.bars[10].date='2026-02-29';
+  assert.throws(()=>normalizeMarketDataset(invalidBar),/invalid date/);
+
+  const provenance=dataset('DATES');
+  provenance.schema=MARKET_DATA_SCHEMA_V2;
+  provenance.provenance={
+    retrievedAt:'2026-02-30T12:00:00.000Z',
+    adjustmentMethod:'PROVIDER_ADJUSTED_DOCUMENTED',
+    corporateActions:'NOT_VERIFIED',
+    survivorship:'NOT_ASSESSED',
+    licensing:'USER_ASSERTED_PERMITTED'
+  };
+  assert.throws(()=>normalizeMarketDataset(provenance),/Invalid market-data retrieval timestamp/);
+});
