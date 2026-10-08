@@ -1,16 +1,13 @@
-import {normalizeMarketDataset,CURRENT_MARKET_DATA_SCHEMA} from '../market-intelligence.mjs';
+import {normalizeMarketDataset,CURRENT_MARKET_DATA_SCHEMA,isStrictISODate} from '../market-intelligence.mjs';
 
 const BASE_URL='https://api.massive.com';
-const isoDate=value=>typeof value==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(value)&&
-  Number.isFinite(Date.parse(value+'T00:00:00.000Z'));
-
 function normalizedSymbol(value){
   const symbol=String(value||'').trim().toUpperCase();
   if(!/^[A-Z0-9.\-]{1,15}$/.test(symbol))throw new Error('Invalid Massive stock symbol');
   return symbol;
 }
 function dateRange(from,to){
-  if(!isoDate(from)||!isoDate(to)||from>to)throw new Error('Invalid Massive date range');
+  if(!isStrictISODate(from)||!isStrictISODate(to)||from>to)throw new Error('Invalid Massive date range');
   return {from,to};
 }
 
