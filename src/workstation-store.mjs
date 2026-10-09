@@ -152,7 +152,10 @@ export class WorkstationStore{
   async createTicket(symbol,paperUnits,{createdAt}={}){
     const normalized=String(symbol||'').trim().toUpperCase();
     if(!SYMBOL.test(normalized))throw new Error('Invalid paper-ticket symbol');
-    if(!Number.isFinite(paperUnits)||paperUnits<=0)throw new Error('Paper units must be positive');
+    if(!Number.isFinite(paperUnits)||paperUnits<0.001||
+      !Number.isSafeInteger(Math.round(paperUnits*1000))||
+      Math.abs(paperUnits*1000-Math.round(paperUnits*1000))>1e-8)
+      throw new Error('Paper units must be at least 0.001 and use 0.001 increments');
     if(typeof createdAt!=='string'||!createdAt)throw new Error('Paper-ticket timestamp is required');
     return this.mutate(state=>{
       const evaluation=state.lastScans[normalized];
