@@ -73,3 +73,16 @@ test('does not echo the API key in network failure errors',async()=>{
     error=>!String(error.message).includes(secret)
   );
 });
+
+
+test('provider rejects impossible calendar dates before requesting market data',()=>{
+  assert.throws(()=>buildMassiveDailyUrl({
+    symbol:'AAPL',from:'2026-02-29',to:'2026-03-31',apiKey:'test-key-123'
+  }),/Invalid Massive date range/);
+  assert.throws(()=>buildMassiveDailyUrl({
+    symbol:'AAPL',from:'2026-01-01',to:'2026-04-31',apiKey:'test-key-123'
+  }),/Invalid Massive date range/);
+  assert.doesNotThrow(()=>buildMassiveDailyUrl({
+    symbol:'AAPL',from:'2024-02-29',to:'2024-03-01',apiKey:'test-key-123'
+  }));
+});

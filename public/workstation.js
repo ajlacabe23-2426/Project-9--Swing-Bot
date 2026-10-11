@@ -22,6 +22,10 @@ function scans(){
 function statusClass(value){
   return value==='PAPER_SETUP_STRONG'?'classification-strong':value==='PAPER_SETUP_WATCH'?'classification-watch':'classification-none';
 }
+function canCreatePaperTicket(scan){
+  return !!scan&&scan.classification!=='NO_PAPER_SETUP'&&
+    Number.isFinite(scan.paperRiskPlan?.maxPaperUnits)&&scan.paperRiskPlan.maxPaperUnits>=0.001;
+}
 function drawSetupChart(scan,ticket){
   const svg=$('setup-chart'),ns='http://www.w3.org/2000/svg';svg.replaceChildren();
   const bars=scan?.chartBars||[];if(!bars.length)return;
@@ -88,7 +92,7 @@ function renderDetail(){
   for(const [label,value] of [['Paper capital basis',usd(p.paperCapital)],['Paper risk budget',usd(p.paperRiskBudget)],['Entry reference',usd(p.entryReference)],['Stop reference',usd(p.stopReference)],['Target reference',usd(p.targetReference)],['Risk per unit',usd(p.riskPerUnit)],['Maximum virtual units',num(p.maxPaperUnits,3)]])plan.append(metric(label,value));
   $('paper-units').max=String(p.maxPaperUnits);
   const current=Number($('paper-units').value);if(!Number.isFinite(current)||current<=0||current>p.maxPaperUnits)$('paper-units').value=String(Math.min(1,p.maxPaperUnits).toFixed(3));
-  $('create-ticket').disabled=scan.classification==='NO_PAPER_SETUP'||!(p.maxPaperUnits>0);
+  $('create-ticket').disabled=!canCreatePaperTicket(scan);
   const ticket=state.tickets.find(item=>item.symbol===scan.symbol);
   drawSetupChart(scan,ticket);
 }
@@ -129,7 +133,13 @@ function render(){
 async function runAction(button,fn){
   if(busy)return;busy=true;const original=button.textContent;button.disabled=true;
   try{state=await fn();render();}catch(error){$('workstation-status').textContent=error.message;}
-  finally{busy=false;button.disabled=false;button.textContent=original;}
+  finally{
+    busy=false;
+    button.disabled=button.id==='create-ticket'
+      ?!canCreatePaperTicket(state?.lastScans?.[selectedSymbol])
+      :false;
+    button.textContent=original;
+  }
 }
 $('save-watchlist').addEventListener('click',()=>runAction($('save-watchlist'),async()=>{
   const symbols=$('watchlist').value.split(',').map(value=>value.trim()).filter(Boolean);
