@@ -117,6 +117,15 @@ test('real headless Chromium operates loopback workstation and preserves state w
         return !!state.lastScans.TEST;
       },'initial research scan');
       await eventually(()=>js("document.querySelector('#setup-title').textContent.includes('TEST') && !!document.querySelector('#setup-chart path') && document.querySelector('#scanner-body').textContent.includes('TEST')"),'chart and detail in browser');
+      assert.equal(await js("document.querySelector('#create-ticket').disabled"),false,'eligible setup can create paper ticket');
+      await js("(() => {document.querySelector('#paper-units').value='0.001';document.querySelector('#create-ticket').click();return true;})()");
+      await eventually(async()=>{
+        const snapshot=await(await fetch(base+'/api/workstation')).json();
+        return snapshot.tickets.length===1;
+      },'paper ticket recorded');
+      await eventually(()=>js("document.querySelector('#ticket-body').textContent.includes('P9-0001')"),'paper journal rendered');
+      const ticketState=await(await fetch(base+'/api/workstation')).json();
+      assert.equal(ticketState.tickets[0].paperUnits,0.001,'fractional paper quantity accepted without rounding drift');
       const before=await(await fetch(base+'/api/workstation')).json();
       const older=structuredClone(source);
       older.bars.pop();
