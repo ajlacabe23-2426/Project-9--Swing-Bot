@@ -11,17 +11,19 @@ Keep local paper-research scans and stored journal observations consistent when 
 
 ## Authorized implementation paths
 - `src/workstation-store.mjs`
+- `.github/workflows/verify.yml`
 - `.codex/CURRENT_TASK.md`
 
 ## Authorized test paths
 - `tests/workstation-store.test.mjs`
+- `tests/browser-workstation.test.mjs`
 
 ## Acceptance criteria
 - Reject a refresh evaluation if its as-of date does not equal the most recent completed bar in the supplied, normalized dataset.
 - Reject a refresh whose evidence date is older than the persisted scan's as-of date for the same symbol.
 - Reject before persistence, retain original alerts/scans/journal/refresh metadata, including after reloading from disk.
 - Existing successful refresh and classification alert behavior stays unchanged.
-- Exact-head offline test verification and Security Monitor succeed; negative-case tests added.
+- Exact-head offline test verification, real headless Chromium loopback acceptance and Security Monitor succeed; negative-case tests added.
 
 ## Explicit non-goals
 - No live orders, broker integration, external market-data calls, hosting, strategy tuning, monetization, Axiovela integration or production configuration.
@@ -30,7 +32,7 @@ Keep local paper-research scans and stored journal observations consistent when 
 ## Required gates
 - Node 22 `npm run check` or equivalent GitHub offline verification.
 - GitHub Security Monitor and repository baseline.
-- Regression tests on frozen candidate SHA, plus review of risk and possible stale-provider recovery behavior.
+- Regression tests and GitHub hosted-runner Chromium loopback acceptance on frozen candidate SHA; document separate untested Mac/Lenovo browser behavior.
 
 ## Final approval gate
 Leave a draft PR for AJ. Do not merge to main or publish/deploy anything.
