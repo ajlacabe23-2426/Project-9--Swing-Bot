@@ -79,3 +79,37 @@ test('paper outcome distinguishes target, stop and ambiguous same-bar observatio
   both.bars[81].low=ticket.stopReference-1;both.bars[81].high=ticket.targetReference+1;
   assert.equal(evaluatePaperTicket(ticket,both).status,'AMBIGUOUS_SAME_BAR');
 });
+
+test('refresh refuses older or mismatched evidence without changing persisted workstation state',async()=>{
+  const dir=await mkdtemp(join(tmpdir(),'project9-stale-research-'));
+  try{
+    const store=new WorkstationStore(join(dir,'workstation.json'));
+    await store.init();
+    await store.setWatchlist(['TEST']);
+    const current=dataset(),currentEvaluation=forceWatchEvaluation(current);
+    await store.applyRefresh([{dataset:current,evaluation:currentEvaluation}],{refreshedAt:'2026-10-06T15:00:00.000Z'});
+    const before=store.snapshot();
+
+    const older=structuredClone(current);
+    older.bars.pop();
+    older.sourceAsOf=older.bars.at(-1).date;
+    const olderEvaluation=forceWatchEvaluation(older);
+    await assert.rejects(
+      ()=>store.applyRefresh([{dataset:older,evaluation:olderEvaluation}],{refreshedAt:'2026-10-07T15:00:00.000Z'}),
+      /Stale market refresh/
+    );
+    assert.deepEqual(store.snapshot(),before);
+
+    const mismatched=structuredClone(currentEvaluation);
+    mismatched.asOf=current.bars.at(-2).date;
+    await assert.rejects(
+      ()=>store.applyRefresh([{dataset:current,evaluation:mismatched}],{refreshedAt:'2026-10-07T15:00:00.000Z'}),
+      /latest completed market bar/
+    );
+    assert.deepEqual(store.snapshot(),before);
+
+    const restored=new WorkstationStore(join(dir,'workstation.json'));
+    await restored.init();
+    assert.deepEqual(restored.snapshot(),before);
+  }finally{await rm(dir,{recursive:true,force:true});}
+});

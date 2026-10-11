@@ -125,6 +125,10 @@ export class WorkstationStore{
         const evaluation=structuredClone(entry.evaluation),dataset=normalizeMarketDataset(entry.dataset);
         if(evaluation.symbol!==dataset.symbol||!state.watchlist.includes(dataset.symbol))throw new Error('Refresh entry is outside watchlist');
         const previous=state.lastScans[dataset.symbol];
+        if(evaluation.asOf!==dataset.bars.at(-1).date)
+          throw new Error('Refresh evidence date must match the latest completed market bar');
+        if(previous&&evaluation.asOf<previous.asOf)
+          throw new Error('Stale market refresh cannot replace newer research evidence');
         if(previous&&previous.classification!==evaluation.classification){
           state.alerts.unshift({
             id:'A'+(state.alerts.length+1)+'-'+dataset.symbol+'-'+evaluation.asOf,
