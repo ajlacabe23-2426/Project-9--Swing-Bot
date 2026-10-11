@@ -113,3 +113,26 @@ test('refresh refuses older or mismatched evidence without changing persisted wo
     assert.deepEqual(restored.snapshot(),before);
   }finally{await rm(dir,{recursive:true,force:true});}
 });
+
+test('paper tickets reject fractional units that would round into invalid stored amounts',async()=>{
+  const dir=await mkdtemp(join(tmpdir(),'project9-units-'));
+  try{
+    const store=new WorkstationStore(join(dir,'workstation.json'));
+    await store.init();
+    await store.setWatchlist(['TEST']);
+    const input=dataset(),evaluation=forceWatchEvaluation(input);
+    await store.applyRefresh([{dataset:input,evaluation}],{refreshedAt:'2026-10-05T15:00:00.000Z'});
+    const createdAt='2026-10-05T15:01:00.000Z';
+    await assert.rejects(
+      ()=>store.createTicket('TEST',0.0001,{createdAt}),/0.001 increments/
+    );
+    await assert.rejects(
+      ()=>store.createTicket('TEST',0.0015,{createdAt}),/0.001 increments/
+    );
+    assert.equal(store.snapshot().tickets.length,0);
+    if(evaluation.paperRiskPlan.maxPaperUnits>=0.001){
+      const valid=await store.createTicket('TEST',0.001,{createdAt});
+      assert.equal(valid.tickets[0].paperUnits,0.001);
+    }
+  }finally{await rm(dir,{recursive:true,force:true});}
+});
