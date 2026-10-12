@@ -104,3 +104,7 @@ Run `npm run check` for syntax checks and the offline unit/HTTP integration suit
 4. Only after a separate scope review: subscriber authentication and isolation, privacy/data retention, network abuse controls, data redistribution rights, regulatory review and independent security testing for commercial software.
 
 **Real-money automated execution is explicitly out of scope.**
+
+### Entry/exit decision and code map
+
+The local workstation includes a rotatable 3D map linking scanner evidence, code functions, and existing paper entry/stop/target references. Select current scan levels or an individual frozen ticket, inspect each node, and switch to flat or code-label views. The chart distinguishes reference levels from subsequent paper touches. See [decision map usage and verification](docs/DECISION_MAP.md).
