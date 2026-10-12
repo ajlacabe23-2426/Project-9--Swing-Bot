@@ -17,17 +17,27 @@
 
 <article class="panel setup-panel"><div class="panel-head"><div><div class="panel-kicker">02 / SETUP DETAIL</div><h2 id="setup-title">Select a scanned symbol</h2></div><span id="setup-tag" class="tag">NO SETUP</span></div>
 <div class="setup-score"><strong id="setup-score">—</strong><span>deterministic setup score / 100</span></div>
+<label class="mini-label" for="reference-view">CHART / MAP REFERENCE BASIS</label><select id="reference-view" aria-describedby="reference-context"><option value="current">Current scan references</option></select><p id="reference-context" class="supporting"></p>
 <div class="chart-wrap workstation-chart"><svg id="setup-chart" role="img" aria-label="Completed daily closing prices with frozen paper references" viewBox="0 0 760 284" preserveAspectRatio="none"></svg></div>
 <div id="setup-source" class="research-provenance">Refresh a symbol to inspect source-bound evidence.</div>
 <div class="detail-grid">
 <div><span class="mini-label">OBSERVED</span><div id="setup-observed" class="metrics-list"></div></div>
 <div><span class="mini-label">RULE CHECKS</span><div id="setup-checks" class="metrics-list"></div></div>
 </div>
-<div class="paper-plan"><span class="mini-label">FROZEN PAPER RISK REFERENCES</span><div id="paper-plan" class="metrics-list"></div>
+<div class="paper-plan"><span class="mini-label">CURRENT SCAN PAPER RISK REFERENCES</span><div id="paper-plan" class="metrics-list"></div>
 <div class="ticket-controls"><label for="paper-units">Virtual units</label><input id="paper-units" type="number" min="0.001" step="0.001" value="1"><button id="create-ticket" class="button secondary-button" disabled>Create paper ticket</button></div>
-<p class="supporting">A paper ticket freezes the current research snapshot. It does not represent a recommendation, brokerage order, or real position.</p></div>
+<p class="supporting">Creating a ticket always uses the current scan, regardless of the chart/map reference view. A paper ticket freezes the current research snapshot. It does not represent a recommendation, brokerage order, or real position.</p></div>
 </article>
 </div>
+
+<article class="panel decision-panel"><div class="panel-head"><div><div class="panel-kicker">DECISION PATH / CODE STRUCTURE</div><h2>Explore entry &amp; exit references</h2></div><span class="tag">READ-ONLY 3D MAP</span></div>
+<p class="supporting">Follow completed bars through scanner rules, paper risk references, and outcomes. Switch to code labels to see the functions behind each step.</p>
+<div class="map-controls"><button type="button" id="map-left" class="button secondary-button" aria-label="Rotate map left">Rotate left</button><button type="button" id="map-right" class="button secondary-button" aria-label="Rotate map right">Rotate right</button><button type="button" id="map-reset" class="button secondary-button">Reset view</button><button type="button" id="map-flat" class="button secondary-button" aria-pressed="false">Flat view</button><button type="button" id="map-code" class="button secondary-button" aria-pressed="false">Code labels</button></div>
+<p id="map-instructions" class="supporting">Drag to rotate, or focus the map and use arrow keys (Home resets). Select a node or use the buttons below. Connections show code dependencies, not forecasts or confidence.</p>
+<div class="map-scroll"><svg id="decision-map" viewBox="0 0 1000 460" tabindex="0" role="img" aria-label="Rotatable decision and code dependency map" aria-describedby="map-instructions map-summary"></svg></div>
+<p id="map-summary" class="supporting"></p><div id="map-node-list" class="map-node-list" aria-label="Decision node selection"></div>
+<div class="map-detail" aria-live="polite"><h3 id="map-detail-title">Decision path</h3><p id="map-detail-text">Select a scanned symbol.</p><code id="map-detail-code"></code></div>
+</article>
 
 <div class="secondary-grid workstation-lower">
 <article class="panel"><div class="panel-head"><div><div class="panel-kicker">03 / CHANGE DETECTION</div><h2>Classification alerts</h2></div><span class="tag" id="alert-count">0 ALERTS</span></div><div id="alerts" class="alert-list"><div class="empty">No classification changes recorded.</div></div></article>

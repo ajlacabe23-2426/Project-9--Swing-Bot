@@ -61,6 +61,11 @@ test('local HTTP API restricts origin, host and inputs and has no broker endpoin
 
     const workstationPage=await fetch(base+'/workstation.html');assert.equal(workstationPage.status,200);assert.match(await workstationPage.text(),/READ-ONLY RESEARCH/);
     assert.equal((await fetch(base+'/workstation.js')).status,200);
+    for(const path of ['/decision-map.js','/decision-map-core.mjs']){
+      const response=await fetch(base+path);assert.equal(response.status,200);
+      assert.match(response.headers.get('content-type'),/text\/javascript/);
+      assert.match(response.headers.get('content-security-policy'),/script-src 'self'/);
+    }
     const workstation=await (await fetch(base+'/api/workstation')).json();assert.deepEqual(workstation.watchlist,[]);
 
     const watchlist=await post('/api/workstation/watchlist',{symbols:['test']});assert.equal(watchlist.status,200);

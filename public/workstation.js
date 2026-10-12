@@ -1,7 +1,10 @@
+import {createDecisionMap} from './decision-map.js';
+import {buildDecisionMap} from './decision-map-core.mjs';
 const $=id=>document.getElementById(id);
 const usd=n=>Number.isFinite(n)?new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:2}).format(n):'—';
 const num=(n,d=2)=>Number.isFinite(n)?new Intl.NumberFormat('en-US',{minimumFractionDigits:d,maximumFractionDigits:d}).format(n):'—';
-let state=null,selectedSymbol=null,busy=false;
+let state=null,selectedSymbol=null,busy=false,referenceView='current';
+const decisionMap=createDecisionMap();
 
 async function request(path,body){
   const options=body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)};
@@ -29,11 +32,8 @@ function canCreatePaperTicket(scan){
 function drawSetupChart(scan,ticket){
   const svg=$('setup-chart'),ns='http://www.w3.org/2000/svg';svg.replaceChildren();
   const bars=scan?.chartBars||[];if(!bars.length)return;
-  const refs=ticket?{
-    entry:ticket.entryReference,stop:ticket.stopReference,target:ticket.targetReference
-  }:{
-    entry:scan.paperRiskPlan.entryReference,stop:scan.paperRiskPlan.stopReference,target:scan.paperRiskPlan.targetReference
-  };
+  const model=buildDecisionMap(scan,ticket),refs=model.references||{};
+  svg.setAttribute('aria-label','Completed daily closes; '+model.summary);
   const values=bars.flatMap(bar=>[bar.close]).concat(Object.values(refs)).filter(Number.isFinite);
   let min=Math.min(...values),max=Math.max(...values);const pad=(max-min)*.12||1;min-=pad;max+=pad;
   const width=760,height=284;
@@ -53,7 +53,22 @@ function drawSetupChart(scan,ticket){
     if(!Number.isFinite(value))continue;
     const y=yFor(value);add('line',{x1:40,x2:735,y1:y,y2:y,stroke,'stroke-width':1,'stroke-dasharray':'5 5'});
     add('text',{x:650,y:y-5,fill:stroke,'font-size':9},label+' '+value.toFixed(2));
+    const index=label==='ENTRY'?bars.findIndex(bar=>bar.date===model.referenceDate):-1;
+    if(label!=='ENTRY'||index>=0){
+      const x=label==='ENTRY'?40+index/Math.max(1,bars.length-1)*690:735;
+      const marker=add('circle',{'data-reference':label.toLowerCase(),cx:x,cy:y,r:4,fill:stroke});
+      const title=document.createElementNS(ns,'title');title.textContent=model.referenceLabel+' · '+label+' reference '+value.toFixed(4);marker.append(title);
+    }
   }
+  const outcome=ticket?.outcome;
+  const exitIndex=bars.findIndex(bar=>bar.date===outcome?.observedThrough);
+  if(exitIndex>=0&&Number.isFinite(outcome?.exitReference)&&['STOP_REFERENCE_TOUCHED','TARGET_REFERENCE_TOUCHED'].includes(outcome.status)){
+    const x=40+exitIndex/Math.max(1,bars.length-1)*690,y=yFor(outcome.exitReference);
+    const marker=add('circle',{'data-outcome':outcome.status,cx:x,cy:y,r:6,fill:'#e5eddf',stroke:'#102c32','stroke-width':2});
+    const title=document.createElementNS(ns,'title');title.textContent='Paper reference touch · '+outcome.observedThrough+' · '+outcome.status+' · not an executable fill';marker.append(title);
+  }
+  add('text',{x:40,y:281,fill:'#79969c','font-size':9},bars[0].date);
+  add('text',{x:650,y:281,fill:'#79969c','font-size':9},bars.at(-1).date);
 }
 function renderScanner(){
   const tbody=$('scanner-body');tbody.replaceChildren();
@@ -62,7 +77,7 @@ function renderScanner(){
   for(const scan of ranked){
     const tr=document.createElement('tr');tr.className=scan.symbol===selectedSymbol?'selected-row':'';
     const symbolCell=document.createElement('td'),button=document.createElement('button');button.className='scanner-symbol';button.textContent=scan.symbol;
-    button.addEventListener('click',()=>{selectedSymbol=scan.symbol;render();});symbolCell.append(button);tr.append(symbolCell);
+    button.addEventListener('click',()=>{selectedSymbol=scan.symbol;referenceView='current';render();});symbolCell.append(button);tr.append(symbolCell);
     tr.append(cell(String(scan.score)),cell(scan.classification,statusClass(scan.classification)),cell(usd(scan.observed.close)),cell(num(scan.observed.rsi14,1)),cell(scan.observed.relativeVolume===null?'—':num(scan.observed.relativeVolume,2)+'×'),cell(scan.asOf));
     tbody.append(tr);
   }
@@ -74,7 +89,7 @@ function renderDetail(){
   if(!scan){
     $('setup-title').textContent='Select a scanned symbol';$('setup-tag').textContent='NO SETUP';$('setup-tag').className='tag';
     $('setup-score').textContent='—';$('setup-source').textContent='Refresh a symbol to inspect source-bound evidence.';
-    $('create-ticket').disabled=true;$('setup-chart').replaceChildren();return;
+    $('create-ticket').disabled=true;$('setup-chart').replaceChildren();renderReferenceView(null);decisionMap.update(null,null);return;
   }
   $('setup-title').textContent=scan.symbol+' · '+scan.asOf;
   $('setup-tag').textContent=scan.classification.replaceAll('_',' ');
@@ -93,8 +108,21 @@ function renderDetail(){
   $('paper-units').max=String(p.maxPaperUnits);
   const current=Number($('paper-units').value);if(!Number.isFinite(current)||current<=0||current>p.maxPaperUnits)$('paper-units').value=String(Math.min(1,p.maxPaperUnits).toFixed(3));
   $('create-ticket').disabled=!canCreatePaperTicket(scan);
-  const ticket=state.tickets.find(item=>item.symbol===scan.symbol);
-  drawSetupChart(scan,ticket);
+  const ticket=renderReferenceView(scan);
+  decisionMap.update(scan,ticket);drawSetupChart(scan,ticket);
+}
+function renderReferenceView(scan){
+  const select=$('reference-view');select.replaceChildren();
+  const add=(value,label)=>{const option=document.createElement('option');option.value=value;option.textContent=label;select.append(option);};
+  add('current','Current scan references'+(scan?' · '+scan.asOf:''));
+  const tickets=(state?.tickets||[]).filter(t=>t.symbol===scan?.symbol);
+  for(const ticket of tickets)add(ticket.id,'Frozen '+ticket.id+' · '+ticket.openedAsOf);
+  if(!tickets.some(t=>t.id===referenceView))referenceView='current';
+  select.value=referenceView;select.disabled=!scan;
+  const ticket=tickets.find(t=>t.id===referenceView)||null;
+  const model=buildDecisionMap(scan,ticket);
+  $('reference-context').textContent=model.summary;
+  return ticket;
 }
 function renderAlerts(){
   const box=$('alerts');box.replaceChildren();const alerts=state?.alerts||[];$('alert-count').textContent=alerts.length+' ALERT'+(alerts.length===1?'':'S');
@@ -141,6 +169,7 @@ async function runAction(button,fn){
     button.textContent=original;
   }
 }
+$('reference-view').addEventListener('change',()=>{referenceView=$('reference-view').value;renderDetail();});
 $('save-watchlist').addEventListener('click',()=>runAction($('save-watchlist'),async()=>{
   const symbols=$('watchlist').value.split(',').map(value=>value.trim()).filter(Boolean);
   return request('/api/workstation/watchlist',{symbols});
