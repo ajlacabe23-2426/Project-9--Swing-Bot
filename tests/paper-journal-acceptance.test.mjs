@@ -47,7 +47,7 @@ test('paper entry, target observation and frozen journal survive actual store re
     const date=nextTradingDate(source.bars.at(-1).date);
     later.bars.push({
       date,open:frozen.entry,high:frozen.target+1,
-      low:Math.max(frozen.stop+0.5,Math.min(frozen.entry,frozen.target)),
+      low:frozen.entry-(frozen.entry-frozen.stop)/2,
       close:frozen.target+0.25,volume:200000
     });
     later.sourceAsOf=date;
