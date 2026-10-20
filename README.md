@@ -65,7 +65,7 @@ MASSIVE_API_KEY=your_local_key npm run fetch:market -- AAPL 2026-01-01 2026-10-0
 npm run scan:watchlist -- .data/AAPL.json
 ```
 
-The adapter maps provider OHLCV into the Project 9 v2 contract and fails closed on HTTP errors, malformed payloads, short history, invalid bars, or contradictory provenance. It records the local retrieval timestamp and explicitly labels Massive adjusted aggregates as provider-adjusted but not independently verified for adjustment methodology/corporate-action coverage; survivorship remains unassessed and provider terms still require review for commercial redistribution. It does **not** fetch trades/quotes, connect a brokerage account, or place orders.
+The adapter maps provider OHLCV into the Project 9 v2 contract and fails closed on HTTP errors, malformed payloads, ticker mismatches, results outside the requested date window, short history, invalid bars, or contradictory provenance. It records the local retrieval timestamp and explicitly labels Massive adjusted aggregates as provider-adjusted but not independently verified for adjustment methodology/corporate-action coverage; survivorship remains unassessed and provider terms still require review for commercial redistribution. It does **not** fetch trades/quotes, connect a brokerage account, or place orders. A successful provider response is not independently authenticated market history.
 
 The next provider milestone is broader historical coverage plus independent corporate-action/survivorship review and point-in-time universe testing. The v2 contract now has explicit fields for those facts, but it deliberately reports them as unresolved until evidence exists.
 
