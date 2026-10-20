@@ -27,3 +27,10 @@ jobs:
             echo "No npm dependency lockfile present; repository baseline verifies that package.json has no dependencies."
           fi
       - run: npm run check
+      - name: Check browser availability for loopback acceptance
+        run: command -v google-chrome
+      - name: Exercise workstation in headless Chromium
+        env:
+          RUN_BROWSER_ACCEPTANCE: '1'
+          CHROME_BIN: /usr/bin/google-chrome
+        run: node --test tests/browser-workstation.test.mjs

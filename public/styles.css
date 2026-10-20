@@ -13,3 +13,15 @@
 .alert-list{display:flex;flex-direction:column;gap:9px}.alert-card{border:1px solid #39504f;background:#1d2c31;padding:12px;display:flex;flex-direction:column;gap:4px}.alert-card strong{font-size:11px;color:#dce8df}.alert-card span{font-size:10px;color:var(--muted)}
 @media(max-width:1200px){.workstation-grid,.workstation-lower{grid-template-columns:1fr}}
 @media(max-width:750px){.workstation-controls{flex-direction:column}.detail-grid{grid-template-columns:1fr}.setup-score strong{font-size:36px}.ticket-controls{align-items:stretch}.ticket-controls input{width:100%}}
+
+/* Decision map uses local SVG projection: no CDN, WebGL or animation dependency. */
+.decision-panel{margin-top:24px}.map-controls,.map-node-list{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}
+.map-scroll{overflow:auto;border:1px solid #345159;border-radius:12px;background:radial-gradient(ellipse at center,#193d43,#10282e)}
+#decision-map{display:block;width:100%;min-width:640px;touch-action:pan-y;cursor:grab}
+#decision-map:focus-visible,.map-choice:focus-visible,#reference-view:focus-visible{outline:2px solid #e1c98b;outline-offset:3px}
+#decision-map.map-flat-view{cursor:default}.map-node{cursor:pointer}
+.map-choice{border:1px solid #42616a;border-radius:6px;padding:8px 12px;background:#15333a;color:#c3d4cd;cursor:pointer;font:inherit;font-size:12px}
+.map-choice[aria-pressed="true"]{border-color:#e1c98b;background:#294247;color:#fff}
+.map-detail{border-top:1px solid #345159;padding:16px 0 0;min-height:140px}.map-detail h3{font-size:17px;margin:0 0 8px}
+.map-detail p{color:#b4c6c3;line-height:1.6;margin:0 0 10px}.map-detail code{color:#e1c98b;overflow-wrap:anywhere;font-size:12px}
+#reference-view{max-width:100%;background:#14323a;color:#e5eddf;border:1px solid #42616a;border-radius:6px;padding:10px;margin-top:8px}

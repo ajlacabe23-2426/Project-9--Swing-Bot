@@ -125,6 +125,10 @@ export class WorkstationStore{
         const evaluation=structuredClone(entry.evaluation),dataset=normalizeMarketDataset(entry.dataset);
         if(evaluation.symbol!==dataset.symbol||!state.watchlist.includes(dataset.symbol))throw new Error('Refresh entry is outside watchlist');
         const previous=state.lastScans[dataset.symbol];
+        if(evaluation.asOf!==dataset.bars.at(-1).date)
+          throw new Error('Refresh evidence date must match the latest completed market bar');
+        if(previous&&evaluation.asOf<previous.asOf)
+          throw new Error('Stale market refresh cannot replace newer research evidence');
         if(previous&&previous.classification!==evaluation.classification){
           state.alerts.unshift({
             id:'A'+(state.alerts.length+1)+'-'+dataset.symbol+'-'+evaluation.asOf,
@@ -152,7 +156,10 @@ export class WorkstationStore{
   async createTicket(symbol,paperUnits,{createdAt}={}){
     const normalized=String(symbol||'').trim().toUpperCase();
     if(!SYMBOL.test(normalized))throw new Error('Invalid paper-ticket symbol');
-    if(!Number.isFinite(paperUnits)||paperUnits<=0)throw new Error('Paper units must be positive');
+    if(!Number.isFinite(paperUnits)||paperUnits<0.001||
+      !Number.isSafeInteger(Math.round(paperUnits*1000))||
+      Math.abs(paperUnits*1000-Math.round(paperUnits*1000))>1e-8)
+      throw new Error('Paper units must be at least 0.001 and use 0.001 increments');
     if(typeof createdAt!=='string'||!createdAt)throw new Error('Paper-ticket timestamp is required');
     return this.mutate(state=>{
       const evaluation=state.lastScans[normalized];
