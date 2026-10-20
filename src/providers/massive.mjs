@@ -35,6 +35,9 @@ export async function fetchMassiveDailyDataset({symbol,from,to,apiKey,fetchImpl=
   let payload;
   try{payload=await response.json();}catch{throw new Error('Massive returned invalid JSON');}
   if(!payload||payload.status!=='OK'||!Array.isArray(payload.results))throw new Error('Massive returned an invalid aggregate response');
+  // A successful HTTP response does not establish that the data is for the requested symbol.
+  // Never attribute another instrument's prices to this research watchlist entry.
+  if(payload.ticker!==ticker)throw new Error('Massive aggregate ticker does not match the requested symbol');
   const bars=payload.results.map((item,index)=>{
     const timestamp=Number(item.t),volume=Number(item.v);
     const bar={
@@ -44,6 +47,8 @@ export async function fetchMassiveDailyDataset({symbol,from,to,apiKey,fetchImpl=
     };
     if(!bar.date||![bar.open,bar.high,bar.low,bar.close].every(Number.isFinite)||!Number.isSafeInteger(bar.volume))
       throw new Error('Massive aggregate '+index+' is malformed');
+    if(bar.date<from||bar.date>to)
+      throw new Error('Massive aggregate '+index+' falls outside the requested date range');
     return bar;
   });
   if(bars.length<60)throw new Error('Massive response needs at least 60 completed daily bars for swing analysis');

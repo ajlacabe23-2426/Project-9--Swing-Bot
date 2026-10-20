@@ -59,8 +59,28 @@ test('fails closed for provider errors, malformed payloads and short history',as
   }),/invalid aggregate response/);
   await assert.rejects(()=>fetchMassiveDailyDataset({
     symbol:'AAPL',from:'2026-01-01',to:'2026-02-01',apiKey:'test-key-123',
-    fetchImpl:async()=>({ok:true,status:200,json:async()=>({status:'OK',results:results(20)})})
+    fetchImpl:async()=>({ok:true,status:200,json:async()=>({status:'OK',ticker:'AAPL',results:results(20)})})
   }),/at least 60/);
+});
+
+test('provider refuses a successful response for another ticker or a bar outside the requested window',async()=>{
+  const request={symbol:'AAPL',from:'2026-01-01',to:'2026-06-30',apiKey:'test-key-123'};
+  await assert.rejects(()=>fetchMassiveDailyDataset({
+    ...request,fetchImpl:async()=>({ok:true,status:200,json:async()=>({status:'OK',ticker:'MSFT',results:results()})})
+  }),/ticker does not match/);
+  await assert.rejects(()=>fetchMassiveDailyDataset({
+    ...request,fetchImpl:async()=>({ok:true,status:200,json:async()=>({status:'OK',results:results()})})
+  }),/ticker does not match/);
+  const outOfWindow=results();
+  outOfWindow[0]={...outOfWindow[0],t:Date.parse('2025-12-31T00:00:00.000Z')};
+  await assert.rejects(()=>fetchMassiveDailyDataset({
+    ...request,fetchImpl:async()=>({ok:true,status:200,json:async()=>({status:'OK',ticker:'AAPL',results:outOfWindow})})
+  }),/outside the requested date range/);
+  const afterWindow=results();
+  afterWindow[afterWindow.length-1]={...afterWindow.at(-1),t:Date.parse('2026-07-01T00:00:00.000Z')};
+  await assert.rejects(()=>fetchMassiveDailyDataset({
+    ...request,fetchImpl:async()=>({ok:true,status:200,json:async()=>({status:'OK',ticker:'AAPL',results:afterWindow})})
+  }),/outside the requested date range/);
 });
 
 test('does not echo the API key in network failure errors',async()=>{

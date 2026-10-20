@@ -1,41 +1,27 @@
-# Project 9 — Isolated integration acceptance task
+# Project 9 — Entry/exit decision and code map
 
-Task ID: P9-PREMERGE-INTEGRATION-12-13-15-2026-10-10
-Title: Validate paper workstation data and interaction safety across PRs #12, #13 and #15
+Task ID: P9-DECISION-MAP-2026-10-12
 Status: VERIFYING
 Risk Tier: TIER_2
-Base SHA: 6924d2bc5742a1d47ad3346508ae85a78530a68e
+Base SHA: 82b739de9a1a64abf5c56dd5d61f5b9f8d3c56ee
+Base PR: #17 (unmerged frozen integration candidate)
 
 ## Objective
-Assemble a non-merged single-parent validation branch combining strict market calendar dates, fractional paper-ticket/UI controls, and stale refresh rejection. Preserve all existing independent PRs.
+Implement the user's authorized 3D structure idea in the personal swing workstation: explore the code path and evidence behind existing paper entry/stop/target levels. Isolated feature branch; preserve #17 and existing paper data.
 
-## Authorized implementation paths
-- `src/market-intelligence.mjs`
-- `src/providers/massive.mjs`
-- `src/workstation-store.mjs`
-- `public/workstation.js`
-- `.github/workflows/verify.yml`
-- `.codex/CURRENT_TASK.md`
-
-## Authorized test paths
-- `tests/market-intelligence.test.mjs`
-- `tests/provider-massive.test.mjs`
-- `tests/workstation-store.test.mjs`
-- `tests/browser-workstation.test.mjs`
-
-## Acceptance criteria
-- Existing headless Chromium browser UI flow passes on the integration candidate with realistic loopback-only synthetic data.
-- All existing offline research and security tests pass, including strict ISO dates, malformed date rejection, fractional paper units, and nonregressing workstation refresh.
-- Source changes from PRs #12/#13/#15 coexist without either branch's shared-file changes lost.
-- No remaining CI failures and one exact frozen candidate SHA is reported.
-
-## Explicit non-goals
-- Do not merge any PR, change main, deploy production, enable broker connections, place trades, activate paid data providers, or handle production secrets.
+## Implementation
+- Browser-local SVG perspective projection, rotation, keyboard/node buttons, flat view and code labels; no new dependencies, AI calls or WebGL/CDN.
+- Pure read-only model projects exact scanner or explicitly selected frozen-ticket references. Current scan indicators never stand in for missing at-open evidence.
+- Chart marks entry at its reference date and a subsequent paper stop/target touch at its observation date; an ambiguous daily bar never receives an invented exit marker.
+- Explicit selector distinguishes current scan from individual historical tickets; ticket creation always uses the current scan.
+- Existing scanner rules, risk formulas, persistence schema and execution boundary are unchanged.
 
 ## Required gates
-- GitHub offline verification and Security Monitor on exact candidate SHA.
-- Headless Chrome loopback acceptance on exact candidate SHA.
-- Manual Mac/Lenovo device-specific acceptance remains separate.
+- Syntax and complete offline Node test suite.
+- Security baseline and full-history secret scan.
+- Actual Chromium loopback acceptance using disposable synthetic data: rotate, select, keyboard, mobile layout, choose frozen ticket, refresh outcome, preserve paper state.
+- GitHub Verify and Security Monitor on exact candidate SHA.
+- Manual Mac/Lenovo acceptance remains owner verification, separately recorded.
 
-## Completion target
-READY_FOR_AJ only once all checks pass. The branch is verification-only, not an authorization to merge.
+## Boundaries
+No merges, main changes, production deployments, broker integration, real orders, paid service activation or production secrets. Graph is a curated map of existing functions, not AI-extracted arbitrary code. No claim of improved trading performance or real-provider data verification.
