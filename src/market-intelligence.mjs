@@ -168,6 +168,28 @@ function summarizeMarketDataQuality(dataset,endIndex=dataset.bars.length-1){
   };
 }
 
+
+function executionReadinessReview(dataset){
+  const reasons=[
+    'NO_LIVE_BID_ASK',
+    'NO_MARKET_SESSION_STATE',
+    'NO_LIQUIDITY_OR_SLIPPAGE_ESTIMATE',
+    'NO_BROKER_EXECUTION_ROUTE'
+  ];
+  if(dataset.mode!=='REALTIME')reasons.unshift('MARKET_DATA_NOT_REALTIME');
+  return {
+    status:'NOT_EXECUTION_READY',
+    reasons,
+    dataMode:dataset.mode,
+    paperOnly:true,
+    setupClassificationIndependent:true,
+    executablePriceVerified:false,
+    marketSessionVerified:false,
+    liquidityVerified:false,
+    brokerRouteVerified:false
+  };
+}
+
 export function assessMarketDataQuality(input){
   return summarizeMarketDataQuality(normalizeMarketDataset(input));
 }
@@ -237,6 +259,7 @@ export function evaluateSwingSetup(input,{asOfIndex=null,paperCapital=10_000,pap
     checks,
     score,
     classification,
+    executionReadiness:executionReadinessReview(dataset),
     paperRiskPlan:{
       basis:'HYPOTHETICAL_ATR_REFERENCE_ONLY',
       paperCapital:round(paperCapital,2),
@@ -261,7 +284,8 @@ export function evaluateSwingSetup(input,{asOfIndex=null,paperCapital=10_000,pap
       brokerageConnected:false,
       executionAllowed:false,
       investmentRecommendation:false,
-      futureBarsUsed:false
+      futureBarsUsed:false,
+      setupImpliesExecutionReadiness:false
     }
   };
 }
