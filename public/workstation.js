@@ -104,7 +104,7 @@ function renderDetail(){
   const labels={above20:'Close above 20-session mean',trendAligned:'20-session mean above 50-session mean',constructiveMomentum:'RSI in configured research band',breakout:'Close above prior 20-session high',volumeConfirmation:'Relative-volume confirmation'};
   for(const [key,value] of Object.entries(scan.checks))checks.append(metric(labels[key]||key,value?'PASS':'NO'));
   const p=scan.paperRiskPlan;
-  for(const [label,value] of [['Paper capital basis',usd(p.paperCapital)],['Paper risk budget',usd(p.paperRiskBudget)],['Entry reference',usd(p.entryReference)],['Stop reference',usd(p.stopReference)],['Target reference',usd(p.targetReference)],['Risk per unit',usd(p.riskPerUnit)],['Maximum virtual units',num(p.maxPaperUnits,3)]])plan.append(metric(label,value));
+  for(const [label,value] of [['Paper capital basis',usd(p.paperCapital)],['Paper risk budget',usd(p.paperRiskBudget)],['Entry reference',usd(p.entryReference)],['Stop reference',usd(p.stopReference)],['Target reference',usd(p.targetReference)],['Risk per unit',usd(p.riskPerUnit)],['Maximum virtual units',num(p.maxPaperUnits,3)],['Execution readiness',String(scan.executionReadiness?.status||'NOT_ASSESSED').replaceAll('_',' ')]])plan.append(metric(label,value));
   $('paper-units').max=String(p.maxPaperUnits);
   const current=Number($('paper-units').value);if(!Number.isFinite(current)||current<=0||current>p.maxPaperUnits)$('paper-units').value=String(Math.min(1,p.maxPaperUnits).toFixed(3));
   $('create-ticket').disabled=!canCreatePaperTicket(scan);

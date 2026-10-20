@@ -121,6 +121,12 @@ test('swing evaluation is deterministic, paper-only and evidence-linked',()=>{
   assert.equal(first.safety.brokerageConnected,false);
   assert.equal(first.safety.executionAllowed,false);
   assert.equal(first.safety.futureBarsUsed,false);
+  assert.equal(first.safety.setupImpliesExecutionReadiness,false);
+  assert.equal(first.executionReadiness.status,'NOT_EXECUTION_READY');
+  assert.equal(first.executionReadiness.paperOnly,true);
+  assert.ok(first.executionReadiness.reasons.includes('NO_LIVE_BID_ASK'));
+  assert.ok(first.executionReadiness.reasons.includes('NO_MARKET_SESSION_STATE'));
+  assert.ok(first.executionReadiness.reasons.includes('NO_LIQUIDITY_OR_SLIPPAGE_ESTIMATE'));
   assert.equal(first.dataQuality.status,'STRUCTURALLY_CLEAN_UNVERIFIED');
   assert.equal(first.evidence.every(item=>item.date===first.asOf),true);
 });
@@ -190,4 +196,18 @@ test('market dates reject impossible leap and month-end days instead of silently
     licensing:'USER_ASSERTED_PERMITTED'
   };
   assert.throws(()=>normalizeMarketDataset(provenance),/Invalid market-data retrieval timestamp/);
+});
+
+
+test('realtime bars still do not imply an executable swing entry',()=>{
+  const input=dataset('READY',{breakout:true});
+  input.mode='REALTIME';
+  const result=evaluateSwingSetup(input);
+  assert.equal(result.executionReadiness.status,'NOT_EXECUTION_READY');
+  assert.equal(result.executionReadiness.reasons.includes('MARKET_DATA_NOT_REALTIME'),false);
+  assert.ok(result.executionReadiness.reasons.includes('NO_LIVE_BID_ASK'));
+  assert.ok(result.executionReadiness.reasons.includes('NO_MARKET_SESSION_STATE'));
+  assert.ok(result.executionReadiness.reasons.includes('NO_LIQUIDITY_OR_SLIPPAGE_ESTIMATE'));
+  assert.ok(result.executionReadiness.reasons.includes('NO_BROKER_EXECUTION_ROUTE'));
+  assert.equal(result.safety.executionAllowed,false);
 });
