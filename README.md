@@ -92,6 +92,20 @@ When `MASSIVE_API_KEY` is configured locally, **Refresh completed bars** fetches
 Paper tickets are intentionally constrained to a current watch/strong research classification and cannot exceed the engine's virtual risk reference. These controls are research guardrails, not individualized investment advice or a claim that the risk model is appropriate for real capital.
 
 
+## No-key workstation demonstration (offline)
+
+No market API key is needed to demonstrate the entire read-only scanner locally:
+
+```bash
+npm run demo:seed
+npm run check
+npm start
+```
+
+Open **http://127.0.0.1:4179/workstation.html**, then click **Refresh completed bars**. The seed command writes two *engineered, entirely fictitious* market-contract fixtures `.data/SIM09.json` (a constructed strong research classification) and `.data/SIM10.json` (a constructed no-setup classification). It adds those names to an existing local watchlist without deleting other symbols. It does not call a network API, place orders, or modify real watchlist data. It refuses to overwrite an unrelated file named SIM09.json or SIM10.json.
+
+This is a user-interface and workflow regression demonstration **only**: fake, deliberately constructed price paths are not market history, backtest evidence, data-source validation or proof of profitable results. If `MASSIVE_API_KEY` is present, the workstation will try the real provider instead of the seeded local cache; **unset the key** for the no-network demo. The normal synthetic simulator remains available at the home page. All state stays in the ignored `.data/` folder; do not deploy publicly.
+
 ## Security and verification
 
 Run `npm run check` for syntax checks and the offline unit/HTTP integration suite. GitHub Actions runs the same suite on Node 22. Local Host and Origin checks, bounded JSON, no public broker routes, and ignored local state are starting boundaries, **not** an independent security audit. No real customer or financial records belong in this prototype.
