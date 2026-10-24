@@ -106,3 +106,31 @@ test('provider rejects impossible calendar dates before requesting market data',
     symbol:'AAPL',from:'2024-02-29',to:'2024-03-01',apiKey:'test-key-123'
   }));
 });
+
+
+test('provider rejects coerced, absent or fractional OHLCV fields and intraday timestamps',async()=>{
+  const request={symbol:'AAPL',from:'2026-01-01',to:'2026-06-30',apiKey:'test-key-123'};
+  const valid=results();
+  const wrong=[
+    {v:null},
+    {v:undefined},
+    {v:'100000'},
+    {v:100.5},
+    {v:-1},
+    {o:'100'},
+    {h:null},
+    {l:undefined},
+    {c:Infinity},
+    {t:String(valid[0].t)},
+    {t:valid[0].t+60_000},
+  ];
+  for(const change of wrong){
+    const modified=valid.map((bar,index)=>index===0?{...bar,...change}:bar);
+    await assert.rejects(()=>fetchMassiveDailyDataset({
+      ...request,
+      fetchImpl:async()=>({ok:true,status:200,json:async()=>({
+        status:'OK',ticker:'AAPL',results:modified
+      })})
+    }),/Massive aggregate 0 is malformed/);
+  }
+});
