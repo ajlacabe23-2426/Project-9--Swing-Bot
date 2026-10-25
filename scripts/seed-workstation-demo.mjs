@@ -52,6 +52,20 @@ export async function seedWorkstationDemo({dataDir=join(root,'.data')}={}){
   const existing=store.snapshot().watchlist;
   if(new Set([...existing,...DEMO_SYMBOLS]).size>20)
     throw new Error('Watchlist is full; demo seeding will not remove saved symbols');
+  // Preflight all demo symbols before writing either dataset. An existing
+  // conflicting second symbol must not leave the first symbol half-seeded.
+  for(const symbol of DEMO_SYMBOLS){
+    const file=join(dataDir,symbol+'.json');
+    let contents;
+    try{contents=await readFile(file,'utf8');}
+    catch(error){if(error.code==='ENOENT')continue;throw error;}
+    let existingDataset;
+    try{existingDataset=JSON.parse(contents);}
+    catch{throw new Error('Existing demo data '+symbol+' is unreadable; preserving it');}
+    if(existingDataset.source!==LABEL||existingDataset.symbol!==symbol)
+      throw new Error('Refusing to overwrite existing local data for '+symbol);
+    normalizeMarketDataset(existingDataset);
+  }
   const summaries=[];
   await mkdir(dataDir,{recursive:true,mode:0o700});
   for(const symbol of DEMO_SYMBOLS){
