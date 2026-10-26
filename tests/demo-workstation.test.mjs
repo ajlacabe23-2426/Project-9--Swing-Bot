@@ -48,3 +48,20 @@ test('demo refuses to replace unrelated local data for the same symbol',async()=
     assert.deepEqual(JSON.parse(await readFile(join(dir,'SIM09.json'),'utf8')),{source:'My research'});
   }finally{await rm(dir,{recursive:true,force:true});}
 });
+
+test('collision in the second demo slot leaves the first slot and watchlist untouched',async()=>{
+  const dir=await mkdtemp(join(tmpdir(),'p9-demo-preflight-'));
+  try{
+    const store=new WorkstationStore(join(dir,'workstation.json'));
+    await store.init();
+    await store.setWatchlist(['AAPL']);
+    const original='{"source":"unrelated local research"}';
+    await writeFile(join(dir,'SIM10.json'),original);
+    await assert.rejects(()=>seedWorkstationDemo({dataDir:dir}),/Refusing to overwrite/);
+    await assert.rejects(readFile(join(dir,'SIM09.json'),'utf8'),{code:'ENOENT'});
+    assert.equal(await readFile(join(dir,'SIM10.json'),'utf8'),original);
+    const restored=new WorkstationStore(join(dir,'workstation.json'));
+    await restored.init();
+    assert.deepEqual(restored.snapshot().watchlist,['AAPL']);
+  }finally{await rm(dir,{recursive:true,force:true});}
+});
