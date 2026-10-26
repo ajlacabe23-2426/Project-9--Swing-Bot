@@ -39,14 +39,24 @@ export async function fetchMassiveDailyDataset({symbol,from,to,apiKey,fetchImpl=
   // Never attribute another instrument's prices to this research watchlist entry.
   if(payload.ticker!==ticker)throw new Error('Massive aggregate ticker does not match the requested symbol');
   const bars=payload.results.map((item,index)=>{
-    const timestamp=Number(item.t),volume=Number(item.v);
+    // Fail closed on missing, coerced, noninteger or silently rounded provider
+    // fields. Null/missing volume must never masquerade as a real zero-volume
+    // session, and JSON string prices must not become trusted observations.
+    const malformed=()=>new Error('Massive aggregate '+index+' is malformed');
+    if(!item||typeof item!=='object'||Array.isArray(item)||
+       !Number.isSafeInteger(item.t)||item.t<0||
+       !Number.isSafeInteger(item.v)||item.v<0||
+       !['o','h','l','c'].every(key=>typeof item[key]==='number'&&Number.isFinite(item[key])&&item[key]>0))
+      throw malformed();
+    const instant=new Date(item.t);
+    if(!Number.isFinite(instant.getTime())||
+       instant.getUTCHours()!==0||instant.getUTCMinutes()!==0||
+       instant.getUTCSeconds()!==0||instant.getUTCMilliseconds()!==0)
+      throw malformed();
     const bar={
-      date:Number.isFinite(timestamp)?new Date(timestamp).toISOString().slice(0,10):'',
-      open:Number(item.o),high:Number(item.h),low:Number(item.l),close:Number(item.c),
-      volume:Number.isFinite(volume)?Math.round(volume):NaN
+      date:instant.toISOString().slice(0,10),
+      open:item.o,high:item.h,low:item.l,close:item.c,volume:item.v
     };
-    if(!bar.date||![bar.open,bar.high,bar.low,bar.close].every(Number.isFinite)||!Number.isSafeInteger(bar.volume))
-      throw new Error('Massive aggregate '+index+' is malformed');
     if(bar.date<from||bar.date>to)
       throw new Error('Massive aggregate '+index+' falls outside the requested date range');
     return bar;
