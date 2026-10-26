@@ -9,6 +9,7 @@
   "scripts": {
     "start": "node server.mjs",
     "dev": "node --watch server.mjs",
+    "demo:seed": "node scripts/seed-workstation-demo.mjs",
     "test": "node --test",
     "security:secrets": "node scripts/security/scan-git-history.mjs",
     "security:baseline": "node scripts/security/check-repository-baseline.mjs",
