@@ -37,7 +37,7 @@ test('workstation can reuse a previously fetched local dataset when no provider 
     assert.deepEqual(loaded,input);
     await assert.rejects(
       ()=>fetchWorkstationDataset({symbol:'MISSING',from:'2026-01-01',to:'2026-10-05',dataDir:dir,apiKey:null}),
-      /No local dataset for MISSING/
+      /No market data for MISSING.*npm run setup:market/
     );
   }finally{
     await rm(dir,{recursive:true,force:true});
