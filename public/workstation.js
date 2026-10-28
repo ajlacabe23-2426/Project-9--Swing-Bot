@@ -150,7 +150,7 @@ function renderStatus(){
     $('workstation-status').textContent='Refresh completed with '+errors.length+' issue'+(errors.length===1?'':'s')+': '+errors.slice(0,3).map(item=>item.symbol+' — '+item.message).join(' | ');
     return;
   }
-  $('workstation-status').textContent=state?.lastRefresh?'Last completed-bar refresh: '+new Date(state.lastRefresh).toLocaleString()+'.':'Watchlist saved locally. Refresh uses a matching .data/SYMBOL.json cache when no provider key is active; otherwise it fetches read-only provider data.';
+  $('workstation-status').textContent=state?.lastRefresh?'Last completed-bar refresh: '+new Date(state.lastRefresh).toLocaleString()+'.':'No scanned data yet. Connect Massive Stocks or import a permitted historical CSV above, then refresh your watchlist.';
 }
 function render(){
   if(!state)return;
@@ -169,6 +169,60 @@ async function runAction(button,fn){
     button.textContent=original;
   }
 }
+async function loadMarketConnection(){
+  try{
+    const connection=await request('/api/market/status');
+    $('market-connection-badge').textContent=connection.connected?'PROVIDER CONNECTED':'PROVIDER NOT CONNECTED';
+    $('market-connection-status').textContent=connection.connected
+      ?'Massive Stocks credential is configured locally. Refresh your watchlist for historical market prices.'
+      :'No provider key configured. Connect one below, or import a permitted historical CSV to analyze completed market bars.';
+  }catch(error){
+    $('market-connection-badge').textContent='CONNECTION STATUS UNAVAILABLE';
+    $('market-connection-status').textContent=error.message;
+  }
+}
+function marketMessage(message){$('market-action-status').textContent=message;}
+$('market-connect-form').addEventListener('submit',async event=>{
+  event.preventDefault();
+  if(busy)return;
+  const button=$('connect-market'),apiKey=$('massive-key').value.trim();
+  if(!apiKey)return marketMessage('Enter your own Massive Stocks API key.');
+  busy=true;button.disabled=true;marketMessage('Verifying actual AAPL historical data with Massive Stocks…');
+  try{
+    const response=await request('/api/market/connect',{apiKey});
+    $('massive-key').value='';
+    state=response.workstation;selectedSymbol='AAPL';referenceView='current';
+    render();await loadMarketConnection();
+    marketMessage('Connected. Real historical AAPL completed bars through '+response.asOf+' loaded into the scanner.');
+  }catch(error){
+    $('massive-key').value='';
+    marketMessage('Connection failed: '+error.message+' No simulated prices were substituted.');
+  }finally{busy=false;button.disabled=false;}
+});
+$('market-import-form').addEventListener('submit',async event=>{
+  event.preventDefault();
+  if(busy)return;
+  const file=$('market-csv').files?.[0],button=$('import-market');
+  if(!file)return marketMessage('Select a historical OHLCV CSV file.');
+  if(file.size>400_000)return marketMessage('Historical CSV exceeds the 400 KB import limit.');
+  busy=true;button.disabled=true;marketMessage('Validating genuine historical CSV rows…');
+  try{
+    const csv=await file.text();
+    const result=await request('/api/market/import',{
+      csv,
+      symbol:$('market-symbol').value.trim().toUpperCase(),
+      source:$('market-source').value.trim(),
+      priceAdjustment:$('market-adjustment').value,
+      confirmedRights:$('market-rights').checked
+    });
+    state=result.workstation;selectedSymbol=result.symbol;referenceView='current';
+    $('market-csv').value='';render();await loadMarketConnection();
+    marketMessage('Imported '+result.bars+' completed historical '+result.symbol+' bars through '+result.asOf+'. Analysis loaded below.');
+  }catch(error){
+    marketMessage('Import rejected: '+error.message);
+  }finally{busy=false;button.disabled=false;}
+});
+
 $('reference-view').addEventListener('change',()=>{referenceView=$('reference-view').value;renderDetail();});
 $('save-watchlist').addEventListener('click',()=>runAction($('save-watchlist'),async()=>{
   const symbols=$('watchlist').value.split(',').map(value=>value.trim()).filter(Boolean);
@@ -180,4 +234,4 @@ $('create-ticket').addEventListener('click',()=>runAction($('create-ticket'),asy
   if(!selectedSymbol||!Number.isFinite(paperUnits)||paperUnits<=0)throw new Error('Choose a scanned setup and valid virtual-unit amount.');
   return request('/api/workstation/tickets',{symbol:selectedSymbol,paperUnits});
 }));
-request('/api/workstation').then(value=>{state=value;render();}).catch(error=>{$('workstation-status').textContent='Workstation unavailable: '+error.message;});
+request('/api/workstation').then(value=>{state=value;render();return loadMarketConnection();}).catch(error=>{$('workstation-status').textContent='Workstation unavailable: '+error.message;});
