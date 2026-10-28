@@ -1,6 +1,6 @@
-# Project 9 — Research-first MVP
+# Project 9 — Local Swing Research Workstation
 
-**Status: local-only educational synthetic-market research prototype.** No real-market price feed, brokerage integration, real-money trading, investment recommendation, customer subscription, or automatic generative AI request. All 190 daily synthetic candles belong to one fictitious instrument, SIM-01. Do not present generated scenario returns as verified trading results or as evidence of future performance.
+**Status: single-user, local historical-market scanner and paper journal; real provider access still requires local acceptance.** The startup page is now the historical-market workstation. A separate synthetic educational simulator remains available at `/simulator.html` but is not used as a substitute for real stock prices. No real-market price feed, brokerage integration, real-money trading, investment recommendation, customer subscription, or automatic generative AI request. All 190 daily synthetic candles belong to one fictitious instrument, SIM-01. Do not present generated scenario returns as verified trading results or as evidence of future performance.
 
 ## Run locally
 
@@ -204,3 +204,42 @@ licensed, validated v2 dataset via npm run import:market.
 
 This is historical-data research and paper observation only. It does not
 authorize live execution, broker access, or trading.
+
+
+## Real-data first-run workflow
+
+From a clean local clone:
+
+    git fetch origin
+    git switch --track origin/feature/p9-market-cache-integrity-20261028
+    npm run check
+    npm start
+
+Open **http://127.0.0.1:4179/** in Safari or another browser. It now opens
+the real-market workstation, not the synthetic educational simulator.
+
+At the top of the workstation, use **either** market-data method:
+
+1. **Massive Stocks API key**: Paste your own key into the local password field,
+   click **Verify and connect prices**, and the app authenticates a real
+   historical AAPL daily-bar response before saving the key privately under
+   .data/massive-api-key. No key is returned to the browser or written to
+   browser storage. The successful response immediately scans AAPL.
+2. **Historical CSV**: Select a permitted plain CSV with Date,Open,High,Low,
+   Close,Volume (60–3000 completed daily rows), enter its symbol, source and
+   adjustment status, confirm usage rights, then choose **Import and analyze
+   real CSV**. The server validates every row and persists an integrity-checked
+   historical dataset. It immediately evaluates that symbol in the scanner.
+
+Select a scanned symbol to inspect completed daily closes, trend indicators,
+research classification and the paper observation plan. Only eligible
+classifications can create a frozen paper ticket; follow-up daily bars update
+reference outcomes. No brokerage route or real-money execution is supported.
+
+For read-only market data, authentication and provider entitlements cannot
+be manufactured by this repository. Without a valid provider key or
+user-supplied actual historical CSV the scanner correctly stays empty;
+synthetic prices are not silently shown as real. End-of-day data is historical,
+not an executable intraday quote. The free provider tier may impose request
+rates and coverage limits; historical calibration and trading performance
+remain unverified until tested against independent, appropriately sourced data.
