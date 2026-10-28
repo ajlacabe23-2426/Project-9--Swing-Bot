@@ -122,3 +122,49 @@ Run `npm run check` for syntax checks and the offline unit/HTTP integration suit
 ### Entry/exit decision and code map
 
 The local workstation includes a rotatable 3D map linking scanner evidence, code functions, and existing paper entry/stop/target references. Select current scan levels or an individual frozen ticket, inspect each node, and switch to flat or code-label views. The chart distinguishes reference levels from subsequent paper touches. See [decision map usage and verification](docs/DECISION_MAP.md).
+
+
+## Validated historical market-data cache (2026-10-28 candidate)
+
+The localhost swing workstation can now refresh from a versioned, integrity-checked
+historical dataset cache when MASSIVE_API_KEY is **not** configured. This makes the
+core read-only evaluation and paper-observation workflow usable with previously
+acquired, permitted historical datasets. It does not claim live prices, provider
+authenticity, a verified trading edge, or broker execution.
+
+The import accepts exactly the existing Project 9 v2 market-data contract:
+
+- schema: project9-market-data-v2
+- symbol, currency, source, mode, sourceAsOf and priceAdjustment
+- provenance with retrievedAt, adjustmentMethod, corporateActions,
+  survivorship and licensing
+- 60–3000 sorted, distinct completed OHLCV daily bars.
+
+From the repository directory:
+
+    npm run check
+    npm run import:market -- /absolute/path/to/permitted-market-data-v2.json
+    npm start
+
+Open http://127.0.0.1:4179/workstation.html, add the imported ticker, and
+select Refresh. The cached series is used for deterministic classification and
+a locally persisted paper journal. The cache is saved under
+.data/market-cache/SYMBOL.json and must remain private and git-ignored.
+Imports reject stale rollbacks, conflicting same-date price revisions, invalid
+source declarations, tampering of stored bytes, and malformed input; existing
+cache remains intact on rejected import. Review any same-date vendor restatement
+manually instead of erasing the old dataset. The SHA-256 digest detects accidental
+local data alteration but **does not authenticate vendor data or its licensing**.
+
+If MASSIVE_API_KEY is configured, the live provider-adapter path is preferred
+for refreshing daily historical bars. A 401/429/provider failure is reported;
+it is not silently concealed by falling back to older cached prices. To use
+the reviewed local dataset instead, stop the server, unset MASSIVE_API_KEY,
+restart, and refresh. The old unwrapped .data/SYMBOL.json file format remains
+supported for legacy local use; new imports use the stronger versioned cache.
+
+This changes no simulated portfolio balances, adds no live execution route, and
+does not remove the separate synthetic educational simulator. One local process
+must own this cache directory; there is no multiuser authentication. Before
+relying on historical performance, verify data rights, adjustment methodology,
+date completeness, unbiased universe selection, and untouched holdout results.
