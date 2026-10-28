@@ -113,11 +113,13 @@ export async function createApp({
           if(Date.now()-lastMarketVerificationAt<12_000)
             return json(res,429,{error:'Connection verification is limited to one attempt every 12 seconds.'});
           lastMarketVerificationAt=Date.now();
-          const key=validateMassiveKey(body.apiKey);
+          let key;
+          try{key=validateMassiveKey(body.apiKey);}
+          catch(error){return json(res,400,{error:error.message});}
           const {from,to}=completedMarketWindow();
           let dataset;
           try{dataset=await marketVerifier({symbol:'AAPL',from,to,apiKey:key});}
-          catch(error){return json(res,422,{error:'Market connection could not be verified: '+String(error.message||'Provider unavailable').slice(0,180)});}
+          catch(error){return json(res,422,{error:'Market connection could not be verified: '+String(error.message||'Provider unavailable').replaceAll(key,'[REDACTED]').slice(0,180)});}
           if(dataset.symbol!=='AAPL'||dataset.bars?.length<60)
             return json(res,422,{error:'Market-data verification returned an invalid symbol or incomplete history.'});
           await saveMarketDataKey(key,{dataDir:dataDirectory});
@@ -132,12 +134,13 @@ export async function createApp({
           if(Object.keys(body).some(key=>!allowed.includes(key))||allowed.some(key=>!(key in body)))
             return json(res,400,{error:'Missing or unexpected historical CSV fields.'});
           const dataset=parseHistoricalCsv(body);
-          await marketCache.save(dataset);
           const current=workstation.snapshot();
-          if(!current.watchlist.includes(dataset.symbol)){
-            if(current.watchlist.length>=20)return json(res,409,{error:'Watchlist has 20 symbols; remove one before importing another.'});
+          if(!current.watchlist.includes(dataset.symbol)&&current.watchlist.length>=20)
+            return json(res,409,{error:'Watchlist has 20 symbols; remove one before importing another.'});
+          try{await marketCache.save(dataset);}
+          catch(error){return json(res,409,{error:'Historical dataset not accepted: '+error.message});}
+          if(!current.watchlist.includes(dataset.symbol))
             await workstation.setWatchlist([...current.watchlist,dataset.symbol]);
-          }
           const evaluation=evaluateSwingSetup(dataset);
           evaluation.chartBars=dataset.bars.slice(-60);
           const refreshed=await workstation.applyRefresh([{dataset,evaluation}],{refreshedAt:new Date().toISOString(),errors:[]});
