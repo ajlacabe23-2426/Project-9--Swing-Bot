@@ -8,6 +8,7 @@ import {modelCommentary} from './src/ai.mjs';
 import {evaluateSwingSetup} from './src/market-intelligence.mjs';
 import {fetchMassiveDailyDataset} from './src/providers/massive.mjs';
 import {MarketCache} from './src/market-cache.mjs';
+import {loadMarketDataKey} from './src/market-credentials.mjs';
 import {WorkstationStore} from './src/workstation-store.mjs';
 
 const root=dirname(fileURLToPath(import.meta.url));
@@ -44,7 +45,8 @@ export async function fetchWorkstationDataset({
   dataDir=resolve(root,'.data'),
   apiKey=process.env.MASSIVE_API_KEY
 }){
-  if(apiKey)return fetchMassiveDailyDataset({symbol,from,to,apiKey});
+  const configuredKey=apiKey||await loadMarketDataKey({dataDir});
+  if(configuredKey)return fetchMassiveDailyDataset({symbol,from,to,apiKey:configuredKey});
   const cached=await new MarketCache(resolve(dataDir,'market-cache')).read(symbol);
   if(cached)return cached;
   const file=resolve(dataDir,symbol+'.json');
@@ -52,7 +54,7 @@ export async function fetchWorkstationDataset({
     const contents=await readFile(file,'utf8');
     return JSON.parse(contents);
   }catch(error){
-    if(error?.code==='ENOENT')throw new Error('No local dataset for '+symbol+' and MASSIVE_API_KEY is not configured. Fetch '+symbol+' to .data/'+symbol+'.json or configure a local read-only market-data key.');
+    if(error?.code==='ENOENT')throw new Error('No market data for '+symbol+'. Run npm run setup:market to connect the free Massive Stocks historical feed, or import a permitted v2 JSON dataset using npm run import:market.');
     if(error instanceof SyntaxError)throw new Error('Cached market dataset for '+symbol+' is not valid JSON.');
     throw new Error('Cached market dataset for '+symbol+' could not be read.');
   }
