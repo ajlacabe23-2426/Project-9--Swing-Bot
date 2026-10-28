@@ -31,7 +31,13 @@ export async function fetchMassiveDailyDataset({symbol,from,to,apiKey,fetchImpl=
   }catch{
     throw new Error('Massive market-data request failed');
   }
-  if(!response||!response.ok)throw new Error('Massive market-data request failed with status '+(response?.status??'unknown'));
+  if(!response||!response.ok){
+    const status=response?.status??'unknown';
+    const guidance=status===401?' (key rejected: run npm run setup:market)':
+      status===403?' (Stocks historical-data entitlement unavailable)':
+      status===429?' (rate limit reached: wait before refreshing)':'';
+    throw new Error('Massive market-data request failed with status '+status+guidance);
+  }
   let payload;
   try{payload=await response.json();}catch{throw new Error('Massive returned invalid JSON');}
   if(!payload||payload.status!=='OK'||!Array.isArray(payload.results))throw new Error('Massive returned an invalid aggregate response');
