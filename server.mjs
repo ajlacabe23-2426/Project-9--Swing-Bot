@@ -8,12 +8,13 @@ import {modelCommentary} from './src/ai.mjs';
 import {evaluateSwingSetup} from './src/market-intelligence.mjs';
 import {fetchMassiveDailyDataset} from './src/providers/massive.mjs';
 import {MarketCache} from './src/market-cache.mjs';
-import {loadMarketDataKey} from './src/market-credentials.mjs';
+import {loadMarketDataKey,saveMarketDataKey,validateMassiveKey} from './src/market-credentials.mjs';
+import {parseHistoricalCsv} from './src/historical-csv.mjs';
 import {WorkstationStore} from './src/workstation-store.mjs';
 
 const root=dirname(fileURLToPath(import.meta.url));
 const staticFiles=new Map([
-  ['/','index.html'],['/index.html','index.html'],['/styles.css','styles.css'],['/app.js','app.js'],
+  ['/','workstation.html'],['/index.html','index.html'],['/simulator.html','index.html'],['/styles.css','styles.css'],['/app.js','app.js'],
   ['/research.html','research.html'],['/research.js','research.js'],['/research-core.mjs','research-core.mjs'],
   ['/workstation.html','workstation.html'],['/workstation.js','workstation.js'],
   ['/decision-map.js','decision-map.js'],['/decision-map-core.mjs','decision-map-core.mjs']
@@ -23,9 +24,9 @@ const headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Re
   'X-Frame-Options':'DENY','Permissions-Policy':'camera=(), microphone=(), geolocation=()',
   'Content-Security-Policy':"default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"};
 const json=(res,status,data)=>{res.writeHead(status,{...headers,'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(data));};
-async function parseBody(req){
+async function parseBody(req,maxBytes=1000){
   if((req.headers['content-type']||'').split(';')[0].trim()!=='application/json')throw Object.assign(new Error('JSON required'),{status:415});
-  let text='';for await(const chunk of req){text+=chunk;if(text.length>1000)throw Object.assign(new Error('Request too large'),{status:413});}
+  let text='',size=0;for await(const chunk of req){size+=chunk.length;if(size>maxBytes)throw Object.assign(new Error('Request too large'),{status:413});text+=chunk.toString('utf8');}
   try{return JSON.parse(text);}catch{throw Object.assign(new Error('Invalid JSON'),{status:400});}
 }
 const allowedHost=(value,port)=>value==='127.0.0.1:'+port||value==='localhost:'+port;
@@ -67,13 +68,17 @@ export async function createApp({
   port=4179,
   store=new PaperStore(resolve(root,'.data/paper.json')),
   workstationStore=null,
-  marketFetcher=defaultMarketFetcher
+  marketFetcher=defaultMarketFetcher,
+  marketVerifier=fetchMassiveDailyDataset,
+  marketDataDir=null
 }={}){
   if(!Number.isInteger(port)||port<1024||port>65535)throw new Error('Port must be between 1024 and 65535');
   await store.init();
   const workstation=workstationStore||new WorkstationStore(resolve(dirname(store.file),'workstation.json'));
   await workstation.init();
-  let lastModelRequestAt=0;
+  const dataDirectory=resolve(marketDataDir||dirname(store.file));
+  const marketCache=new MarketCache(resolve(dataDirectory,'market-cache'));
+  let lastModelRequestAt=0,lastMarketVerificationAt=0;
   const server=http.createServer(async(req,res)=>{
     try{
       if(!allowedHost(req.headers.host,port))return json(res,403,{error:'Host not allowed'});
@@ -81,21 +86,63 @@ export async function createApp({
       if(req.method==='GET'&&url.pathname==='/api/state')return json(res,200,report(store.state,generateScenario(store.state.seed)));
       if(req.method==='GET'&&url.pathname==='/api/experiment')return json(res,200,historicalExperiment(store.state.seed));
       if(req.method==='GET'&&url.pathname==='/api/workstation')return json(res,200,workstation.snapshot());
+      if(req.method==='GET'&&url.pathname==='/api/market/status'){
+        const key=await loadMarketDataKey({dataDir:dataDirectory});
+        const scans=Object.values(workstation.snapshot().lastScans).map(scan=>({symbol:scan.symbol,asOf:scan.asOf,mode:scan.source.mode,source:scan.source.name}));
+        return json(res,200,{connected:!!key,provider:'Massive Stocks',dataMode:'HISTORICAL',scans});
+      }
       if(req.method==='GET'&&staticFiles.has(url.pathname)){
         const file=staticFiles.get(url.pathname),contents=await readFile(join(root,'public',file));
         res.writeHead(200,{...headers,'Content-Type':types[file.slice(file.lastIndexOf('.'))]});return res.end(contents);
       }
       const postRoutes=[
         '/api/step','/api/run','/api/reset','/api/ai-report',
-        '/api/workstation/watchlist','/api/workstation/refresh','/api/workstation/tickets'
+        '/api/workstation/watchlist','/api/workstation/refresh','/api/workstation/tickets',
+        '/api/market/connect','/api/market/import'
       ];
       if(req.method==='POST'&&postRoutes.includes(url.pathname)){
         if(!allowedOrigin(req.headers.origin,port)||
           (req.headers['sec-fetch-site']&&!['same-origin','none'].includes(req.headers['sec-fetch-site'])))
           return json(res,403,{error:'Local same-origin request required'});
-        const body=await parseBody(req);
+        const body=await parseBody(req,url.pathname==='/api/market/import'?450_000:1000);
         if(!body||typeof body!=='object'||Array.isArray(body))return json(res,400,{error:'JSON object required'});
 
+        if(url.pathname==='/api/market/connect'){
+          if(Object.keys(body).length!==1||typeof body.apiKey!=='string')
+            return json(res,400,{error:'Enter only a Massive Stocks API key.'});
+          if(Date.now()-lastMarketVerificationAt<12_000)
+            return json(res,429,{error:'Connection verification is limited to one attempt every 12 seconds.'});
+          lastMarketVerificationAt=Date.now();
+          const key=validateMassiveKey(body.apiKey);
+          const {from,to}=completedMarketWindow();
+          let dataset;
+          try{dataset=await marketVerifier({symbol:'AAPL',from,to,apiKey:key});}
+          catch(error){return json(res,422,{error:'Market connection could not be verified: '+String(error.message||'Provider unavailable').slice(0,180)});}
+          if(dataset.symbol!=='AAPL'||dataset.bars?.length<60)
+            return json(res,422,{error:'Market-data verification returned an invalid symbol or incomplete history.'});
+          await saveMarketDataKey(key,{dataDir:dataDirectory});
+          if(!workstation.snapshot().watchlist.length)await workstation.setWatchlist(['AAPL']);
+          const evaluation=evaluateSwingSetup(dataset);
+          evaluation.chartBars=dataset.bars.slice(-60);
+          const refreshed=await workstation.applyRefresh([{dataset,evaluation}],{refreshedAt:new Date().toISOString(),errors:[]});
+          return json(res,200,{connected:true,provider:'Massive Stocks',symbol:'AAPL',asOf:evaluation.asOf,workstation:refreshed});
+        }
+        if(url.pathname==='/api/market/import'){
+          const allowed=['csv','symbol','source','priceAdjustment','confirmedRights'];
+          if(Object.keys(body).some(key=>!allowed.includes(key))||allowed.some(key=>!(key in body)))
+            return json(res,400,{error:'Missing or unexpected historical CSV fields.'});
+          const dataset=parseHistoricalCsv(body);
+          await marketCache.save(dataset);
+          const current=workstation.snapshot();
+          if(!current.watchlist.includes(dataset.symbol)){
+            if(current.watchlist.length>=20)return json(res,409,{error:'Watchlist has 20 symbols; remove one before importing another.'});
+            await workstation.setWatchlist([...current.watchlist,dataset.symbol]);
+          }
+          const evaluation=evaluateSwingSetup(dataset);
+          evaluation.chartBars=dataset.bars.slice(-60);
+          const refreshed=await workstation.applyRefresh([{dataset,evaluation}],{refreshedAt:new Date().toISOString(),errors:[]});
+          return json(res,200,{symbol:dataset.symbol,bars:dataset.bars.length,asOf:evaluation.asOf,workstation:refreshed});
+        }
         if(url.pathname==='/api/workstation/watchlist'){
           if(Object.keys(body).length!==1||!('symbols' in body)||!Array.isArray(body.symbols))
             return json(res,400,{error:'symbols array required'});
