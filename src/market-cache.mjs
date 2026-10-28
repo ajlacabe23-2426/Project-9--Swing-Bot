@@ -100,7 +100,14 @@ export class MarketCache{
         const next=dataset.bars.at(-1).date;
         if(next<previous)throw new Error('Refusing a stale market dataset rollback');
         if(next===previous){
-          if(old.sha256!==sha256)
+          const withoutRetrieval=(value)=>({
+            ...value,provenance:{...value.provenance,retrievedAt:null}
+          });
+          // A file may be reimported at a new retrieval time without changing
+          // the previously verified market observations or source declaration.
+          const unchanged=JSON.stringify(withoutRetrieval(old.dataset))===
+            JSON.stringify(withoutRetrieval(dataset));
+          if(!unchanged)
             throw new Error('Conflicting same-date market history requires explicit provenance review');
           return this.inspect(dataset.symbol);
         }
