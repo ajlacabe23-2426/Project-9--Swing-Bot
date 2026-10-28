@@ -55,7 +55,8 @@ test('local HTTP API restricts origin, host and inputs and has no broker endpoin
   const base='http://127.0.0.1:'+port;
   const post=(path,body,origin=base)=>fetch(base+path,{method:'POST',headers:{'Content-Type':'application/json','Origin':origin},body:JSON.stringify(body)});
   try{
-    const home=await fetch(base+'/');assert.equal(home.status,200);assert.match(await home.text(),/EDUCATIONAL SIMULATION/);
+    const home=await fetch(base+'/');assert.equal(home.status,200);assert.match(await home.text(),/Connect prices before scanning/);
+    const simulator=await fetch(base+'/simulator.html');assert.equal(simulator.status,200);assert.match(await simulator.text(),/EDUCATIONAL SIMULATION/);
     const state=await (await fetch(base+'/api/state')).json();assert.equal(state.cursor,29);assert.equal(state.mode,'SYNTHETIC_ONLY');
     assert.equal((await fetch(base+'/api/broker/orders')).status,404);
 
