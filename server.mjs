@@ -78,6 +78,8 @@ export async function createApp({
   await workstation.init();
   const dataDirectory=resolve(marketDataDir||dirname(store.file));
   const marketCache=new MarketCache(resolve(dataDirectory,'market-cache'));
+  const scopedMarketFetcher=marketFetcher===defaultMarketFetcher
+    ?args=>fetchWorkstationDataset({...args,dataDir:dataDirectory}):marketFetcher;
   let lastModelRequestAt=0,lastMarketVerificationAt=0;
   const server=http.createServer(async(req,res)=>{
     try{
@@ -158,7 +160,7 @@ export async function createApp({
           const {from,to}=completedMarketWindow(),entries=[],errors=[];
           for(const symbol of current.watchlist){
             try{
-              const dataset=await marketFetcher({symbol,from,to});
+              const dataset=await scopedMarketFetcher({symbol,from,to});
               const evaluation=evaluateSwingSetup(dataset);
               evaluation.chartBars=dataset.bars.slice(-60).map(bar=>({
                 date:bar.date,open:bar.open,high:bar.high,low:bar.low,close:bar.close,volume:bar.volume
