@@ -7,6 +7,7 @@ import {PaperStore} from './src/store.mjs';
 import {modelCommentary} from './src/ai.mjs';
 import {evaluateSwingSetup} from './src/market-intelligence.mjs';
 import {fetchMassiveDailyDataset} from './src/providers/massive.mjs';
+import {MarketCache} from './src/market-cache.mjs';
 import {WorkstationStore} from './src/workstation-store.mjs';
 
 const root=dirname(fileURLToPath(import.meta.url));
@@ -44,6 +45,8 @@ export async function fetchWorkstationDataset({
   apiKey=process.env.MASSIVE_API_KEY
 }){
   if(apiKey)return fetchMassiveDailyDataset({symbol,from,to,apiKey});
+  const cached=await new MarketCache(resolve(dataDir,'market-cache')).read(symbol);
+  if(cached)return cached;
   const file=resolve(dataDir,symbol+'.json');
   try{
     const contents=await readFile(file,'utf8');
