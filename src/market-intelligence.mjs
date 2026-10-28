@@ -48,8 +48,10 @@ function normalizeMarketProvenance(input,schema,priceAdjustment){
     };
   }
   if(!isObject(input))throw new Error('Market-data v2 requires provenance');
-  const allowed=['retrievedAt','adjustmentMethod','corporateActions','survivorship','licensing'];
-  if(Object.keys(input).some(key=>!allowed.includes(key))||allowed.some(key=>!(key in input)))
+  const required=['retrievedAt','adjustmentMethod','corporateActions','survivorship','licensing'];
+  const allowed=[...required,'contract'];
+  if(Object.keys(input).some(key=>!allowed.includes(key))||required.some(key=>!(key in input))||
+     ('contract' in input&&input.contract!=='V2_DECLARED'))
     throw new Error('Market-data provenance has invalid fields');
   if(typeof input.retrievedAt!=='string'||!isStrictISODate(input.retrievedAt.slice(0,10))||
     !input.retrievedAt.includes('T')||!Number.isFinite(Date.parse(input.retrievedAt)))
