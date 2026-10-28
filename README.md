@@ -168,3 +168,39 @@ does not remove the separate synthetic educational simulator. One local process
 must own this cache directory; there is no multiuser authentication. Before
 relying on historical performance, verify data rights, adjustment methodology,
 date completeness, unbiased universe selection, and untouched holdout results.
+
+## One-time Massive historical-data setup
+
+The local server works without a provider, but real watchlist Refresh requires
+a market-data source. Create a free Stocks Basic key in your own Massive
+account. Project 9 never creates or distributes provider credentials.
+
+From the project directory, run:
+
+    npm run setup:market
+
+Paste the API key into the hidden prompt and press Enter. The command makes
+one real AAPL historical request, verifies at least 60 completed daily bars,
+and saves the key only when that request succeeds. The private file is
+.data/massive-api-key, with owner-only permissions (0600). The .data
+directory is git-ignored, and the key is never shown in the output.
+
+Then run:
+
+    npm start
+
+Open http://127.0.0.1:4179/workstation.html, add AAPL to the watchlist,
+and click Refresh. For a subsequent independent provider check:
+
+    npm run check:market
+
+An explicitly exported MASSIVE_API_KEY environment variable overrides
+the local saved key; avoid putting secrets in shell history or screenshots.
+
+Troubleshooting: 401 means the API key was not accepted; 403 means your
+account may lack the required entitlement; 429 indicates provider throttling.
+Do not bypass provider rate limits. A missing key can be replaced with a
+licensed, validated v2 dataset via npm run import:market.
+
+This is historical-data research and paper observation only. It does not
+authorize live execution, broker access, or trading.
