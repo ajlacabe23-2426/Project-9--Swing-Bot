@@ -60,6 +60,19 @@ test('maps Massive daily aggregates into the Project 9 market-data contract',asy
   assert.equal(value.sourceAsOf,value.bars.at(-1).date);
 });
 
+test('accepts a legitimate fractional-volume day without rounding or changing subsequent bars',async()=>{
+  const rows=results(140);
+  // Mirror the 117th returned daily bar that previously failed locally.
+  rows[116].v=114723.250625;
+  const data=await fetchMassiveDailyDataset({
+    symbol:'AAPL',from:'2026-01-01',to:'2026-08-31',apiKey:'test-key-123',
+    fetchImpl:async()=>({ok:true,status:200,json:async()=>({status:'OK',ticker:'AAPL',results:rows})})
+  });
+  assert.equal(data.bars.length,140);
+  assert.equal(data.bars[116].volume,114723.250625);
+  assert.equal(data.bars[117].volume,rows[117].v);
+});
+
 test('fails closed for provider errors, malformed payloads and short history',async()=>{
   await assert.rejects(()=>fetchMassiveDailyDataset({
     symbol:'AAPL',from:'2026-01-01',to:'2026-06-30',apiKey:'test-key-123',
@@ -120,15 +133,17 @@ test('provider rejects impossible calendar dates before requesting market data',
 });
 
 
-test('provider rejects coerced, absent or fractional OHLCV fields and intraday timestamps',async()=>{
+test('provider rejects coerced, absent or invalid OHLCV fields and intraday timestamps',async()=>{
   const request={symbol:'AAPL',from:'2026-01-01',to:'2026-06-30',apiKey:'test-key-123'};
   const valid=results();
   const wrong=[
     {v:null},
     {v:undefined},
     {v:'100000'},
-    {v:100.5},
     {v:-1},
+    {v:Infinity},
+    {v:NaN},
+    {v:Number.MAX_SAFE_INTEGER+1},
     {o:'100'},
     {h:null},
     {l:undefined},
