@@ -29,6 +29,13 @@ test('historical CSV ingestion preserves real-only labeling and full indicator e
   assert.equal(evaluateSwingSetup(data).symbol,'AAPL');
   assert.deepEqual(parseHistoricalCsv({...good,csv:toCsv([...bars].reverse())},NOW).bars,data.bars);
 });
+test('historical CSV preserves permitted fractional daily volume',()=>{
+  const changed=bars.map((b,index)=>index===37?{...b,volume:117_203.375625}:b);
+  const data=parseHistoricalCsv({...good,csv:toCsv(changed)},NOW);
+  assert.equal(data.bars[37].volume,117_203.375625);
+  assert.ok(Number.isFinite(evaluateSwingSetup(data).observed.relativeVolume));
+});
+
 test('historical CSV rejects corrupt, synthetic-like defaults and suspicious source content',()=>{
   const attempts=[
     [{...good,confirmedRights:false},/permission/],
