@@ -1,6 +1,6 @@
-# Project 9 — Research-first MVP
+# Project 9 — Local Swing Research Workstation
 
-**Status: local-only educational synthetic-market research prototype.** No real-market price feed, brokerage integration, real-money trading, investment recommendation, customer subscription, or automatic generative AI request. All 190 daily synthetic candles belong to one fictitious instrument, SIM-01. Do not present generated scenario returns as verified trading results or as evidence of future performance.
+**Status: single-user, local historical-market scanner and paper journal; real provider access still requires local acceptance.** The startup page is now the historical-market workstation. A separate synthetic educational simulator remains available at `/simulator.html` but is not used as a substitute for real stock prices. No real-market price feed, brokerage integration, real-money trading, investment recommendation, customer subscription, or automatic generative AI request. All 190 daily synthetic candles belong to one fictitious instrument, SIM-01. Do not present generated scenario returns as verified trading results or as evidence of future performance.
 
 ## Run locally
 
@@ -65,7 +65,7 @@ MASSIVE_API_KEY=your_local_key npm run fetch:market -- AAPL 2026-01-01 2026-10-0
 npm run scan:watchlist -- .data/AAPL.json
 ```
 
-The adapter maps provider OHLCV into the Project 9 v2 contract and fails closed on HTTP errors, malformed payloads, ticker mismatches, results outside the requested date window, short history, invalid bars, or contradictory provenance. It records the local retrieval timestamp and explicitly labels Massive adjusted aggregates as provider-adjusted but not independently verified for adjustment methodology/corporate-action coverage; survivorship remains unassessed and provider terms still require review for commercial redistribution. It does **not** fetch trades/quotes, connect a brokerage account, or place orders. A successful provider response is not independently authenticated market history.
+The adapter maps provider OHLCV into the Project 9 v2 contract and fails closed on HTTP errors, malformed payloads, ticker mismatches, results outside the requested date window, short history, invalid bars, or contradictory provenance. Consolidated share volumes can contain fractional quantities (including after FINRA's February 2026 fractional-share reporting change); both provider and local workstation imports preserve finite, nonnegative numeric fractional volume without truncation. This is intentionally distinct from the synthetic CSV research lab's older integer-volume-only format. It records the local retrieval timestamp and explicitly labels Massive adjusted aggregates as provider-adjusted but not independently verified for adjustment methodology/corporate-action coverage; survivorship remains unassessed and provider terms still require review for commercial redistribution. It does **not** fetch trades/quotes, connect a brokerage account, or place orders. A successful provider response is not independently authenticated market history.
 
 The next provider milestone is broader historical coverage plus independent corporate-action/survivorship review and point-in-time universe testing. The v2 contract now has explicit fields for those facts, but it deliberately reports them as unresolved until evidence exists.
 
@@ -122,3 +122,124 @@ Run `npm run check` for syntax checks and the offline unit/HTTP integration suit
 ### Entry/exit decision and code map
 
 The local workstation includes a rotatable 3D map linking scanner evidence, code functions, and existing paper entry/stop/target references. Select current scan levels or an individual frozen ticket, inspect each node, and switch to flat or code-label views. The chart distinguishes reference levels from subsequent paper touches. See [decision map usage and verification](docs/DECISION_MAP.md).
+
+
+## Validated historical market-data cache (2026-10-28 candidate)
+
+The localhost swing workstation can now refresh from a versioned, integrity-checked
+historical dataset cache when MASSIVE_API_KEY is **not** configured. This makes the
+core read-only evaluation and paper-observation workflow usable with previously
+acquired, permitted historical datasets. It does not claim live prices, provider
+authenticity, a verified trading edge, or broker execution.
+
+The import accepts exactly the existing Project 9 v2 market-data contract:
+
+- schema: project9-market-data-v2
+- symbol, currency, source, mode, sourceAsOf and priceAdjustment
+- provenance with retrievedAt, adjustmentMethod, corporateActions,
+  survivorship and licensing
+- 60–3000 sorted, distinct completed OHLCV daily bars.
+
+From the repository directory:
+
+    npm run check
+    npm run import:market -- /absolute/path/to/permitted-market-data-v2.json
+    npm start
+
+Open http://127.0.0.1:4179/workstation.html, add the imported ticker, and
+select Refresh. The cached series is used for deterministic classification and
+a locally persisted paper journal. The cache is saved under
+.data/market-cache/SYMBOL.json and must remain private and git-ignored.
+Imports reject stale rollbacks, conflicting same-date price revisions, invalid
+source declarations, tampering of stored bytes, and malformed input; existing
+cache remains intact on rejected import. Review any same-date vendor restatement
+manually instead of erasing the old dataset. The SHA-256 digest detects accidental
+local data alteration but **does not authenticate vendor data or its licensing**.
+
+If MASSIVE_API_KEY is configured, the live provider-adapter path is preferred
+for refreshing daily historical bars. A 401/429/provider failure is reported;
+it is not silently concealed by falling back to older cached prices. To use
+the reviewed local dataset instead, stop the server, unset MASSIVE_API_KEY,
+restart, and refresh. The old unwrapped .data/SYMBOL.json file format remains
+supported for legacy local use; new imports use the stronger versioned cache.
+
+This changes no simulated portfolio balances, adds no live execution route, and
+does not remove the separate synthetic educational simulator. One local process
+must own this cache directory; there is no multiuser authentication. Before
+relying on historical performance, verify data rights, adjustment methodology,
+date completeness, unbiased universe selection, and untouched holdout results.
+
+## One-time Massive historical-data setup
+
+The local server works without a provider, but real watchlist Refresh requires
+a market-data source. Create a free Stocks Basic key in your own Massive
+account. Project 9 never creates or distributes provider credentials.
+
+From the project directory, run:
+
+    npm run setup:market
+
+Paste the API key into the hidden prompt and press Enter. The command makes
+one real AAPL historical request, verifies at least 60 completed daily bars,
+and saves the key only when that request succeeds. The private file is
+.data/massive-api-key, with owner-only permissions (0600). The .data
+directory is git-ignored, and the key is never shown in the output.
+
+Then run:
+
+    npm start
+
+Open http://127.0.0.1:4179/workstation.html, add AAPL to the watchlist,
+and click Refresh. For a subsequent independent provider check:
+
+    npm run check:market
+
+An explicitly exported MASSIVE_API_KEY environment variable overrides
+the local saved key; avoid putting secrets in shell history or screenshots.
+
+Troubleshooting: 401 means the API key was not accepted; 403 means your
+account may lack the required entitlement; 429 indicates provider throttling.
+Do not bypass provider rate limits. A missing key can be replaced with a
+licensed, validated v2 dataset via npm run import:market.
+
+This is historical-data research and paper observation only. It does not
+authorize live execution, broker access, or trading.
+
+
+## Real-data first-run workflow
+
+From a clean local clone:
+
+    git fetch origin
+    git switch --track origin/feature/p9-market-cache-integrity-20261028
+    npm run check
+    npm start
+
+Open **http://127.0.0.1:4179/** in Safari or another browser. It now opens
+the real-market workstation, not the synthetic educational simulator.
+
+At the top of the workstation, use **either** market-data method:
+
+1. **Massive Stocks API key**: Paste your own key into the local password field,
+   click **Verify and connect prices**, and the app authenticates a real
+   historical AAPL daily-bar response before saving the key privately under
+   .data/massive-api-key. No key is returned to the browser or written to
+   browser storage. The successful response immediately scans AAPL.
+2. **Historical CSV**: Select a permitted plain CSV with Date,Open,High,Low,
+   Close,Volume (60–3000 completed daily rows), enter its symbol, source and
+   adjustment status, confirm usage rights, then choose **Import and analyze
+   real CSV**. The server validates every row and persists an integrity-checked
+   historical dataset. It immediately evaluates that symbol in the scanner.
+
+Select a scanned symbol to inspect completed daily closes, trend indicators,
+research classification and the paper observation plan. Only eligible
+classifications can create a frozen paper ticket; follow-up daily bars update
+reference outcomes. No brokerage route or real-money execution is supported.
+
+For read-only market data, authentication and provider entitlements cannot
+be manufactured by this repository. Without a valid provider key or
+user-supplied actual historical CSV the scanner correctly stays empty;
+synthetic prices are not silently shown as real. End-of-day data is historical,
+not an executable intraday quote. The free provider tier may impose request
+rates and coverage limits; historical calibration and trading performance
+remain unverified until tested against independent, appropriately sourced data.

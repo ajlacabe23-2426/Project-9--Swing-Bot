@@ -28,7 +28,10 @@ function validateBar(bar,index,previousDate){
   for(const key of ['open','high','low','close']){
     if(!Number.isFinite(bar[key])||bar[key]<=0)throw new Error('Market bar '+index+' has invalid '+key);
   }
-  if(!Number.isSafeInteger(bar.volume)||bar.volume<0)throw new Error('Market bar '+index+' has invalid volume');
+  // Consolidated stock volume can be fractional. Preserve exact provider decimals;
+  // reject unsafe magnitudes, non-numeric values and nonfinite numbers.
+  if(typeof bar.volume!=='number'||!Number.isFinite(bar.volume)||bar.volume<0||bar.volume>Number.MAX_SAFE_INTEGER)
+    throw new Error('Market bar '+index+' has invalid volume');
   if(bar.high<Math.max(bar.open,bar.close)||bar.low>Math.min(bar.open,bar.close)||bar.low>bar.high)
     throw new Error('Market bar '+index+' has inconsistent OHLC values');
   return {date:bar.date,open:bar.open,high:bar.high,low:bar.low,close:bar.close,volume:bar.volume};
@@ -48,8 +51,10 @@ function normalizeMarketProvenance(input,schema,priceAdjustment){
     };
   }
   if(!isObject(input))throw new Error('Market-data v2 requires provenance');
-  const allowed=['retrievedAt','adjustmentMethod','corporateActions','survivorship','licensing'];
-  if(Object.keys(input).some(key=>!allowed.includes(key))||allowed.some(key=>!(key in input)))
+  const required=['retrievedAt','adjustmentMethod','corporateActions','survivorship','licensing'];
+  const allowed=[...required,'contract'];
+  if(Object.keys(input).some(key=>!allowed.includes(key))||required.some(key=>!(key in input))||
+     ('contract' in input&&input.contract!=='V2_DECLARED'))
     throw new Error('Market-data provenance has invalid fields');
   if(typeof input.retrievedAt!=='string'||!isStrictISODate(input.retrievedAt.slice(0,10))||
     !input.retrievedAt.includes('T')||!Number.isFinite(Date.parse(input.retrievedAt)))

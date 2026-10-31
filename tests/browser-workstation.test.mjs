@@ -107,12 +107,12 @@ test('real headless Chromium operates loopback workstation and preserves state w
           chromePort=Number(data.split('\n')[0]);
           return Number.isInteger(chromePort)&&chromePort>0;
         }catch{return false;}
-      },'Chromium debugging port');
+      },'Chromium debugging port',30000);
       connection=await connectCDP(chromePort);
       const js=connection.evaluate;
       await connection.command('Emulation.setDeviceMetricsOverride',{width:1440,height:1080,deviceScaleFactor:1,mobile:false});
       await connection.command('Network.enable');
-      await eventually(()=>js("!!document.querySelector('#watchlist') && document.querySelector('#workstation-status').textContent.includes('Watchlist saved')"),'rendered workstation');
+      await eventually(()=>js("!!document.querySelector('#watchlist') && document.querySelector('#workstation-status').textContent.includes('No scanned data yet') && !!document.querySelector('#market-connect-form')"),'rendered workstation');
       await js("(() => {document.querySelector('#watchlist').value='TEST';document.querySelector('#save-watchlist').click();return true;})()");
       await eventually(async()=>{const state=await(await fetch(base+'/api/workstation')).json();return state.watchlist.join(',')==='TEST';},'watchlist persistence');
       await js("document.querySelector('#refresh').click()");

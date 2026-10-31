@@ -7,11 +7,14 @@ import {PaperStore} from './src/store.mjs';
 import {modelCommentary} from './src/ai.mjs';
 import {evaluateSwingSetup} from './src/market-intelligence.mjs';
 import {fetchMassiveDailyDataset} from './src/providers/massive.mjs';
+import {MarketCache} from './src/market-cache.mjs';
+import {loadMarketDataKey,saveMarketDataKey,validateMassiveKey} from './src/market-credentials.mjs';
+import {parseHistoricalCsv} from './src/historical-csv.mjs';
 import {WorkstationStore} from './src/workstation-store.mjs';
 
 const root=dirname(fileURLToPath(import.meta.url));
 const staticFiles=new Map([
-  ['/','index.html'],['/index.html','index.html'],['/styles.css','styles.css'],['/app.js','app.js'],
+  ['/','workstation.html'],['/index.html','index.html'],['/simulator.html','index.html'],['/styles.css','styles.css'],['/app.js','app.js'],
   ['/research.html','research.html'],['/research.js','research.js'],['/research-core.mjs','research-core.mjs'],
   ['/workstation.html','workstation.html'],['/workstation.js','workstation.js'],
   ['/decision-map.js','decision-map.js'],['/decision-map-core.mjs','decision-map-core.mjs']
@@ -21,9 +24,9 @@ const headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Re
   'X-Frame-Options':'DENY','Permissions-Policy':'camera=(), microphone=(), geolocation=()',
   'Content-Security-Policy':"default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"};
 const json=(res,status,data)=>{res.writeHead(status,{...headers,'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(data));};
-async function parseBody(req){
+async function parseBody(req,maxBytes=1000){
   if((req.headers['content-type']||'').split(';')[0].trim()!=='application/json')throw Object.assign(new Error('JSON required'),{status:415});
-  let text='';for await(const chunk of req){text+=chunk;if(text.length>1000)throw Object.assign(new Error('Request too large'),{status:413});}
+  let text='',size=0;for await(const chunk of req){size+=chunk.length;if(size>maxBytes)throw Object.assign(new Error('Request too large'),{status:413});text+=chunk.toString('utf8');}
   try{return JSON.parse(text);}catch{throw Object.assign(new Error('Invalid JSON'),{status:400});}
 }
 const allowedHost=(value,port)=>value==='127.0.0.1:'+port||value==='localhost:'+port;
@@ -36,20 +39,34 @@ function completedMarketWindow(){
   start.setUTCDate(start.getUTCDate()-420);
   return {from:isoDate(start),to:isoDate(end)};
 }
+// Conservative completed-session reference for the daily historical feed.
+// Do not skip a refresh when a symbol's latest scan is older than this day.
+// Exchange holidays may cause an unnecessary check, never invented prices.
+export function latestCompletedWeekday(to){
+  const date=new Date(to+'T00:00:00.000Z');
+  if(!Number.isFinite(date.getTime()))throw new Error('Invalid historical data window');
+  while(date.getUTCDay()===0||date.getUTCDay()===6)
+    date.setUTCDate(date.getUTCDate()-1);
+  return isoDate(date);
+}
 export async function fetchWorkstationDataset({
   symbol,
   from,
   to,
   dataDir=resolve(root,'.data'),
-  apiKey=process.env.MASSIVE_API_KEY
+  apiKey=process.env.MASSIVE_API_KEY,
+  providerFetcher=fetchMassiveDailyDataset
 }){
-  if(apiKey)return fetchMassiveDailyDataset({symbol,from,to,apiKey});
+  const configuredKey=apiKey||await loadMarketDataKey({dataDir});
+  if(configuredKey)return providerFetcher({symbol,from,to,apiKey:configuredKey});
+  const cached=await new MarketCache(resolve(dataDir,'market-cache')).read(symbol);
+  if(cached)return cached;
   const file=resolve(dataDir,symbol+'.json');
   try{
     const contents=await readFile(file,'utf8');
     return JSON.parse(contents);
   }catch(error){
-    if(error?.code==='ENOENT')throw new Error('No local dataset for '+symbol+' and MASSIVE_API_KEY is not configured. Fetch '+symbol+' to .data/'+symbol+'.json or configure a local read-only market-data key.');
+    if(error?.code==='ENOENT')throw new Error('No market data for '+symbol+'. Run npm run setup:market to connect the free Massive Stocks historical feed, or import a permitted v2 JSON dataset using npm run import:market.');
     if(error instanceof SyntaxError)throw new Error('Cached market dataset for '+symbol+' is not valid JSON.');
     throw new Error('Cached market dataset for '+symbol+' could not be read.');
   }
@@ -62,13 +79,41 @@ export async function createApp({
   port=4179,
   store=new PaperStore(resolve(root,'.data/paper.json')),
   workstationStore=null,
-  marketFetcher=defaultMarketFetcher
+  marketFetcher=defaultMarketFetcher,
+  marketVerifier=fetchMassiveDailyDataset,
+  marketDataDir=null
 }={}){
   if(!Number.isInteger(port)||port<1024||port>65535)throw new Error('Port must be between 1024 and 65535');
   await store.init();
   const workstation=workstationStore||new WorkstationStore(resolve(dirname(store.file),'workstation.json'));
   await workstation.init();
-  let lastModelRequestAt=0;
+  const dataDirectory=resolve(marketDataDir||dirname(store.file));
+  const marketCache=new MarketCache(resolve(dataDirectory,'market-cache'));
+  // Conservative protection for the five-request/minute Massive Stocks Basic
+  // limit. Includes both verification and watchlist requests in this process.
+  // Other applications sharing the key can still consume the provider quota.
+  const recentMarketCalls=[];
+  let providerCooldownUntil=0;
+  async function limitedMarketRequest(args,request){
+    const now=Date.now();
+    if(now<providerCooldownUntil)
+      throw new Error('Massive rate-limit cooldown active; no new request sent. Keep prior scans and retry after the provider window resets.');
+    while(recentMarketCalls.length&&now-recentMarketCalls[0]>=60_000)
+      recentMarketCalls.shift();
+    if(recentMarketCalls.length>=4)
+      throw new Error('Local Massive request budget reached (4 per minute). No new request sent; existing scans are preserved.');
+    recentMarketCalls.push(now);
+    try{return await request(args);}
+    catch(error){
+      if(/status 429/.test(String(error?.message||'')))
+        providerCooldownUntil=Date.now()+60_000;
+      throw error;
+    }
+  }
+  const scopedMarketFetcher=marketFetcher===defaultMarketFetcher
+    ?args=>fetchWorkstationDataset({...args,dataDir:dataDirectory,
+      providerFetcher:input=>limitedMarketRequest(input,fetchMassiveDailyDataset)}):marketFetcher;
+  let lastModelRequestAt=0,lastMarketVerificationAt=0;
   const server=http.createServer(async(req,res)=>{
     try{
       if(!allowedHost(req.headers.host,port))return json(res,403,{error:'Host not allowed'});
@@ -76,21 +121,74 @@ export async function createApp({
       if(req.method==='GET'&&url.pathname==='/api/state')return json(res,200,report(store.state,generateScenario(store.state.seed)));
       if(req.method==='GET'&&url.pathname==='/api/experiment')return json(res,200,historicalExperiment(store.state.seed));
       if(req.method==='GET'&&url.pathname==='/api/workstation')return json(res,200,workstation.snapshot());
+      if(req.method==='GET'&&url.pathname==='/api/market/status'){
+        const key=await loadMarketDataKey({dataDir:dataDirectory});
+        const scans=Object.values(workstation.snapshot().lastScans).map(scan=>({symbol:scan.symbol,asOf:scan.asOf,mode:scan.source.mode,source:scan.source.name}));
+        return json(res,200,{connected:!!key,provider:'Massive Stocks',dataMode:'HISTORICAL',scans});
+      }
       if(req.method==='GET'&&staticFiles.has(url.pathname)){
         const file=staticFiles.get(url.pathname),contents=await readFile(join(root,'public',file));
         res.writeHead(200,{...headers,'Content-Type':types[file.slice(file.lastIndexOf('.'))]});return res.end(contents);
       }
       const postRoutes=[
         '/api/step','/api/run','/api/reset','/api/ai-report',
-        '/api/workstation/watchlist','/api/workstation/refresh','/api/workstation/tickets'
+        '/api/workstation/watchlist','/api/workstation/refresh','/api/workstation/tickets',
+        '/api/market/connect','/api/market/import'
       ];
       if(req.method==='POST'&&postRoutes.includes(url.pathname)){
         if(!allowedOrigin(req.headers.origin,port)||
           (req.headers['sec-fetch-site']&&!['same-origin','none'].includes(req.headers['sec-fetch-site'])))
           return json(res,403,{error:'Local same-origin request required'});
-        const body=await parseBody(req);
+        const body=await parseBody(req,url.pathname==='/api/market/import'?450_000:1000);
         if(!body||typeof body!=='object'||Array.isArray(body))return json(res,400,{error:'JSON object required'});
 
+        if(url.pathname==='/api/market/connect'){
+          if(Object.keys(body).length!==1||typeof body.apiKey!=='string')
+            return json(res,400,{error:'Enter only a Massive Stocks API key.'});
+          if(Date.now()-lastMarketVerificationAt<12_000)
+            return json(res,429,{error:'Connection verification is limited to one attempt every 12 seconds.'});
+          lastMarketVerificationAt=Date.now();
+          let key;
+          try{key=validateMassiveKey(body.apiKey);}
+          catch(error){return json(res,400,{error:error.message});}
+          const {from,to}=completedMarketWindow();
+          let dataset;
+          try{dataset=await limitedMarketRequest({symbol:'AAPL',from,to,apiKey:key},marketVerifier);}
+          catch(error){return json(res,422,{error:'Market connection could not be verified: '+String(error.message||'Provider unavailable').replaceAll(key,'[REDACTED]').slice(0,180)});}
+          if(dataset.symbol!=='AAPL'||dataset.bars?.length<60)
+            return json(res,422,{error:'Market-data verification returned an invalid symbol or incomplete history.'});
+          // Verification scans AAPL regardless of the user's existing watchlist.
+          // Preserve other symbols rather than replacing the list or failing when
+          // it is non-empty but does not yet include AAPL.
+          const current=workstation.snapshot();
+          if(!current.watchlist.includes('AAPL')&&current.watchlist.length>=20)
+            return json(res,409,{error:'AAPL is not on the full 20-symbol watchlist. Remove a symbol and retry connecting.'});
+          const evaluation=evaluateSwingSetup(dataset);
+          evaluation.chartBars=dataset.bars.slice(-60);
+          if(!current.watchlist.includes('AAPL'))
+            await workstation.setWatchlist([...current.watchlist,'AAPL']);
+          const refreshed=await workstation.applyRefresh([{dataset,evaluation}],{refreshedAt:new Date().toISOString(),errors:[]});
+          // Do not persist the credential until the actual scan succeeds.
+          await saveMarketDataKey(key,{dataDir:dataDirectory});
+          return json(res,200,{connected:true,provider:'Massive Stocks',symbol:'AAPL',asOf:evaluation.asOf,workstation:refreshed});
+        }
+        if(url.pathname==='/api/market/import'){
+          const allowed=['csv','symbol','source','priceAdjustment','confirmedRights'];
+          if(Object.keys(body).some(key=>!allowed.includes(key))||allowed.some(key=>!(key in body)))
+            return json(res,400,{error:'Missing or unexpected historical CSV fields.'});
+          const dataset=parseHistoricalCsv(body);
+          const current=workstation.snapshot();
+          if(!current.watchlist.includes(dataset.symbol)&&current.watchlist.length>=20)
+            return json(res,409,{error:'Watchlist has 20 symbols; remove one before importing another.'});
+          try{await marketCache.save(dataset);}
+          catch(error){return json(res,409,{error:'Historical dataset not accepted: '+error.message});}
+          if(!current.watchlist.includes(dataset.symbol))
+            await workstation.setWatchlist([...current.watchlist,dataset.symbol]);
+          const evaluation=evaluateSwingSetup(dataset);
+          evaluation.chartBars=dataset.bars.slice(-60);
+          const refreshed=await workstation.applyRefresh([{dataset,evaluation}],{refreshedAt:new Date().toISOString(),errors:[]});
+          return json(res,200,{symbol:dataset.symbol,bars:dataset.bars.length,asOf:evaluation.asOf,workstation:refreshed});
+        }
         if(url.pathname==='/api/workstation/watchlist'){
           if(Object.keys(body).length!==1||!('symbols' in body)||!Array.isArray(body.symbols))
             return json(res,400,{error:'symbols array required'});
@@ -100,10 +198,19 @@ export async function createApp({
           if(Object.keys(body).length)return json(res,400,{error:'Refresh accepts no parameters'});
           const current=workstation.snapshot();
           if(!current.watchlist.length)return json(res,400,{error:'Add at least one watchlist symbol before refreshing'});
-          const {from,to}=completedMarketWindow(),entries=[],errors=[];
+          const {from,to}=completedMarketWindow(),entries=[],errors=[],reusedSymbols=[];
+          const expectedTradingDay=latestCompletedWeekday(to);
           for(const symbol of current.watchlist){
+            const prior=current.lastScans[symbol];
+            if(prior&&prior.asOf>=expectedTradingDay&&
+               prior.source?.name==='Massive Stocks adjusted daily aggregates'){
+              // There is no newer completed weekday to fetch. Keep the
+              // previously verified source/date and avoid another paid/quota call.
+              reusedSymbols.push(symbol);
+              continue;
+            }
             try{
-              const dataset=await marketFetcher({symbol,from,to});
+              const dataset=await scopedMarketFetcher({symbol,from,to});
               const evaluation=evaluateSwingSetup(dataset);
               evaluation.chartBars=dataset.bars.slice(-60).map(bar=>({
                 date:bar.date,open:bar.open,high:bar.high,low:bar.low,close:bar.close,volume:bar.volume
@@ -114,7 +221,8 @@ export async function createApp({
             }
           }
           const next=await workstation.applyRefresh(entries,{refreshedAt:new Date().toISOString(),errors});
-          return json(res,200,{...next,refreshWindow:{from,to}});
+          return json(res,200,{...next,refreshWindow:{from,to},expectedTradingDay,
+            reusedSymbols,fetchedSymbols:entries.map(entry=>entry.dataset.symbol)});
         }
         if(url.pathname==='/api/workstation/tickets'){
           if(Object.keys(body).length!==2||!('symbol' in body)||!('paperUnits' in body))

@@ -25,3 +25,24 @@
 .map-detail{border-top:1px solid #345159;padding:16px 0 0;min-height:140px}.map-detail h3{font-size:17px;margin:0 0 8px}
 .map-detail p{color:#b4c6c3;line-height:1.6;margin:0 0 10px}.map-detail code{color:#e1c98b;overflow-wrap:anywhere;font-size:12px}
 #reference-view{max-width:100%;background:#14323a;color:#e5eddf;border:1px solid #42616a;border-radius:6px;padding:10px;margin-top:8px}
+
+
+/* First-run genuine market data connection: clear, responsive, and accessible. */
+.connection-panel{margin-bottom:18px;border-color:#49665b}
+.connection-panel .panel-head{margin-bottom:10px}
+.provider-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-top:18px}
+.provider-method{padding:20px;background:#15272d;border:1px solid #3c5759;min-width:0}
+.provider-method h3{font-size:18px;color:#e4f1e8;margin:0 0 8px}
+.provider-method form{display:flex;flex-direction:column;align-items:stretch;gap:10px;margin-top:14px}
+.provider-method input:not([type=checkbox]),.provider-method select{width:100%;max-width:100%;border:1px solid #52716c;background:#0e2027;color:#eef4ec;border-radius:5px;padding:12px;font:inherit;min-width:0}
+.provider-method input[type=file]{font-size:12px}
+.provider-method form .button{align-self:start;margin-top:4px}
+.provider-method a{color:#d9e9a8}
+.provider-method .data-confirm{display:flex;align-items:start;gap:10px;color:#c3d3cb;font-size:12px;line-height:1.6}
+.provider-method .data-confirm input{margin-top:3px;flex-shrink:0}
+#market-action-status{color:#d9e8ae;min-height:1.7em;margin-top:16px;font-weight:600}
+#market-connection-status{color:#d6e8dc}
+#market-connection-badge{white-space:nowrap}
+.provider-method :focus-visible{outline:2px solid #e4cf93;outline-offset:3px}
+@media(max-width:960px){.provider-grid{grid-template-columns:1fr}}
+@media(max-width:750px){.provider-method{padding:14px}.provider-method form .button{width:100%}.connection-panel .panel-head{gap:10px}}

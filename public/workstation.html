@@ -2,10 +2,35 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Project 09 · Swing Workstation</title><meta name="description" content="Local read-only market scanner and paper swing-trade research workstation."><link rel="stylesheet" href="/styles.css"></head>
 <body>
-<div class="frame"><aside class="rail"><a class="brand" href="/" aria-label="Project nine home"><span class="symbol">09<span>.</span></span><span>PROJECT<br><b>NINE</b></span></a><div class="rail-sep"></div><div class="rail-label">WORKSPACE</div><a class="nav" href="/">◫ &nbsp; Synthetic command center</a><a class="nav selected" href="/workstation.html">⌁ &nbsp; Swing workstation</a><a class="nav" href="/research.html">⌗ &nbsp; Historical research lab</a><div class="rail-bottom"><div class="shield">◉ &nbsp; READ-ONLY MARKET RESEARCH</div><p>Market data may be real. Orders are not. No brokerage connection or real-money execution exists.</p><div class="rail-version">WORKSTATION · V1</div></div></aside>
+<div class="frame"><aside class="rail"><a class="brand" href="/" aria-label="Project nine real-market workstation"><span class="symbol">09<span>.</span></span><span>PROJECT<br><b>NINE</b></span></a><div class="rail-sep"></div><div class="rail-label">WORKSPACE</div><a class="nav" href="/simulator.html">◫ &nbsp; Educational simulator</a><a class="nav selected" href="/workstation.html">⌁ &nbsp; Swing workstation</a><a class="nav" href="/research.html">⌗ &nbsp; Historical research lab</a><div class="rail-bottom"><div class="shield">◉ &nbsp; READ-ONLY MARKET RESEARCH</div><p>Market data may be real. Orders are not. No brokerage connection or real-money execution exists.</p><div class="rail-version">WORKSTATION · V1</div></div></aside>
 <main class="main"><header class="topbar"><div>PROJECT 09 <span>/ SWING WORKSTATION</span></div><div class="top-right"><span class="live"></span> LOCAL RESEARCH <span class="top-sep">|</span> NO BROKER</div></header>
-<section class="content"><div class="eyebrow">MARKET INTELLIGENCE <span class="dot"></span> COMPLETED DAILY BARS</div><div class="title-row"><div><h1>Swing workstation<span class="period">.</span></h1><p>Rank setups, inspect evidence, freeze paper plans, and measure what happened next.</p></div><div class="status-chip">◉ &nbsp; PAPER DECISION SUPPORT</div></div>
+<section class="content"><div class="eyebrow">MARKET INTELLIGENCE <span class="dot"></span> COMPLETED DAILY BARS</div><div class="title-row"><div><h1>Swing workstation<span class="period">.</span></h1><p>Load historical market prices, rank evidence-based setups, and track paper outcomes. No invented market prices.</p></div><div class="status-chip">◉ &nbsp; PAPER DECISION SUPPORT</div></div>
 <div class="notice"><b>READ-ONLY RESEARCH</b><span>This screen may use real historical/delayed market data. Setup labels and risk references are research outputs, not recommendations. Nothing here can place or route a real order.</span></div>
+
+<section class="panel connection-panel" aria-labelledby="market-data-title">
+<div class="panel-head"><div><div class="panel-kicker">00 / REAL MARKET DATA</div><h2 id="market-data-title">Connect prices before scanning</h2></div><span class="tag" id="market-connection-badge">CHECKING DATA SOURCE</span></div>
+<p class="supporting" id="market-connection-status" role="status">Checking whether historical market prices are configured…</p>
+<div class="provider-grid">
+<div class="provider-method">
+<h3>Connect a historical stock feed</h3>
+<p class="supporting">A Massive Stocks API key unlocks real completed daily market bars. Credentials stay on this Mac in the app’s private, Git-ignored data folder, not in browser storage.</p>
+<form id="market-connect-form" autocomplete="off"><label class="mini-label" for="massive-key">MASSIVE STOCKS API KEY</label>
+<input id="massive-key" type="password" autocomplete="new-password" placeholder="Paste your API key here" minlength="8" maxlength="512" required spellcheck="false">
+<button class="button main-button" id="connect-market" type="submit">Verify and connect prices</button></form>
+<p class="supporting">A key is required for this provider. The server verifies historical AAPL bars before saving it. <a href="https://massive.com/pricing?product=stocks" target="_blank" rel="noreferrer noopener">Massive Stocks plans</a></p>
+</div>
+<div class="provider-method">
+<h3>Or import your own historical CSV</h3>
+<p class="supporting">Use real OHLCV data you are permitted to access. Required columns: Date, Open, High, Low, Close, Volume. Minimum 60 completed daily bars.</p>
+<form id="market-import-form"><label class="mini-label" for="market-csv">HISTORICAL CSV</label><input id="market-csv" type="file" accept=".csv,text/csv" required>
+<label class="mini-label" for="market-symbol">SYMBOL</label><input id="market-symbol" type="text" maxlength="15" placeholder="AAPL" autocapitalize="characters" required>
+<label class="mini-label" for="market-source">DATA SOURCE</label><input id="market-source" type="text" maxlength="100" placeholder="Your actual CSV source" required>
+<label class="mini-label" for="market-adjustment">PRICE ADJUSTMENT</label>
+<select id="market-adjustment"><option value="UNKNOWN">Unknown / not verified</option><option value="RAW">Raw, unadjusted prices</option><option value="VENDOR_ADJUSTED">Vendor-adjusted prices (unverified)</option></select>
+<label class="data-confirm"><input id="market-rights" type="checkbox" required> I have permission to use this dataset for personal research.</label>
+<button class="button secondary-button" id="import-market" type="submit">Import and analyze real CSV</button></form>
+</div></div><p class="supporting" id="market-action-status" role="status"></p>
+</section>
 
 <div class="workstation-grid">
 <article class="panel watchlist-panel"><div class="panel-head"><div><div class="panel-kicker">01 / WATCHLIST</div><h2>Market scanner</h2></div><button id="refresh" class="button main-button">Refresh completed bars ↗</button></div>
