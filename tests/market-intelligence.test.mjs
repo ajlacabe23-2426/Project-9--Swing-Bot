@@ -55,6 +55,21 @@ test('normalizes a bounded provider-neutral completed-bar dataset',()=>{
   assert.equal(value.provenance.retrievedAt,null);
 });
 
+test('fractional share volumes remain precise through normalization and swing evaluation',()=>{
+  const input=dataset('FRACT');
+  input.bars[70].volume=100_000.125625;
+  input.bars[89].volume=127_010.875;
+  const normalized=normalizeMarketDataset(input);
+  assert.equal(normalized.bars[70].volume,100_000.125625);
+  assert.equal(normalized.bars[89].volume,127_010.875);
+  assert.ok(Number.isFinite(evaluateSwingSetup(normalized).observed.relativeVolume));
+  for(const invalid of [-1,Infinity,NaN,'100.25',null,Number.MAX_SAFE_INTEGER+1]){
+    const mutated=structuredClone(input);
+    mutated.bars[70].volume=invalid;
+    assert.throws(()=>normalizeMarketDataset(mutated),/invalid volume/);
+  }
+});
+
 test('market-data readiness stays explicitly unverified and flags structural review conditions',()=>{
   const clean=assessMarketDataQuality(dataset());
   assert.equal(clean.status,'STRUCTURALLY_CLEAN_UNVERIFIED');
