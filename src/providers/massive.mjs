@@ -1,6 +1,20 @@
 import {normalizeMarketDataset,CURRENT_MARKET_DATA_SCHEMA,isStrictISODate} from '../market-intelligence.mjs';
 
 const BASE_URL='https://api.massive.com';
+// Massive's US stock daily aggregate timestamp is midnight America/New_York,
+// not midnight UTC. The UTC instant shifts between 04:00 and 05:00 with DST.
+// Validate the provider's exchange-local day boundary before deriving a date.
+const EXCHANGE_DAY=new Intl.DateTimeFormat('en-US',{
+  timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit',
+  hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'
+});
+function stockDailyDate(instant){
+  const parts=Object.fromEntries(EXCHANGE_DAY.formatToParts(instant)
+    .filter(part=>part.type!=='literal').map(part=>[part.type,part.value]));
+  if(parts.hour!=='00'||parts.minute!=='00'||parts.second!=='00'||
+     instant.getUTCMilliseconds()!==0)return null;
+  return parts.year+'-'+parts.month+'-'+parts.day;
+}
 function normalizedSymbol(value){
   const symbol=String(value||'').trim().toUpperCase();
   if(!/^[A-Z0-9.\-]{1,15}$/.test(symbol))throw new Error('Invalid Massive stock symbol');
@@ -55,12 +69,10 @@ export async function fetchMassiveDailyDataset({symbol,from,to,apiKey,fetchImpl=
        !['o','h','l','c'].every(key=>typeof item[key]==='number'&&Number.isFinite(item[key])&&item[key]>0))
       throw malformed();
     const instant=new Date(item.t);
-    if(!Number.isFinite(instant.getTime())||
-       instant.getUTCHours()!==0||instant.getUTCMinutes()!==0||
-       instant.getUTCSeconds()!==0||instant.getUTCMilliseconds()!==0)
-      throw malformed();
+    const marketDate=Number.isFinite(instant.getTime())?stockDailyDate(instant):null;
+    if(!marketDate)throw malformed();
     const bar={
-      date:instant.toISOString().slice(0,10),
+      date:marketDate,
       open:item.o,high:item.h,low:item.l,close:item.c,volume:item.v
     };
     if(bar.date<from||bar.date>to)
