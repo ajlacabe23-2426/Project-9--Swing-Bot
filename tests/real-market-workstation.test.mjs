@@ -8,6 +8,7 @@ import {generateScenario} from '../src/engine.mjs';
 import {CURRENT_MARKET_DATA_SCHEMA,evaluateSwingSetup} from '../src/market-intelligence.mjs';
 import {createApp} from '../server.mjs';
 import {PaperStore} from '../src/store.mjs';
+import {WorkstationStore} from '../src/workstation-store.mjs';
 
 const NOW=new Date('2026-10-28T22:00:00.000Z');
 const bars=generateScenario(101,120);
@@ -82,6 +83,69 @@ test('local browser connects historical provider, persists key privately, and sc
     const after=await (await fetch(base+'/api/market/status')).json();
     assert.equal(after.connected,true);
     assert.equal(JSON.stringify(after).includes(saved.trim()),false);
+  }finally{
+    await new Promise(resolve=>app.close(resolve));
+    await rm(root,{recursive:true,force:true});
+  }
+});
+
+test('connecting AAPL succeeds with an existing nonempty watchlist and preserves other symbols',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'p9-existing-watchlist-'));
+  const watchlistStore=new WorkstationStore(join(root,'workstation.json'));
+  await watchlistStore.init();
+  await watchlistStore.setWatchlist(['MSFT']);
+  const app=await createApp({
+    port:49367,
+    store:new PaperStore(join(root,'paper.json')),
+    marketVerifier:async({symbol,apiKey})=>{
+      assert.equal(symbol,'AAPL');
+      assert.equal(apiKey,'test-private-key-123');
+      return parseHistoricalCsv(good,NOW);
+    }
+  });
+  await new Promise((resolve,reject)=>app.once('error',reject).listen(49367,'127.0.0.1',resolve));
+  const base='http://127.0.0.1:49367';
+  try{
+    const response=await fetch(base+'/api/market/connect',{
+      method:'POST',headers:{'Content-Type':'application/json','Origin':base},
+      body:JSON.stringify({apiKey:'test-private-key-123'})
+    });
+    assert.equal(response.status,200);
+    const payload=await response.json();
+    assert.deepEqual(payload.workstation.watchlist,['MSFT','AAPL']);
+    assert.equal(payload.workstation.lastScans.AAPL.symbol,'AAPL');
+    assert.equal((await readFile(join(root,'massive-api-key'),'utf8')).trim(),'test-private-key-123');
+    const recovered=new WorkstationStore(join(root,'workstation.json'));
+    await recovered.init();
+    assert.deepEqual(recovered.snapshot().watchlist,['MSFT','AAPL']);
+    assert.equal(recovered.snapshot().lastScans.AAPL.symbol,'AAPL');
+  }finally{
+    await new Promise(resolve=>app.close(resolve));
+    await rm(root,{recursive:true,force:true});
+  }
+});
+
+test('full watchlist returns an actionable error without changing symbols or saving a key',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'p9-full-watchlist-'));
+  const existing=Array.from({length:20},(_,i)=>'SYM'+i);
+  const watchlistStore=new WorkstationStore(join(root,'workstation.json'));
+  await watchlistStore.init();await watchlistStore.setWatchlist(existing);
+  const app=await createApp({
+    port:49368,
+    store:new PaperStore(join(root,'paper.json')),
+    marketVerifier:async()=>parseHistoricalCsv(good,NOW)
+  });
+  await new Promise((resolve,reject)=>app.once('error',reject).listen(49368,'127.0.0.1',resolve));
+  const base='http://127.0.0.1:49368';
+  try{
+    const response=await fetch(base+'/api/market/connect',{
+      method:'POST',headers:{'Content-Type':'application/json','Origin':base},
+      body:JSON.stringify({apiKey:'test-private-key-123'})
+    });
+    assert.equal(response.status,409);
+    assert.match((await response.json()).error,/full 20-symbol watchlist/);
+    assert.deepEqual((await (await fetch(base+'/api/workstation')).json()).watchlist,existing);
+    await assert.rejects(()=>readFile(join(root,'massive-api-key'),'utf8'),{code:'ENOENT'});
   }finally{
     await new Promise(resolve=>app.close(resolve));
     await rm(root,{recursive:true,force:true});
