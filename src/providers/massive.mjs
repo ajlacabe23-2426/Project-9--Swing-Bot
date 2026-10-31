@@ -65,7 +65,7 @@ export async function fetchMassiveDailyDataset({symbol,from,to,apiKey,fetchImpl=
     const malformed=()=>new Error('Massive aggregate '+index+' is malformed');
     if(!item||typeof item!=='object'||Array.isArray(item)||
        !Number.isSafeInteger(item.t)||item.t<0||
-       !Number.isSafeInteger(item.v)||item.v<0||
+       (!Number.isFinite(item.v)||item.v<0||item.v>Number.MAX_SAFE_INTEGER)||
        !['o','h','l','c'].every(key=>typeof item[key]==='number'&&Number.isFinite(item[key])&&item[key]>0))
       throw malformed();
     const instant=new Date(item.t);
