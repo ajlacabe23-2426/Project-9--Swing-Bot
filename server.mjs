@@ -124,11 +124,19 @@ export async function createApp({
           catch(error){return json(res,422,{error:'Market connection could not be verified: '+String(error.message||'Provider unavailable').replaceAll(key,'[REDACTED]').slice(0,180)});}
           if(dataset.symbol!=='AAPL'||dataset.bars?.length<60)
             return json(res,422,{error:'Market-data verification returned an invalid symbol or incomplete history.'});
-          await saveMarketDataKey(key,{dataDir:dataDirectory});
-          if(!workstation.snapshot().watchlist.length)await workstation.setWatchlist(['AAPL']);
+          // Verification scans AAPL regardless of the user's existing watchlist.
+          // Preserve other symbols rather than replacing the list or failing when
+          // it is non-empty but does not yet include AAPL.
+          const current=workstation.snapshot();
+          if(!current.watchlist.includes('AAPL')&&current.watchlist.length>=20)
+            return json(res,409,{error:'AAPL is not on the full 20-symbol watchlist. Remove a symbol and retry connecting.'});
           const evaluation=evaluateSwingSetup(dataset);
           evaluation.chartBars=dataset.bars.slice(-60);
+          if(!current.watchlist.includes('AAPL'))
+            await workstation.setWatchlist([...current.watchlist,'AAPL']);
           const refreshed=await workstation.applyRefresh([{dataset,evaluation}],{refreshedAt:new Date().toISOString(),errors:[]});
+          // Do not persist the credential until the actual scan succeeds.
+          await saveMarketDataKey(key,{dataDir:dataDirectory});
           return json(res,200,{connected:true,provider:'Massive Stocks',symbol:'AAPL',asOf:evaluation.asOf,workstation:refreshed});
         }
         if(url.pathname==='/api/market/import'){
