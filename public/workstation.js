@@ -147,10 +147,10 @@ function renderTickets(){
 function renderStatus(){
   const errors=state?.lastRefreshErrors||[];
   if(errors.length){
-    $('workstation-status').textContent='Refresh completed with '+errors.length+' issue'+(errors.length===1?'':'s')+': '+errors.slice(0,3).map(item=>item.symbol+' — '+item.message).join(' | ');
+    $('workstation-status').textContent='Latest refresh attempted with '+errors.length+' issue'+(errors.length===1?'':'s')+': '+errors.slice(0,3).map(item=>item.symbol+' — '+item.message).join(' | ')+' · Previously successful scans remain displayed; failed symbols did NOT receive new bars.';
     return;
   }
-  $('workstation-status').textContent=state?.lastRefresh?'Last completed-bar refresh: '+new Date(state.lastRefresh).toLocaleString()+'.':'No scanned data yet. Connect Massive Stocks or import a permitted historical CSV above, then refresh your watchlist.';
+  $('workstation-status').textContent=state?.lastRefresh?'Last workstation check: '+new Date(state.lastRefresh).toLocaleString()+'. Market-data as-of dates are shown for each symbol.':'No scanned data yet. Connect Massive Stocks or import a permitted historical CSV above, then refresh your watchlist.';
 }
 function render(){
   if(!state)return;
@@ -158,9 +158,9 @@ function render(){
   const ranked=scans();if(!selectedSymbol||!state.lastScans[selectedSymbol])selectedSymbol=ranked[0]?.symbol||null;
   renderStatus();renderScanner();renderDetail();renderAlerts();renderTickets();
 }
-async function runAction(button,fn){
+async function runAction(button,fn,afterRender=null){
   if(busy)return;busy=true;const original=button.textContent;button.disabled=true;
-  try{state=await fn();render();}catch(error){$('workstation-status').textContent=error.message;}
+  try{state=await fn();render();if(afterRender)afterRender(state);}catch(error){$('workstation-status').textContent=error.message;}
   finally{
     busy=false;
     button.disabled=button.id==='create-ticket'
@@ -228,7 +228,20 @@ $('save-watchlist').addEventListener('click',()=>runAction($('save-watchlist'),a
   const symbols=$('watchlist').value.split(',').map(value=>value.trim()).filter(Boolean);
   return request('/api/workstation/watchlist',{symbols});
 }));
-$('refresh').addEventListener('click',()=>runAction($('refresh'),async()=>request('/api/workstation/refresh',{})));
+$('refresh').addEventListener('click',()=>runAction($('refresh'),
+  async()=>request('/api/workstation/refresh',{}),
+  response=>{
+    if((response.lastRefreshErrors||[]).length)return;
+    const reused=response.reusedSymbols||[],fetched=response.fetchedSymbols||[];
+    if(reused.length===0)return;
+    const noRequests=fetched.length===0;
+    $('workstation-status').textContent=noRequests
+      ?'No newer completed weekday since '+response.expectedTradingDay+
+       '. Reused saved scans for '+reused.join(', ')+
+       '; no new Massive requests sent. Market dates in the scanner are unchanged.'
+      :'Fetched '+fetched.join(', ')+'; reused unchanged completed-day scans for '+
+       reused.join(', ')+'. Each row shows its own market-data date.';
+  }));
 $('create-ticket').addEventListener('click',()=>runAction($('create-ticket'),async()=>{
   const paperUnits=Number($('paper-units').value);
   if(!selectedSymbol||!Number.isFinite(paperUnits)||paperUnits<=0)throw new Error('Choose a scanned setup and valid virtual-unit amount.');
