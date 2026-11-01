@@ -16,7 +16,7 @@ const root=dirname(fileURLToPath(import.meta.url));
 const staticFiles=new Map([
   ['/','workstation.html'],['/index.html','index.html'],['/simulator.html','index.html'],['/styles.css','styles.css'],['/app.js','app.js'],
   ['/research.html','research.html'],['/research.js','research.js'],['/research-core.mjs','research-core.mjs'],
-  ['/workstation.html','workstation.html'],['/workstation.js','workstation.js'],
+  ['/workstation.html','workstation.html'],['/workstation.js','workstation.js'],['/observation-age.mjs','observation-age.mjs'],
   ['/decision-map.js','decision-map.js'],['/decision-map-core.mjs','decision-map-core.mjs']
 ]);
 const types={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.mjs':'text/javascript; charset=utf-8'};
