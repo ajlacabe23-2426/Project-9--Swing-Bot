@@ -243,3 +243,18 @@ synthetic prices are not silently shown as real. End-of-day data is historical,
 not an executable intraday quote. The free provider tier may impose request
 rates and coverage limits; historical calibration and trading performance
 remain unverified until tested against independent, appropriately sourced data.
+
+## Workstation historical-data evidence strip (November 1, 2026)
+
+The market-data-first workstation now displays **datasets scanned**, **oldest
+last-observation age (calendar days)**, and **local provider credential status**.
+These are visible before the watchlist detail and update as research snapshots
+change. Elapsed calendar days are not exchange trading sessions, a real-time feed
+test, or a prediction of future market movement. A saved key is only a local
+configuration fact—not proof of successful current authorization, accuracy,
+licensing, or an executable opportunity.
+
+Headless Chromium regression checks that a synthetic test source does **not**
+appear as a configured provider credential and that historical age is surfaced.
+Actual provider response, license entitlement, and owner-machine acceptance are
+still separate gates. No brokerage routes or real-money behavior were added.
