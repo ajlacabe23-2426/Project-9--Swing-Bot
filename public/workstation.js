@@ -1,4 +1,5 @@
 import {createDecisionMap} from './decision-map.js';
+import {observationAgeDays} from './observation-age.mjs';
 import {buildDecisionMap} from './decision-map-core.mjs';
 const $=id=>document.getElementById(id);
 const usd=n=>Number.isFinite(n)?new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:2}).format(n):'—';
@@ -143,14 +144,6 @@ function renderTickets(){
     tr.append(cell(ticket.id),cell(ticket.symbol),cell(ticket.openedAsOf),cell(usd(ticket.entryReference)),cell(usd(ticket.stopReference)),cell(usd(ticket.targetReference)),cell(String(o.status||'—').replaceAll('_',' ')),cell(o.paperPnl===null?'—':usd(o.paperPnl)),cell(o.rMultiple===null?'—':num(o.rMultiple,2)+'R'));
     tbody.append(tr);
   }
-}
-function observationAgeDays(value){
-  if(typeof value!=='string'||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value))return null;
-  const target=Date.parse(value+'T00:00:00.000Z');
-  if(!Number.isFinite(target)||new Date(target).toISOString().slice(0,10)!==value)return null;
-  const now=new Date(),today=Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate());
-  const age=Math.floor((today-target)/86400000);
-  return age<0?null:age;
 }
 function renderEvidenceSummary(){
   const items=scans();
