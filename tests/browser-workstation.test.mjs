@@ -121,6 +121,8 @@ test('real headless Chromium operates loopback workstation and preserves state w
         return !!state.lastScans.TEST;
       },'initial research scan');
       await eventually(()=>js("document.querySelector('#setup-title').textContent.includes('TEST') && !!document.querySelector('#setup-chart path') && document.querySelector('#scanner-body').textContent.includes('TEST')"),'chart and detail in browser');
+      await eventually(()=>js("document.querySelector('#evidence-symbols').textContent==='1' && document.querySelector('#evidence-age').textContent.includes('days')"),'historical data evidence summary');
+      assert.equal(await js("document.querySelector('#evidence-provider').textContent"),'No provider key','no provider credential is implied by local test data');
       assert.equal(await js("document.querySelector('#create-ticket').disabled"),false,'eligible setup can create paper ticket');
       await eventually(()=>js("document.querySelectorAll('#decision-map [data-node]').length===10"),'decision map rendered');
       assert.equal(await js("document.querySelectorAll('#setup-chart [data-reference]').length"),3,'entry and exit reference markers');
