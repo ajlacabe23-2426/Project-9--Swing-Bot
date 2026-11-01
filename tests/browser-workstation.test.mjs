@@ -107,12 +107,12 @@ test('real headless Chromium operates loopback workstation and preserves state w
           chromePort=Number(data.split('\n')[0]);
           return Number.isInteger(chromePort)&&chromePort>0;
         }catch{return false;}
-      },'Chromium debugging port');
+      },'Chromium debugging port',30000);
       connection=await connectCDP(chromePort);
       const js=connection.evaluate;
       await connection.command('Emulation.setDeviceMetricsOverride',{width:1440,height:1080,deviceScaleFactor:1,mobile:false});
       await connection.command('Network.enable');
-      await eventually(()=>js("!!document.querySelector('#watchlist') && document.querySelector('#workstation-status').textContent.includes('Watchlist saved')"),'rendered workstation');
+      await eventually(()=>js("!!document.querySelector('#watchlist') && document.querySelector('#workstation-status').textContent.includes('No scanned data yet') && !!document.querySelector('#market-connect-form')"),'rendered workstation');
       await js("(() => {document.querySelector('#watchlist').value='TEST';document.querySelector('#save-watchlist').click();return true;})()");
       await eventually(async()=>{const state=await(await fetch(base+'/api/workstation')).json();return state.watchlist.join(',')==='TEST';},'watchlist persistence');
       await js("document.querySelector('#refresh').click()");
@@ -121,6 +121,10 @@ test('real headless Chromium operates loopback workstation and preserves state w
         return !!state.lastScans.TEST;
       },'initial research scan');
       await eventually(()=>js("document.querySelector('#setup-title').textContent.includes('TEST') && !!document.querySelector('#setup-chart path') && document.querySelector('#scanner-body').textContent.includes('TEST')"),'chart and detail in browser');
+      await eventually(()=>js("document.querySelector('#evidence-symbols').textContent==='1' && document.querySelector('#evidence-age').textContent.includes('days')"),'historical data evidence summary');
+      assert.equal(await js("document.querySelector('#evidence-provider').textContent"),'No provider key','no provider credential is implied by local test data');
+      assert.equal(await js("document.querySelector('#market-connection-badge').textContent"),'NO KEY CONFIGURED','UI cannot imply an active provider connection without a key');
+      assert.equal(await js("document.querySelector('#market-connection-status').textContent.includes('No provider key configured')"),true);
       assert.equal(await js("document.querySelector('#create-ticket').disabled"),false,'eligible setup can create paper ticket');
       await eventually(()=>js("document.querySelectorAll('#decision-map [data-node]').length===10"),'decision map rendered');
       assert.equal(await js("document.querySelectorAll('#setup-chart [data-reference]').length"),3,'entry and exit reference markers');

@@ -1,6 +1,20 @@
 import {normalizeMarketDataset,CURRENT_MARKET_DATA_SCHEMA,isStrictISODate} from '../market-intelligence.mjs';
 
 const BASE_URL='https://api.massive.com';
+// Massive's US stock daily aggregate timestamp is midnight America/New_York,
+// not midnight UTC. The UTC instant shifts between 04:00 and 05:00 with DST.
+// Validate the provider's exchange-local day boundary before deriving a date.
+const EXCHANGE_DAY=new Intl.DateTimeFormat('en-US',{
+  timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit',
+  hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'
+});
+function stockDailyDate(instant){
+  const parts=Object.fromEntries(EXCHANGE_DAY.formatToParts(instant)
+    .filter(part=>part.type!=='literal').map(part=>[part.type,part.value]));
+  if(parts.hour!=='00'||parts.minute!=='00'||parts.second!=='00'||
+     instant.getUTCMilliseconds()!==0)return null;
+  return parts.year+'-'+parts.month+'-'+parts.day;
+}
 function normalizedSymbol(value){
   const symbol=String(value||'').trim().toUpperCase();
   if(!/^[A-Z0-9.\-]{1,15}$/.test(symbol))throw new Error('Invalid Massive stock symbol');
@@ -31,7 +45,13 @@ export async function fetchMassiveDailyDataset({symbol,from,to,apiKey,fetchImpl=
   }catch{
     throw new Error('Massive market-data request failed');
   }
-  if(!response||!response.ok)throw new Error('Massive market-data request failed with status '+(response?.status??'unknown'));
+  if(!response||!response.ok){
+    const status=response?.status??'unknown';
+    const guidance=status===401?' (key rejected: run npm run setup:market)':
+      status===403?' (Stocks historical-data entitlement unavailable)':
+      status===429?' (rate limit reached: wait before refreshing)':'';
+    throw new Error('Massive market-data request failed with status '+status+guidance);
+  }
   let payload;
   try{payload=await response.json();}catch{throw new Error('Massive returned invalid JSON');}
   if(!payload||payload.status!=='OK'||!Array.isArray(payload.results))throw new Error('Massive returned an invalid aggregate response');
@@ -45,16 +65,14 @@ export async function fetchMassiveDailyDataset({symbol,from,to,apiKey,fetchImpl=
     const malformed=()=>new Error('Massive aggregate '+index+' is malformed');
     if(!item||typeof item!=='object'||Array.isArray(item)||
        !Number.isSafeInteger(item.t)||item.t<0||
-       !Number.isSafeInteger(item.v)||item.v<0||
+       (!Number.isFinite(item.v)||item.v<0||item.v>Number.MAX_SAFE_INTEGER)||
        !['o','h','l','c'].every(key=>typeof item[key]==='number'&&Number.isFinite(item[key])&&item[key]>0))
       throw malformed();
     const instant=new Date(item.t);
-    if(!Number.isFinite(instant.getTime())||
-       instant.getUTCHours()!==0||instant.getUTCMinutes()!==0||
-       instant.getUTCSeconds()!==0||instant.getUTCMilliseconds()!==0)
-      throw malformed();
+    const marketDate=Number.isFinite(instant.getTime())?stockDailyDate(instant):null;
+    if(!marketDate)throw malformed();
     const bar={
-      date:instant.toISOString().slice(0,10),
+      date:marketDate,
       open:item.o,high:item.h,low:item.l,close:item.c,volume:item.v
     };
     if(bar.date<from||bar.date>to)
