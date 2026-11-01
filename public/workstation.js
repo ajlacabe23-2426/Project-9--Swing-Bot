@@ -145,9 +145,9 @@ function renderTickets(){
   }
 }
 function observationAgeDays(value){
-  if(typeof value!=='string'||!/[0-9]{4}-[0-9]{2}-[0-9]{2}/.test(value)||value.length!==10)return null;
+  if(typeof value!=='string'||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value))return null;
   const target=Date.parse(value+'T00:00:00.000Z');
-  if(!Number.isFinite(target))return null;
+  if(!Number.isFinite(target)||new Date(target).toISOString().slice(0,10)!==value)return null;
   const now=new Date(),today=Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate());
   const age=Math.floor((today-target)/86400000);
   return age<0?null:age;
@@ -191,16 +191,16 @@ async function runAction(button,fn,afterRender=null){
 async function loadMarketConnection(){
   try{
     const connection=await request('/api/market/status');
-    $('market-connection-badge').textContent=connection.connected?'PROVIDER CONNECTED':'PROVIDER NOT CONNECTED';
+    $('market-connection-badge').textContent=connection.connected?'CREDENTIAL SAVED':'NO KEY CONFIGURED';
     $('evidence-provider').textContent=connection.connected?'Key configured':'No provider key';
     $('evidence-provider-note').textContent=connection.connected
-      ?'Credential stored locally; authenticity and licensing not independently verified'
+      ?'Saved credential does not establish current provider availability, data rights or authenticity'
       :'Permitted local CSV import available; sources are not independently authenticated';
     $('market-connection-status').textContent=connection.connected
-      ?'Massive Stocks credential is configured locally. Refresh your watchlist for historical market prices.'
+      ?'A Massive Stocks credential is saved locally. Availability for this session is unverified until a completed-bar refresh succeeds.'
       :'No provider key configured. Connect one below, or import a permitted historical CSV to analyze completed market bars.';
   }catch(error){
-    $('market-connection-badge').textContent='CONNECTION STATUS UNAVAILABLE';
+    $('market-connection-badge').textContent='LOCAL STATUS UNAVAILABLE';
     $('evidence-provider').textContent='Status unavailable';
     $('evidence-provider-note').textContent='Could not inspect the local provider configuration';
     $('market-connection-status').textContent=error.message;
