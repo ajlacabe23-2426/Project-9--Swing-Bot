@@ -145,7 +145,7 @@ function renderTickets(){
   }
 }
 function observationAgeDays(value){
-  if(typeof value!=='string'||!/^\\d{4}-\\d{2}-\\d{2}$/.test(value))return null;
+  if(typeof value!=='string'||!/[0-9]{4}-[0-9]{2}-[0-9]{2}/.test(value)||value.length!==10)return null;
   const target=Date.parse(value+'T00:00:00.000Z');
   if(!Number.isFinite(target))return null;
   const now=new Date(),today=Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate());
