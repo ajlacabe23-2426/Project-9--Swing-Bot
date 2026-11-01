@@ -144,6 +144,25 @@ function renderTickets(){
     tbody.append(tr);
   }
 }
+function observationAgeDays(value){
+  if(typeof value!=='string'||!/^\\d{4}-\\d{2}-\\d{2}$/.test(value))return null;
+  const target=Date.parse(value+'T00:00:00.000Z');
+  if(!Number.isFinite(target))return null;
+  const now=new Date(),today=Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate());
+  const age=Math.floor((today-target)/86400000);
+  return age<0?null:age;
+}
+function renderEvidenceSummary(){
+  const items=scans();
+  $('evidence-symbols').textContent=String(items.length);
+  const ages=items.map(scan=>observationAgeDays(scan.asOf)).filter(Number.isInteger);
+  $('evidence-age').textContent=ages.length?Math.max(...ages)+' days':'—';
+  $('evidence-age-note').textContent=items.length===0
+    ?'No completed-bar scans loaded'
+    :ages.length!==items.length
+      ?'One or more dates need review; calendar-day comparison only'
+      :'Calendar days since the oldest last bar · not market-session age';
+}
 function renderStatus(){
   const errors=state?.lastRefreshErrors||[];
   if(errors.length){
@@ -156,7 +175,7 @@ function render(){
   if(!state)return;
   if(document.activeElement!==$('watchlist'))$('watchlist').value=state.watchlist.join(', ');
   const ranked=scans();if(!selectedSymbol||!state.lastScans[selectedSymbol])selectedSymbol=ranked[0]?.symbol||null;
-  renderStatus();renderScanner();renderDetail();renderAlerts();renderTickets();
+  renderStatus();renderEvidenceSummary();renderScanner();renderDetail();renderAlerts();renderTickets();
 }
 async function runAction(button,fn,afterRender=null){
   if(busy)return;busy=true;const original=button.textContent;button.disabled=true;
@@ -173,11 +192,17 @@ async function loadMarketConnection(){
   try{
     const connection=await request('/api/market/status');
     $('market-connection-badge').textContent=connection.connected?'PROVIDER CONNECTED':'PROVIDER NOT CONNECTED';
+    $('evidence-provider').textContent=connection.connected?'Key configured':'No provider key';
+    $('evidence-provider-note').textContent=connection.connected
+      ?'Credential stored locally; authenticity and licensing not independently verified'
+      :'Permitted local CSV import available; sources are not independently authenticated';
     $('market-connection-status').textContent=connection.connected
       ?'Massive Stocks credential is configured locally. Refresh your watchlist for historical market prices.'
       :'No provider key configured. Connect one below, or import a permitted historical CSV to analyze completed market bars.';
   }catch(error){
     $('market-connection-badge').textContent='CONNECTION STATUS UNAVAILABLE';
+    $('evidence-provider').textContent='Status unavailable';
+    $('evidence-provider-note').textContent='Could not inspect the local provider configuration';
     $('market-connection-status').textContent=error.message;
   }
 }
