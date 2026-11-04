@@ -19,7 +19,7 @@ export function convertAuthorizedMarketCSV(text,{
   if(typeof source!=='string'||source.trim().length<2||source.trim().length>100)
     throw new Error('Provide a concise, identifiable data source');
   if(typeof retrievedAt!=='string'||!/^\d{4}-\d{2}-\d{2}T/.test(retrievedAt)||
-     !Number.isFinite(Date.parse(retrievedAt))||!/[zZ]|[+-]\d{2}:\d{2}$/.test(retrievedAt))
+     !Number.isFinite(Date.parse(retrievedAt))||!/(?:[zZ]|[+-]\d{2}:\d{2})$/.test(retrievedAt))
     throw new Error('Explicit timezone-aware retrieval timestamp required');
   const rows=text.replace(/^\uFEFF/,'').trim().split(/\r?\n/);
   if(rows.length<61||rows.length>3001)throw new Error('Require 60–3000 completed historical bars');
