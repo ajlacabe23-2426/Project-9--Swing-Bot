@@ -116,6 +116,16 @@ npm run audit:market -- --as-of 2026-11-04 .data/AAPL.json
 
 The **explicit review date** prevents accidental evaluation against future observations. The JSON result contains each input file's SHA-256, symbol, latest completed bar, observed bar count, structural data-quality checks, declared provider-provenance gaps, and a five-**calendar**-day age review flag. Files are never sent over the network or changed. The date-age flag is **not** a trading-calendar or exchange-session checker; weekends and holidays can trigger review. Mixed last-bar dates are disclosed rather than silently aligned. All data remains **unverified research** even when structurally clean. This audit cannot create trading signals, broker connections, or orders.
 
+## Retrospective market-condition research
+
+The new read-only `research:regimes` command combines a multi-symbol, checksum-linked data-quality review with fixed **non-overlapping historical windows**. Each window reports completed-bar close changes, descriptive historical rising/falling/range-like conditions, close drawdown, and the existing paper-only scanner classification **at the window end**. It does not evaluate subsequent returns, optimize rules, or establish strategy profitability.
+
+```bash
+npm run research:regimes -- --as-of 2026-11-04 --window-bars 20 .data/AAPL.json .data/MSFT.json
+```
+
+Every file must be a previously imported local `project9-market-data-v1` or `v2` market JSON. A 50-bar indicator warmup precedes the first full research window; incomplete windows are excluded and counted. All reports include each exact file SHA-256 and declared provenance review reasons. Date and sample gaps stay explicit. Condition thresholds are arbitrary descriptive research categories and cannot be used as trade recommendations. No network calls or orders occur. Data source rights, corporate actions and point-in-time universe evidence remain unresolved.
+
 ## Security and verification
 
 Run `npm run check` for syntax checks and the offline unit/HTTP integration suite. GitHub Actions runs the same suite on Node 22. Local Host and Origin checks, bounded JSON, no public broker routes, and ignored local state are starting boundaries, **not** an independent security audit. No real customer or financial records belong in this prototype.
