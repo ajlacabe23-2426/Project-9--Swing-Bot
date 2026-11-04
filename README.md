@@ -126,6 +126,18 @@ npm run research:regimes -- --as-of 2026-11-04 --window-bars 20 .data/AAPL.json 
 
 Every file must be a previously imported local `project9-market-data-v1` or `v2` market JSON. A 50-bar indicator warmup precedes the first full research window; incomplete windows are excluded and counted. All reports include each exact file SHA-256 and declared provenance review reasons. Date and sample gaps stay explicit. Condition thresholds are arbitrary descriptive research categories and cannot be used as trade recommendations. No network calls or orders occur. Data source rights, corporate actions and point-in-time universe evidence remain unresolved.
 
+## Add permitted historical datasets without a market-data API key
+
+The local `import:market-csv` adapter accepts a deliberately simple, single-instrument daily CSV with headers `date,open,high,low,close,volume` and 60–3000 ascending completed rows. Source and research permission are **user-declared**; no independent authentication or rights clearance is implied. Adjustment status, corporate actions and survivorship are intentionally marked unknown/unverified.
+
+```bash
+npm run import:market-csv -- --input /path/to/allowed-bars.csv --output .data/SYMBOL.json --symbol SYMBOL --source "Your permitted source" --retrieved-at 2026-11-04T00:00:00Z --confirm-permitted
+npm run audit:market -- --as-of 2026-11-04 .data/SYMBOL.json
+npm run research:regimes -- --as-of 2026-11-04 .data/SYMBOL.json
+```
+
+CSV accepts plain decimals and whole-number volume without quoting or thousands separators. The importer validates OHLC consistency and calendar order, records input/output SHA-256 in a local receipt, writes a new user-private JSON file with no overwrite, and makes **no network requests**. Do not import or attest to datasets without permission; never commit source records or keys. This expands local research portability, not verified market-data coverage.
+
 ## Security and verification
 
 Run `npm run check` for syntax checks and the offline unit/HTTP integration suite. GitHub Actions runs the same suite on Node 22. Local Host and Origin checks, bounded JSON, no public broker routes, and ignored local state are starting boundaries, **not** an independent security audit. No real customer or financial records belong in this prototype.
