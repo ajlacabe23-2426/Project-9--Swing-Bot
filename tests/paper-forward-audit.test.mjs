@@ -5,6 +5,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createHash} from 'node:crypto';
 import {auditPaperForward,auditLocalPaperForwardFiles} from '../scripts/paper-forward-audit.mjs';
+import {buildDemoDataset} from '../scripts/seed-workstation-demo.mjs';
 
 function synthetic(symbol='UP',drift=0.01,count=130){
   const bars=[],day=new Date('2026-01-01T00:00:00.000Z');
@@ -81,5 +82,26 @@ test('local audit links output to exact input byte SHA without writing to disk',
       auditLocalPaperForwardFiles([file,file],{asOf:data.sourceAsOf}),
       /Duplicate market symbol/
     );
+  }finally{await rm(dir,{recursive:true,force:true});}
+});
+
+test('seeded v2 demo provenance is accepted by paper-forward audit without re-normalization',async()=>{
+  const demo=buildDemoDataset('SIM09');
+  assert.equal(demo.schema,'project9-market-data-v2');
+  const asOf=demo.sourceAsOf;
+  const single=auditPaperForward(demo,{asOf});
+  assert.equal(single.symbol,'SIM09');
+  assert.equal(single.lastCompletedBarUsed,asOf);
+  assert.equal(single.safety.realOrdersCreated,false);
+  assert.ok(single.evaluatedSignalDates>0);
+
+  const dir=await mkdtemp(join(tmpdir(),'paper-forward-v2-'));
+  try{
+    const file=join(dir,'SIM09.json');
+    await writeFile(file,JSON.stringify(demo));
+    const batch=await auditLocalPaperForwardFiles([file],{asOf});
+    assert.equal(batch.datasetCount,1);
+    assert.equal(batch.results[0].symbol,'SIM09');
+    assert.equal(batch.results[0].lastCompletedBarUsed,asOf);
   }finally{await rm(dir,{recursive:true,force:true});}
 });

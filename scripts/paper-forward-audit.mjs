@@ -28,7 +28,9 @@ export function auditPaperForward(input,{asOf,holdingBars=5,feeBps=10,slippageBp
   let evaluatedSignals=0;
   for(let i=50;i+holdingBars<=end;){
     // No price after this completed signal date enters the classifier.
-    const signal=evaluateSwingSetup(dataset,{asOfIndex:i});
+    // evaluateSwingSetup validates its input itself. Never send it the
+    // normalized dataset with the internal provenance.contract field.
+    const signal=evaluateSwingSetup(input,{asOfIndex:i});
     evaluatedSignals+=1;
     if(signal.classification==='NO_PAPER_SETUP'){
       i+=1;continue;
