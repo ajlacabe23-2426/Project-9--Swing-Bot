@@ -4,6 +4,8 @@ import {mkdtemp,rm,readFile,writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {convertAuthorizedMarketCSV} from '../src/market-csv-import.mjs';
+import {normalizeMarketDataset} from '../src/market-intelligence.mjs';
+import {analyzeDailyBreakout} from '../src/daily-breakout-research.mjs';
 import {importLocalMarketCSV} from '../scripts/import-market-csv.mjs';
 
 const config={symbol:'SYN1',source:'Locally authored synthetic fixture',
@@ -25,6 +27,9 @@ test('authorized synthetic CSV becomes conservative, auditable v2 contract',()=>
   assert.equal(d.priceAdjustment,'UNKNOWN');
   assert.equal(d.provenance.corporateActions,'NOT_VERIFIED');
   assert.equal(d.provenance.licensing,'USER_ASSERTED_PERMITTED');
+  assert.equal(Object.hasOwn(d.provenance,'contract'),false);
+  assert.doesNotThrow(()=>normalizeMarketDataset(d));
+  assert.equal(analyzeDailyBreakout(d).schema,'project9-locked-daily-breakout-research-v1');
 });
 test('unknown rights, invalid prices and duplicate history are rejected',()=>{
   assert.throws(()=>convertAuthorizedMarketCSV(csv(),{...config,confirmedResearchPermission:false}),/permission/);
@@ -42,7 +47,10 @@ test('import produces private file with hashes and never overwrites previous out
     const receipt=await importLocalMarketCSV({input,output,...config});
     const contents=await readFile(output,'utf8');
     assert.equal(receipt.symbol,'SYN1');
-    assert.equal(JSON.parse(contents).bars.length,65);
+    const parsed=JSON.parse(contents);
+    assert.equal(parsed.bars.length,65);
+    assert.equal(Object.hasOwn(parsed.provenance,'contract'),false);
+    assert.equal(analyzeDailyBreakout(parsed).symbol,'SYN1');
     assert.match(receipt.sourceCsvSha256,/^[0-9a-f]{64}$/);
     await assert.rejects(importLocalMarketCSV({input,output,...config}),{code:'EEXIST'});
     assert.equal(await readFile(output,'utf8'),contents);
