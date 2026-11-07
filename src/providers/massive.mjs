@@ -62,7 +62,7 @@ export async function fetchMassiveDailyDataset({symbol,from,to,apiKey,fetchImpl=
     return bar;
   });
   if(bars.length<60)throw new Error('Massive response needs at least 60 completed daily bars for swing analysis');
-  return normalizeMarketDataset({
+  const candidate={
     schema:CURRENT_MARKET_DATA_SCHEMA,
     symbol:ticker,
     currency:'USD',
@@ -78,5 +78,10 @@ export async function fetchMassiveDailyDataset({symbol,from,to,apiKey,fetchImpl=
       licensing:'PROVIDER_TERMS_REVIEW_REQUIRED'
     },
     bars
-  });
+  };
+  // Validating may add internal provenance.contract for the research report.
+  // Do not persist that internal field into source JSON: downstream scanners
+  // revalidate and reject fields outside the canonical v2 input contract.
+  normalizeMarketDataset(candidate);
+  return candidate;
 }
