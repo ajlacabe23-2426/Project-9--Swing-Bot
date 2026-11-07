@@ -27,20 +27,50 @@ export async function inspectDailyBreakoutFiles(paths,{asOf=null}={}){
   };
 }
 
+function formatSummary(report){
+  const lines=[
+    'PROJECT 9 | DAILY 20-HIGH / 50-SMA | PAPER RESEARCH ONLY',
+    'Symbol      Date         Above SMA50   Breakout   Closed paper tests   Positive rate   Mean change',
+  ];
+  for(const entry of report.results){
+    const checks=entry.latestSetup.checks;
+    const rate=entry.positiveOutcomeRatePct===null?'n/a':entry.positiveOutcomeRatePct+'%';
+    const mean=entry.meanModeledAfterCostChangePct===null?'n/a':
+      entry.meanModeledAfterCostChangePct+'%';
+    lines.push([
+      entry.symbol.padEnd(11),
+      entry.latestCompletedBar.padEnd(12),
+      String(checks.above50DayAverage).padEnd(13),
+      String(checks.brokePrior20DayHigh).padEnd(10),
+      String(entry.closedPaperObservations).padEnd(20),
+      rate.padEnd(15),
+      mean,
+    ].join(' '));
+    lines.push('  Latest: '+entry.latestSetup.signal+
+      ' | Source: '+entry.source.name+' ('+entry.source.mode+')');
+  }
+  lines.push('Historical paper results only; not predicted returns, validated fills or broker orders.');
+  return lines.join('\n')+'\n';
+}
+
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   const args=process.argv.slice(2);
-  let asOf=null,files=args;
-  if(args[0]==='--as-of'){
-    if(args.length<3){console.error('Missing --as-of value or JSON file');process.exit(2);}
-    asOf=args[1];files=args.slice(2);
+  let asOf=null,json=false;
+  const files=[];
+  let invalid=false;
+  for(let i=0;i<args.length;i++){
+    if(args[i]==='--as-of'&&i+1<args.length){asOf=args[++i];}
+    else if(args[i]==='--json'){json=true;}
+    else if(args[i].startsWith('--'))invalid=true;
+    else files.push(args[i]);
   }
-  if(!files.length||files.some(file=>file.startsWith('--'))){
-    console.error('Usage: npm run research:daily -- [--as-of YYYY-MM-DD] file.json [file.json ...]');
+  if(invalid||!files.length){
+    console.error('Usage: npm run research:daily -- [--as-of YYYY-MM-DD] [--json] file.json [file.json ...]');
     process.exitCode=2;
   }else{
     try{
       const report=await inspectDailyBreakoutFiles(files,{asOf});
-      process.stdout.write(JSON.stringify(report,null,2)+'\n');
+      process.stdout.write(json?JSON.stringify(report,null,2)+'\n':formatSummary(report));
     }catch(error){
       console.error('Daily breakout research failed:',error.message);
       process.exitCode=1;
