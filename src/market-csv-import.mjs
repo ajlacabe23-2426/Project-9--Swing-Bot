@@ -39,7 +39,7 @@ export function convertAuthorizedMarketCSV(text,{
   });
   // All provenance fields are intentionally conservative; file-level checks
   // and an attestation never establish authentic or cleared upstream data.
-  return normalizeMarketDataset({
+  const candidate={
     schema:CURRENT_MARKET_DATA_SCHEMA,
     symbol,currency:'USD',source:source.trim(),mode:'HISTORICAL',
     sourceAsOf:bars.at(-1).date,priceAdjustment:'UNKNOWN',
@@ -51,5 +51,10 @@ export function convertAuthorizedMarketCSV(text,{
       licensing:'USER_ASSERTED_PERMITTED'
     },
     bars
-  });
+  };
+  // Validate for safety, but persist only the provider-neutral INPUT schema.
+  // normalizeMarketDataset adds an internal provenance.contract inspection field
+  // that downstream scanners intentionally reject when serialized as source.
+  normalizeMarketDataset(candidate);
+  return candidate;
 }
