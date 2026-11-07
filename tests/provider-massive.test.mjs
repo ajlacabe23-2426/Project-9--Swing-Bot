@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {buildMassiveDailyUrl,fetchMassiveDailyDataset} from '../src/providers/massive.mjs';
-import {MARKET_DATA_SCHEMA_V2} from '../src/market-intelligence.mjs';
+import {MARKET_DATA_SCHEMA_V2,normalizeMarketDataset} from '../src/market-intelligence.mjs';
+import {analyzeDailyBreakout} from '../src/daily-breakout-research.mjs';
 
 function results(count=90){
   const out=[];let price=100;const date=new Date('2026-01-01T00:00:00.000Z');
@@ -38,7 +39,11 @@ test('maps Massive daily aggregates into the Project 9 market-data contract',asy
   assert.equal(value.symbol,'AAPL');
   assert.equal(value.mode,'HISTORICAL');
   assert.equal(value.priceAdjustment,'VENDOR_ADJUSTED');
-  assert.equal(value.provenance.contract,'V2_DECLARED');
+  assert.equal(Object.hasOwn(value.provenance,'contract'),false);
+  assert.equal(normalizeMarketDataset(value).provenance.contract,'V2_DECLARED');
+  const serialized=JSON.parse(JSON.stringify(value));
+  assert.equal(analyzeDailyBreakout(serialized).symbol,'AAPL');
+  assert.equal(analyzeDailyBreakout(serialized).schema,'project9-locked-daily-breakout-research-v1');
   assert.equal(value.provenance.adjustmentMethod,'PROVIDER_ADJUSTED_UNVERIFIED');
   assert.equal(value.provenance.corporateActions,'PROVIDER_ADJUSTED_NOT_INDEPENDENTLY_VERIFIED');
   assert.equal(value.provenance.survivorship,'NOT_ASSESSED');
