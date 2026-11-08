@@ -69,5 +69,8 @@ test('locked or invalid prior source is preserved without partial writes',async(
     await writeFile(file,'{corrupt JSON');
     await assert.rejects(writeReviewedMarketDataset(file,dataset),/unreadable or invalid/);
     assert.equal(await readFile(file,'utf8'),'{corrupt JSON');
+    await writeFile(file,'null');
+    await assert.rejects(writeReviewedMarketDataset(file,dataset),/Market dataset must be an object/);
+    assert.equal(await readFile(file,'utf8'),'null');
   }finally{await rm(dir,{recursive:true,force:true});}
 });
