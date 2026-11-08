@@ -62,7 +62,8 @@ export async function runOperationalCycle({
     if(!SETUP_CLASSES.has(scan.classification)){
       actions.push({symbol,status:'NO_ELIGIBLE_PAPER_SETUP',classification:scan.classification});continue;
     }
-    const synthetic=SYNTHETIC_SOURCE.test(String(scan.source||''));
+    const sourceName=typeof scan.source==='object'&&scan.source!==null?String(scan.source.name||''):String(scan.source||'');
+    const synthetic=SYNTHETIC_SOURCE.test(sourceName);
     if(synthetic&&!allowSyntheticDemo){
       actions.push({symbol,status:'SYNTHETIC_REQUIRES_DEMO_OPT_IN'});continue;
     }
