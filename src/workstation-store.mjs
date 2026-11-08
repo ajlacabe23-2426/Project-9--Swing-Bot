@@ -141,7 +141,10 @@ export class WorkstationStore{
           });
         }
         state.lastScans[dataset.symbol]=evaluation;
-        datasets.set(dataset.symbol,dataset);
+        // Keep the original validated wire contract: normalizeMarketDataset adds an
+        // internal provenance.contract field that is not valid on re-import.
+        // Paper outcome evaluation performs its own strict normalization.
+        datasets.set(dataset.symbol,entry.dataset);
       }
       state.alerts=state.alerts.slice(0,100);
       state.lastRefresh=refreshedAt;
