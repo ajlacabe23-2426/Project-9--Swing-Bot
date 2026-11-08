@@ -1,4 +1,4 @@
-import {writeFile} from 'node:fs/promises';
+import {writeReviewedMarketDataset} from '../src/reviewed-market-write.mjs';
 import {resolve} from 'node:path';
 import {fetchMassiveDailyDataset} from '../src/providers/massive.mjs';
 
@@ -14,9 +14,8 @@ if(!symbol||!from||!to){
     const dataset=await fetchMassiveDailyDataset({symbol,from,to,apiKey:process.env.MASSIVE_API_KEY});
     const json=JSON.stringify(dataset,null,2)+'\n';
     if(output){
-      const path=resolve(output);
-      await writeFile(path,json,{encoding:'utf8',mode:0o600});
-      console.error('Saved validated read-only market dataset to '+path);
+      const receipt=await writeReviewedMarketDataset(resolve(output),dataset);
+      console.error('Saved guarded read-only market dataset to '+receipt.path+' ('+receipt.barCount+' completed bars; SHA-256 '+receipt.sha256+')');
     }else process.stdout.write(json);
   }catch(error){
     console.error('Market-data fetch failed:',error.message);
