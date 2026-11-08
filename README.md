@@ -100,6 +100,17 @@ When `MASSIVE_API_KEY` is configured locally, **Refresh completed bars** fetches
 Paper tickets are intentionally constrained to a current watch/strong research classification and cannot exceed the engine's virtual risk reference. These controls are research guardrails, not individualized investment advice or a claim that the risk model is appropriate for real capital.
 
 
+## Working operational agent cycle (local paper tickets)
+
+The existing workstation now has a **write-capable operator command** that refreshes scans, advances paper observations, and can open bounded virtual tickets when explicitly enabled. This can be called manually or through StarNet's authorized terminal tool. It never routes real brokerage orders.
+
+```sh
+npm run agent:cycle -- --paper-auto   # permitted, recent non-synthetic observations
+npm run agent:cycle -- --paper-auto --demo   # explicitly invented synthetic demo data
+```
+
+The local Project 9 server must be running before either command; use the synthetic seed instructions below for a no-provider end-to-end test. Review [StarNet setup and operator acceptance](docs/STARNET_OPERATOR.md) before enabling recurring workflows.
+
 ## No-key workstation demonstration (offline)
 
 No market API key is needed to demonstrate the entire read-only scanner locally:
