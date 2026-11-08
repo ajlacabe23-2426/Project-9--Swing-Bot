@@ -100,6 +100,21 @@ When `MASSIVE_API_KEY` is configured locally, **Refresh completed bars** fetches
 Paper tickets are intentionally constrained to a current watch/strong research classification and cannot exceed the engine's virtual risk reference. These controls are research guardrails, not individualized investment advice or a claim that the risk model is appropriate for real capital.
 
 
+## One-command working operator (local paper simulation)
+
+The easiest way to **run** the full synthetic paper loop, not merely inspect it:
+
+```sh
+git pull origin main
+npm run agent:launch -- --demo --paper-auto
+```
+
+This starts a local HTTP workstation, seeds explicitly invented symbol data, refreshes all saved watchlist scans, creates eligible bounded **paper** tickets, and leaves the workstation running at http://127.0.0.1:4179/workstation.html . Subsequent launches preserve local paper state and refuse duplicate same-session tickets. Press Ctrl+C to stop. No model account, market-data API key, broker integration, or npm dependencies are needed for the synthetic demo. The simulated prices **do not** demonstrate real-market profitability.
+
+For permitted non-synthetic datasets already imported into the local workstation, run `npm run agent:launch -- --paper-auto` (omit `--demo`). If you want it to refresh and track existing tickets without opening new simulated ones, omit `--paper-auto`. A real-data workflow needs sufficiently recent completed bars and valid provider authorization.
+
+StarNet can also issue the operator command as a real terminal task after you install and configure its desktop agent. See [StarNet operator instructions](docs/STARNET_OPERATOR.md).
+
 ## Working operational agent cycle (local paper tickets)
 
 The existing workstation now has a **write-capable operator command** that refreshes scans, advances paper observations, and can open bounded virtual tickets when explicitly enabled. This can be called manually or through StarNet's authorized terminal tool. It never routes real brokerage orders.

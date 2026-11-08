@@ -69,6 +69,19 @@ test('synthetic data requires explicit demo opt-in even for paper tickets',async
   assert.equal(allowed.actions[0].status,'PAPER_TICKET_CREATED');
   assert.equal(allowed.mode,'EXPLICIT_SYNTHETIC_DEMO');
 });
+test('structured provider source metadata blocks synthetic tickets without demo opt-in',async()=>{
+  const structured={name:'Project 9 ENGINEERED SYNTHETIC DEMO - NOT REAL MARKET DATA',
+    mode:'HISTORICAL',sourceAsOf:'2026-11-06'};
+  const blocked=mockServer({source:structured,asOf:'2026-11-06'});
+  const result=await runOperationalCycle({now:NOW,fetcher:blocked.fetcher,autoPaper:true});
+  assert.equal(result.actions[0].status,'SYNTHETIC_REQUIRES_DEMO_OPT_IN');
+  assert.equal(blocked.state.tickets.length,0);
+  const allowed=mockServer({source:structured,asOf:'2026-11-06'});
+  const demo=await runOperationalCycle({now:NOW,fetcher:allowed.fetcher,
+    autoPaper:true,allowSyntheticDemo:true});
+  assert.equal(demo.actions[0].status,'PAPER_TICKET_CREATED');
+});
+
 test('stale or future bars do not create paper tickets',async()=>{
   for(const asOf of ['2026-10-01','2026-11-09']){
     const m=mockServer({asOf});
