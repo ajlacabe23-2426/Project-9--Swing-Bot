@@ -4,6 +4,28 @@ This is a **write-capable** integration with Project 9's existing workstation. T
 
 StarNet is optional as an orchestration front end: the identical Project 9 command works locally without an AI provider. StarNet is a separate local application and is **not** installed by this repository.
 
+## Fastest working launch
+
+After installing Project 9 and Node.js, run this **single terminal command** in its folder:
+
+```sh
+npm run agent:launch -- --demo --paper-auto
+```
+
+No second terminal is required. This seeds an explicitly synthetic test watchlist, starts the loopback workstation, executes the write-capable refresh and paper-ticket cycle, and **keeps the workstation available** at http://127.0.0.1:4179/workstation.html until Ctrl+C. It ignores `MASSIVE_API_KEY` when `--demo` is specified. The result is stored in the private local `.data/` directory for a later run; it cannot demonstrate trading profitability.
+
+With legally permitted recent real-market datasets already configured, omit `--demo`. This is local simulated trading, never live broker execution.
+
+### StarNet CLI handoff
+
+According to StarNet's official CLI docs, on macOS its app provides `starnet` once configured. With the Project 9 directory trusted, a task can run through the real agent harness:
+
+```sh
+starnet -p "In this trusted Project 9 folder, run npm run agent:cycle -- --paper-auto --demo once against the already-running local server. Report only the returned JSON actions, paper ticket IDs and any failures. Do not fetch external data or connect to a brokerage."
+```
+
+This handoff requires the StarNet app, agent model, terminal capability, and user approvals on your Mac. `agent:launch` itself needs no StarNet account or paid model. For an automated StarNet workflow, start with a manual test, configure a spending limit and a trusted project directory, then enable a scheduled routine only after observing a correct run.
+
 ## Immediate repeatable synthetic test (Mac, Node >=22.23.4)
 
 From the cloned Project 9 repository:
