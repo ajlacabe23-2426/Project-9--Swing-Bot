@@ -24,13 +24,15 @@ export async function writeReviewedMarketDataset(outputFile,input){
     throw error;
   }
   try{
-    let previous=null;
+    let previous=null,hasPreviousFile=false;
     try{
-      previous=JSON.parse(await readFile(output,'utf8'));
+      const existingText=await readFile(output,'utf8');
+      hasPreviousFile=true;
+      previous=JSON.parse(existingText);
     }catch(error){
       if(error?.code!=='ENOENT')throw new Error('Existing market file is unreadable or invalid; refusing replacement');
     }
-    if(previous!==null){
+    if(hasPreviousFile){
       const old=normalizeMarketDataset(previous);
       if(old.symbol!==validated.symbol||old.source!==validated.source||
          old.currency!==validated.currency||old.mode!==validated.mode||
@@ -55,7 +57,7 @@ export async function writeReviewedMarketDataset(outputFile,input){
       symbol:validated.symbol,
       latestCompletedBar:validated.bars.at(-1).date,
       barCount:validated.bars.length,
-      previousBarCount:previous?.bars?.length??0,
+      previousBarCount:hasPreviousFile?previous.bars.length:0,
       sha256:createHash('sha256').update(bytes).digest('hex'),
       paperResearchOnly:true
     };
