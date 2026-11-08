@@ -69,6 +69,14 @@ The adapter maps provider OHLCV into the Project 9 v2 contract and fails closed 
 
 The next provider milestone is broader historical coverage plus independent corporate-action/survivorship review and point-in-time universe testing. The v2 contract now has explicit fields for those facts, but it deliberately reports them as unresolved until evidence exists.
 
+## Guarded local market-history export
+
+The read-only `fetch:market` CLI can save a newly fetched, permitted completed-bar dataset to a specified local JSON file. Existing files are **not silently replaced**: the writer validates source identity and adjustment metadata, requires a later completed session, and requires every previously stored daily bar to match. A lock file prevents two cooperating writers from updating the same path at once. The replacement is written to a private temporary file and renamed into place after all checks pass.
+
+A provider may revise historical prices for splits or corrections. When that happens, **the export deliberately refuses to overwrite the old evidence**; retain the original and write the new source to a separate filename for review rather than assuming a correction is harmless. If a process terminates before removing a `.lock` file, inspect the output and running processes before manually clearing the stale lock. The lock is not a network-wide distributed lock.
+
+No API keys are saved by this writer; `MASSIVE_API_KEY` is used only from the local environment. No network trading, order placement, brokerage connection, source authenticity or license clearance is implied. After a permitted fetch, run `npm run audit:market -- --as-of YYYY-MM-DD .data/SYMBOL.json` and the offline daily research command independently.
+
 ## Swing workstation v1
 
 The local app now includes `/workstation.html`, a read-only swing-trade research workstation built on the provider-neutral market-data contract.
