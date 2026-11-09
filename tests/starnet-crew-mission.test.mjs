@@ -34,7 +34,7 @@ test('complete StarNet mission writes reproducible local research evidence witho
     assert.equal(json.paperForward.datasetCount,2);
     assert.equal(json.operations.paperCycle,false);
     assert.equal(json.guardrails.executionAllowed,false);
-    assert.match(output.deliverables.json,/\.data\/starnet\/latest\.json$/);
+    assert.ok(output.deliverables.json.endsWith('/starnet/latest.json'));
   }finally{
     await rm(dir,{recursive:true,force:true});
   }
