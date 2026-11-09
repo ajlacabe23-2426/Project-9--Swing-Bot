@@ -115,6 +115,18 @@ For permitted non-synthetic datasets already imported into the local workstation
 
 StarNet can also issue the operator command as a real terminal task after you install and configure its desktop agent. See [StarNet operator instructions](docs/STARNET_OPERATOR.md).
 
+## StarNet full local crew mission
+
+The optional StarNet bridge coordinates **actual Project 9 research functions** and stores their audited outputs as `.data/starnet/latest.json` and `.data/starnet/latest.md`. With your local workstation server running and the two synthetic demo fixtures seeded:
+
+```sh
+npm run starnet:mission -- --as-of 2026-02-16 --symbols SIM09,SIM10 --demo --paper-auto
+```
+
+It runs the existing offline quality audit, retrospective condition analysis, and modeled paper-outcome audit, then (only with `--paper-auto`) refreshes the local workstation and creates eligible bounded virtual tickets. It never contacts a broker or submits market orders. Re-running remains subject to duplicate protection. Omit `--paper-auto` to produce reports without new tickets.
+
+StarNet must have a trusted folder, WORKBENCH and file-reading capabilities to run the command and consume the reports. See [StarNet crew mission and skill onboarding](docs/STARNET_OPERATOR.md) and the importable [Project 9 skill](skills/project9-paper-research/SKILL.md). This is local integration, not an authenticated hosted app or proven market strategy.
+
 ## Working operational agent cycle (local paper tickets)
 
 The existing workstation now has a **write-capable operator command** that refreshes scans, advances paper observations, and can open bounded virtual tickets when explicitly enabled. This can be called manually or through StarNet's authorized terminal tool. It never routes real brokerage orders.

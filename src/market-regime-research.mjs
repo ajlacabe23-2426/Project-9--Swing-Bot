@@ -30,7 +30,8 @@ export function analyzeMarketRegimeWindows(entries,{reviewDate,windowBars=20}={}
         peak=Math.max(peak,bars[i].close);
         maxDrawdownPct=Math.max(maxDrawdownPct,(1-bars[i].close/peak)*100);
       }
-      const scan=evaluateSwingSetup(dataset,{asOfIndex:end});
+      // Evaluate the original wire input; normalized provenance includes a private contract marker.
+      const scan=evaluateSwingSetup(entry.data,{asOfIndex:end});
       windows.push({
         startDate:bars[start].date,endDate:bars[end].date,
         observedBars:windowBars,
