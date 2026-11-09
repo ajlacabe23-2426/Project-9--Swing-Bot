@@ -1,5 +1,44 @@
 # StarNet operational integration — Project 9 (paper only)
 
+## StarNet crew mission — full local research handoff
+
+The **StarNet mission bridge** wraps the existing deterministic Project 9 functions into one accepted command and two private deliverables. It coordinates real calculations (not fabricated agent summaries), and can update the local paper journal when explicitly requested.
+
+With the Project 9 server already running and the SIM09/SIM10 seeded demo files in `.data/`:
+
+```sh
+npm run starnet:mission -- --as-of 2026-02-16 --symbols SIM09,SIM10 --demo --paper-auto
+```
+
+This runs, in order:
+
+1. Local source-quality and provenance audit for both datasets.
+2. Retrospective market-condition research with independent fixed windows.
+3. Historical hypothetical paper-outcome evaluation with costs.
+4. The existing write-capable workstation cycle (including duplicate prevention), only because `--paper-auto` was explicitly supplied.
+5. A structured report in `.data/starnet/latest.json` and human-readable `.data/starnet/latest.md`, with file checksums and every result grounded in local calculations.
+
+Omit `--paper-auto` to produce research deliverables without creating new virtual tickets. Omit `--demo` only after preparing permitted non-synthetic datasets and reviewing the server's saved watchlist. The server's saved watchlist determines which paper tickets the separate operational cycle may update.
+
+### Make this native to the StarNet crew
+
+1. In BUILD MODE, verify your assigned agents have CONSOLE (compute), INTEL CAB (files), and WORKBENCH (terminal) in the same room. The Workbench asks approval to run code.
+2. Open BUILD › CONNECT › ABILITIES › SKILL MARKET › ADD FROM A LINK. Inspect the Project 9 `skills/project9-paper-research/SKILL.md` file in this public repository and add it after review. A Skill teaches technique; it does not automatically launch work or grant extra terminal access.
+3. In your saved **Project 9 Research Crew** Recipe, replace the long list of manual commands with the single exact `starnet:mission` command above. Its `{as_of_date}` fill-in controls the date; for the engineered demo use `2026-02-16`.
+4. Give the Chief Orchestrator responsibility for verifying the command's exit code and reading **both** deliverables. Researcher evaluates `audit.datasets`; Analyst reads `regimes.results` and `paperForward.results`; Risk Auditor checks provenance, costs, and output guardrails; QA Engineer separately runs `npm run check`. Merge only actual tool results into the final report.
+5. For genuine multi-agent routing, BUILD › BUILD MODE › CONVEYORS › CONVEYOR LINES. Staff an appropriate layout, use the Workflow panel's TEST, and confirm that **SEND A REAL JOB** produces an actual DELIVERABLE (not merely a moving crate).
+6. Once a single full task is verified, optionally attach the saved Recipe to a Routine. The scheduler operates only while StarNet is running. Keep source changes and external communications subject to approval.
+
+StarNet's public documentation: https://www.starnetos.com/docs/guides/crew, https://www.starnetos.com/docs/guides/first-line, https://www.starnetos.com/docs/guides/routines.
+
+### Limits and acceptance
+
+- This bridge uses a trusted Workbench terminal command and local artifacts; **it is not a direct StarNet app installation, live socket subscription, hosted trading service, or verified remote integration**.
+- The Project 9 workstation remains bound to localhost and unauthenticated; do not expose it to the public internet.
+- For acceptance, the StarNet run must show a successful real terminal command, nonempty `.data/starnet/latest.json`, a readable `.data/starnet/latest.md`, and the same paper-ticket IDs as the workstation when `--paper-auto` was approved.
+- Historical and synthetic outcomes are not forecasts, and there is no broker access or real-money execution.
+
+
 This is a **write-capable** integration with Project 9's existing workstation. The operational cycle makes a completed-bar refresh, persists scans and paper outcome updates, and can **create paper tickets** automatically when explicitly opted in. It does not dispatch real broker orders, execute market trades, or infer profitable performance from synthetic data.
 
 StarNet is optional as an orchestration front end: the identical Project 9 command works locally without an AI provider. StarNet is a separate local application and is **not** installed by this repository.
@@ -15,16 +54,6 @@ npm run agent:launch -- --demo --paper-auto
 No second terminal is required. This seeds an explicitly synthetic test watchlist, starts the loopback workstation, executes the write-capable refresh and paper-ticket cycle, and **keeps the workstation available** at http://127.0.0.1:4179/workstation.html until Ctrl+C. It ignores `MASSIVE_API_KEY` when `--demo` is specified. The result is stored in the private local `.data/` directory for a later run; it cannot demonstrate trading profitability.
 
 With legally permitted recent real-market datasets already configured, omit `--demo`. This is local simulated trading, never live broker execution.
-
-### StarNet CLI handoff
-
-According to StarNet's official CLI docs, on macOS its app provides `starnet` once configured. With the Project 9 directory trusted, a task can run through the real agent harness:
-
-```sh
-starnet -p "In this trusted Project 9 folder, run npm run agent:cycle -- --paper-auto --demo once against the already-running local server. Report only the returned JSON actions, paper ticket IDs and any failures. Do not fetch external data or connect to a brokerage."
-```
-
-This handoff requires the StarNet app, agent model, terminal capability, and user approvals on your Mac. `agent:launch` itself needs no StarNet account or paid model. For an automated StarNet workflow, start with a manual test, configure a spending limit and a trusted project directory, then enable a scheduled routine only after observing a correct run.
 
 ## Immediate repeatable synthetic test (Mac, Node >=22.23.4)
 
