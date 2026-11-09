@@ -15,7 +15,7 @@ import {runOperationalCycle,validatePort} from './agent-operational-cycle.mjs';
 import {isStrictISODate} from '../src/market-intelligence.mjs';
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
-const symbolPattern=/^[A-Z][A-Z0-9.\\-]{0,14}$/;
+const symbolPattern=/^[A-Z][A-Z0-9.-]{0,14}$/;
 const syntheticName=/synthetic|fictitious|simulated|engineered demo/i;
 
 export function parseMissionArgs(args){
