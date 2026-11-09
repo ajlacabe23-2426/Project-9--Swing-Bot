@@ -26,7 +26,8 @@ export function auditMarketDatasetBatch(entries,{reviewDate}={}){
     const latestBar=dataset.bars.at(-1).date;
     if(latestBar>reviewDate||dataset.sourceAsOf>reviewDate)
       throw new Error('Dataset for '+dataset.symbol+' contains observations or source metadata after review date');
-    const quality=assessMarketDataQuality(dataset);
+    // Quality assessment validates the wire input itself; normalized provenance has an internal contract field.
+    const quality=assessMarketDataQuality(entry.data);
     const ageCalendarDays=daysBetween(latestBar,reviewDate);
     const reviewReasons=[...new Set([
       ...quality.reasons,
