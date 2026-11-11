@@ -8,7 +8,9 @@ import {readFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {evaluateSwingSetup,isStrictISODate,normalizeMarketDataset} from '../src/market-intelligence.mjs';
+import {evaluateSwingSetup,isStrictISODate,normalizeMarketDataset,summarizeMarketDataQuality} from '../src/market-intelligence.mjs';
+import {RETURN_CONTRACT,modeledReturns,observationWindow,windowDefinition,meanReturn} from '../src/research-return-contract.mjs';
+import {researchManifest} from '../src/research-manifest.mjs';
 
 const rounded=(n)=>Number(n.toFixed(4));
 
@@ -20,6 +22,7 @@ export function auditPaperForward(input,{asOf,holdingBars=5,feeBps=10,slippageBp
      !Number.isFinite(slippageBps)||slippageBps<0||slippageBps>250)
     throw new Error('Modeled fee and slippage must each be 0–250 basis points');
   const dataset=normalizeMarketDataset(input);
+  if(asOf>dataset.sourceAsOf)throw new Error('Review date exceeds declared source-as-of date');
   const bars=dataset.bars;
   const end=bars.findLastIndex(bar=>bar.date<=asOf);
   if(end<51)throw new Error('Need at least 52 completed bars through --as-of');
@@ -36,11 +39,10 @@ export function auditPaperForward(input,{asOf,holdingBars=5,feeBps=10,slippageBp
       i+=1;continue;
     }
     const enter=bars[i+1],exit=bars[i+holdingBars];
-    const modeledEntry=enter.open*(1+slippageBps/10_000);
-    const modeledExit=exit.close*(1-slippageBps/10_000);
-    const netPct=100*(modeledExit*(1-feeBps/10_000)-
-      modeledEntry*(1+feeBps/10_000))/modeledEntry;
+    const returns=modeledReturns(enter.open,exit.close,{feeBps,slippageBps});
+    const {entryReference:modeledEntry,exitReference:modeledExit,cashOutlayReturnPct:netPct}=returns;
     observations.push({
+      window:observationWindow(bars,i,holdingBars),returns,
       symbol:dataset.symbol,
       signalDate:bars[i].date,
       simulatedEntryDate:enter.date,
@@ -55,11 +57,18 @@ export function auditPaperForward(input,{asOf,holdingBars=5,feeBps=10,slippageBp
     // No overlapping hypothetical positions in this symbol.
     i+=holdingBars;
   }
-  const mean=observations.length?
-    rounded(observations.reduce((a,o)=>a+o.modeledNetChangePct,0)/observations.length):null;
+  const cashMean=meanReturn(observations,'cashOutlayReturnPct');
+  const mean=cashMean===null?null:rounded(cashMean);
   const wins=observations.filter(o=>o.successfulModeledOutcome).length;
   return {
-    schema:'project9-paper-forward-audit-v1',
+    schema:'project9-paper-forward-audit-v2',
+    strategy:'P9_SWING_SCANNER_WATCH_STRONG_V1',
+    returnContract:RETURN_CONTRACT,
+    windowDefinition:windowDefinition(50,holdingBars),
+    meanCashOutlayReturnPct:cashMean,
+    meanEntryReferenceReturnPct:meanReturn(observations,'referenceReturnPct'),
+    dataQuality:summarizeMarketDataQuality(dataset,end),
+    provenance:dataset.provenance,
     symbol:dataset.symbol,
     source:dataset.source,
     sourceAsOf:dataset.sourceAsOf,
@@ -95,10 +104,11 @@ export async function auditLocalPaperForwardFiles(files,options){
     const output=auditPaperForward(input,options);
     if(symbols.has(output.symbol))throw new Error('Duplicate market symbol');
     symbols.add(output.symbol);
-    results.push({...output,fileSha256:createHash('sha256').update(bytes).digest('hex')});
+    const fileSha256=createHash('sha256').update(bytes).digest('hex');
+    results.push({...output,fileSha256,...await researchManifest(output,fileSha256)});
   }
   return {
-    schema:'project9-paper-forward-batch-v1',
+    schema:'project9-paper-forward-batch-v2',
     datasetCount:results.length,
     researchOnly:true,
     realOrdersCreated:false,

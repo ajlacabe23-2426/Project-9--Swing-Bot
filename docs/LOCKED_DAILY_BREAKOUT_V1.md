@@ -1,5 +1,9 @@
 # Project 9 — Locked daily breakout research strategy v1
 
+The strategy remains v1; new report schemas and return accounting are v2. See
+[return/window contract v2](RETURN_WINDOW_CONTRACT_V2.md) for cash-outlay denominators,
+raw-precision aggregation, actual window tuples and reproducibility manifests.
+
 ## Why this strategy
 
 Choose **one** repeatable, inspectable set of conditions before examining outcomes. This is a hypothesis to validate, not an optimized or verified profitable strategy.

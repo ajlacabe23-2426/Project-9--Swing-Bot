@@ -43,7 +43,7 @@ test('maps Massive daily aggregates into the Project 9 market-data contract',asy
   assert.equal(normalizeMarketDataset(value).provenance.contract,'V2_DECLARED');
   const serialized=JSON.parse(JSON.stringify(value));
   assert.equal(analyzeDailyBreakout(serialized).symbol,'AAPL');
-  assert.equal(analyzeDailyBreakout(serialized).schema,'project9-locked-daily-breakout-research-v1');
+  assert.equal(analyzeDailyBreakout(serialized).schema,'project9-locked-daily-breakout-research-v2');
   assert.equal(value.provenance.adjustmentMethod,'PROVIDER_ADJUSTED_UNVERIFIED');
   assert.equal(value.provenance.corporateActions,'PROVIDER_ADJUSTED_NOT_INDEPENDENTLY_VERIFIED');
   assert.equal(value.provenance.survivorship,'NOT_ASSESSED');

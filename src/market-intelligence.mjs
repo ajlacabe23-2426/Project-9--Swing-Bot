@@ -121,7 +121,7 @@ function calendarGapDays(previousDate,currentDate){
   return Math.round((Date.parse(currentDate+'T00:00:00.000Z')-Date.parse(previousDate+'T00:00:00.000Z'))/86_400_000);
 }
 
-function summarizeMarketDataQuality(dataset,endIndex=dataset.bars.length-1){
+export function summarizeMarketDataQuality(dataset,endIndex=dataset.bars.length-1){
   const bars=dataset.bars.slice(0,endIndex+1);
   let zeroVolumeBars=0;
   let largeCalendarGaps=0;

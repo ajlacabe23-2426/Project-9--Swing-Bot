@@ -7,7 +7,8 @@
  * Outcomes are retrospective references, not broker orders or fills.
  */
 import {sma} from './engine.mjs';
-import {normalizeMarketDataset,isStrictISODate} from './market-intelligence.mjs';
+import {normalizeMarketDataset,isStrictISODate,summarizeMarketDataQuality} from './market-intelligence.mjs';
+import {RETURN_CONTRACT,modeledReturns,observationWindow,windowDefinition,meanReturn} from './research-return-contract.mjs';
 
 export const BREAKOUT_STRATEGY_ID='P9_DAILY_20H_50SMA_V1';
 const round=(n,dp=4)=>Number(n.toFixed(dp));
@@ -66,11 +67,10 @@ export function analyzeDailyBreakout(input,{
       continue;
     }
     const entry=bars[index+1],exit=bars[index+holdingBars];
-    const entryReference=entry.open*(1+slippageBps/10_000);
-    const exitReference=exit.close*(1-slippageBps/10_000);
-    const afterCostPct=100*((exitReference*(1-feeBps/10_000))/
-      (entryReference*(1+feeBps/10_000))-1);
+    const returns=modeledReturns(entry.open,exit.close,{feeBps,slippageBps});
+    const {entryReference,exitReference,cashOutlayReturnPct:afterCostPct}=returns;
     outcomes.push({
+      window:observationWindow(bars,index,holdingBars),returns,
       signalDate:signal.signalDate,
       modeledEntrySession:entry.date,
       modeledExitSession:exit.date,
@@ -84,14 +84,19 @@ export function analyzeDailyBreakout(input,{
     index+=holdingBars;
   }
   const positiveCount=outcomes.filter(item=>item.positiveModeledOutcome).length;
-  const changes=outcomes.map(item=>item.modeledAfterCostChangePct);
+  const changes=outcomes.map(item=>item.returns.cashOutlayReturnPct);
   return {
-    schema:'project9-locked-daily-breakout-research-v1',
+    schema:'project9-locked-daily-breakout-research-v2',
     strategy:BREAKOUT_STRATEGY_ID,
+    returnContract:RETURN_CONTRACT,
+    windowDefinition:windowDefinition(49,holdingBars),
+    meanCashOutlayReturnPct:meanReturn(outcomes,'cashOutlayReturnPct'),
+    meanEntryReferenceReturnPct:meanReturn(outcomes,'referenceReturnPct'),
+    dataQuality:summarizeMarketDataQuality(data,latestIndex),
     parameters:{
       signal:'Daily close > 50-day SMA AND > prior 20-session highest high',
       entryReference:'Next completed session open, with modeled adverse slippage',
-      exitReference:'Close of the fifth completed session after signal',
+      exitReference:windowDefinition(49,holdingBars).exitReference,
       holdingBars,
       feeBpsEachSide:feeBps,
       adverseSlippageBpsEachSide:slippageBps
