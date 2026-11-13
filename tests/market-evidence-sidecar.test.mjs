@@ -141,3 +141,14 @@ test('legacy provenance with no retrieval instant is quarantined',()=>{
   const raw=JSON.stringify(data);sidecar.datasetSha256=hash(raw);
   assert.ok(assess({datasetBytes:raw,sidecar}).reasonCodes.includes('DATASET_RETRIEVAL_TIMESTAMP_MISSING'));
 });
+
+test('consistent late acquisition is retrospective, but unrelated blockers stay quarantined',()=>{
+  const {datasetBytes,sidecar}=fixture();const data=JSON.parse(datasetBytes);
+  data.provenance.retrievedAt='2026-07-01T12:00:00.000Z';
+  const raw=JSON.stringify(data);sidecar.datasetSha256=hash(raw);
+  sidecar.timeline.acquiredAt=data.provenance.retrievedAt;
+  sidecar.timeline.knownAt=data.provenance.retrievedAt;
+  assert.equal(assess({datasetBytes:raw,sidecar}).status,'RETROSPECTIVE_UNVERIFIED_PIT');
+  sidecar.rights=[];
+  assert.equal(assess({datasetBytes:raw,sidecar}).status,'QUARANTINED');
+});

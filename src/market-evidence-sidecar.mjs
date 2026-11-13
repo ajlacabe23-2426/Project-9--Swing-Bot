@@ -82,13 +82,15 @@ export function assessMarketEvidence({datasetBytes,sidecar=null,decisionAt}={}){
   }
   if(/synthetic|fictitious|invented|\bdemo\b|\bgenerated\b|\bsimulated\b/i.test(dataset.source))reasons.push('SYNTHETIC_DATA');
   const reasonCodes=[...new Set(reasons)].sort();
-  const retrospectiveReasons=new Set(['ACQUIRED_AFTER_DECISION','DATASET_RETRIEVED_AFTER_DECISION']);
+  const retrospectiveReasons=new Set(['ACQUIRED_AFTER_DECISION','DATASET_RETRIEVED_AFTER_DECISION','EVIDENCE_NOT_KNOWN_AT_DECISION']);
+  const lateAcquisition=reasonCodes.includes('ACQUIRED_AFTER_DECISION')||reasonCodes.includes('DATASET_RETRIEVED_AFTER_DECISION');
   return {
     schema:'project9-market-evidence-preflight-v1',
     symbol:dataset.symbol,rawDatasetSha256:digest,
     decisionAt,sourceAsOf:dataset.sourceAsOf,
-    status:reasonCodes.some(reason=>!retrospectiveReasons.has(reason))?'QUARANTINED':
-      reasonCodes.length?'RETROSPECTIVE_UNVERIFIED_PIT':'EVIDENCE_REVIEW_PENDING',
+    status:reasonCodes.length===0?'EVIDENCE_REVIEW_PENDING':
+      lateAcquisition&&reasonCodes.every(reason=>retrospectiveReasons.has(reason))?
+        'RETROSPECTIVE_UNVERIFIED_PIT':'QUARANTINED',
     reasonCodes,
     dataAuthenticityVerified:false,
     researchAccepted:false,
