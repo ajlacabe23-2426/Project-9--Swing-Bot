@@ -21,7 +21,7 @@ test('startup reports missing executable immediately instead of retrying until t
   const profile=await fixture(t);
   await assert.rejects(launchChromium({binary:join(profile,'missing'),args:[],profile,timeoutMs:5000,pollMs:10}),error=>{
     assert.match(error.message,/spawn failed/);
-    const d=JSON.parse(error.message.split('; startup=')[1]);
+    const d=JSON.parse(error.message.split('; startup=')[1].split('; final=')[0]);
     assert.equal(d.launchError.code,'ENOENT');
     assert.equal(d.spawned,false);
     assert.ok(d.elapsedMs<4000);
@@ -33,7 +33,7 @@ test('early child exit includes exit status and bounded stderr',async t=>{
   const profile=await fixture(t);
   await assert.rejects(fake(profile,"process.stderr.write('x'.repeat(20000)+'CI_STARTUP_FAILURE');process.exitCode=23;",{timeoutMs:5000}),error=>{
     assert.match(error.message,/exited before/);
-    const d=JSON.parse(error.message.split('; startup=')[1]);
+    const d=JSON.parse(error.message.split('; startup=')[1].split('; final=')[0]);
     assert.equal(d.exit.code,23);
     assert.ok(d.stderrTail.length<=8192);
     assert.match(d.stderrTail,/CI_STARTUP_FAILURE$/);
@@ -46,7 +46,7 @@ test('live child without port file times out and is stopped',async t=>{
   let pid;
   await assert.rejects(fake(profile,"setInterval(()=>{},1000)"),error=>{
     assert.match(error.message,/Timed out waiting/);
-    const d=JSON.parse(error.message.split('; startup=')[1]);
+    const d=JSON.parse(error.message.split('; startup=')[1].split('; final=')[0]);
     assert.equal(d.portFile,'ENOENT');
     assert.equal(d.exit,null);
     assert.equal(d.spawned,true);
@@ -61,7 +61,7 @@ for(const contents of ['0\n/devtools/browser/id\n','65536\n/devtools/browser/id\
     const profile=await fixture(t);
     await assert.rejects(fake(profile,writePort+`writeFileSync(file,${JSON.stringify(contents)});setInterval(()=>{},1000);`),error=>{
       assert.match(error.message,/Timed out waiting/);
-      const d=JSON.parse(error.message.split('; startup=')[1]);
+      const d=JSON.parse(error.message.split('; startup=')[1].split('; final=')[0]);
       assert.match(d.portFile,/^invalid:/);
       return true;
     });
@@ -84,7 +84,38 @@ test('unreadable port path reports filesystem failure, never acceptance',async t
   await mkdir(join(profile,'DevToolsActivePort'));
   await assert.rejects(fake(profile,'setInterval(()=>{},1000)'),error=>{
     assert.match(error.message,/Timed out waiting/);
-    assert.equal(JSON.parse(error.message.split('; startup=')[1]).portFile,'EISDIR');
+    assert.equal(JSON.parse(error.message.split('; startup=')[1].split('; final=')[0]).portFile,'EISDIR');
     return true;
   });
+});
+
+test('SIGTERM-resistant child is force-stopped with confirmed closure',async t=>{
+  const profile=await fixture(t);
+  const launch=await fake(profile,writePort+"process.on('SIGTERM',()=>{});writeFileSync(file,'43123\\n/devtools/browser/test\\n');setInterval(()=>{},1000);",{timeoutMs:5000});
+  t.after(()=>{try{process.kill(launch.child.pid,'SIGKILL');}catch{}});
+  await launch.stop();
+  assert.equal(launch.diagnostics().closed,true);
+  assert.equal(launch.diagnostics().cleanup.complete,true);
+  assert.ok(launch.diagnostics().cleanup.signals.some(s=>s.name==='SIGKILL'&&s.sent));
+  assert.throws(()=>process.kill(launch.child.pid,0),{code:'ESRCH'});
+});
+
+test('failure retains onset state and drains termination stderr',async t=>{
+  const profile=await fixture(t);
+  await assert.rejects(fake(profile,"process.on('SIGTERM',()=>{process.stderr.write('TERMINATION_DIAGNOSTIC',()=>process.exit(0));});setInterval(()=>{},1000);"),error=>{
+    const final=JSON.parse(error.message.split('; final=')[1]);
+    assert.equal(final.closed,true);
+    assert.equal(final.cleanup.complete,true);
+    assert.match(final.stderrTail,/TERMINATION_DIAGNOSTIC/);
+    return true;
+  });
+});
+
+test('owned wrapper descendants are stopped, not unrelated process names',{skip:process.platform==='win32'},async t=>{
+  const profile=await fixture(t);
+  const launch=await fake(profile,writePort+"import {spawn} from 'node:child_process';const sub=spawn(process.execPath,['-e',\"process.on('SIGTERM',()=>{});setInterval(()=>{},1000)\"],{stdio:['ignore','ignore','inherit']});writeFileSync(file,'43123\\n/devtools/browser/test\\n');setInterval(()=>{},1000);",{timeoutMs:5000});
+  t.after(()=>{try{process.kill(-launch.child.pid,'SIGKILL');}catch{}});
+  await launch.stop();
+  assert.equal(launch.diagnostics().closed,true,'inherited descendant stderr closes');
+  assert.equal(launch.diagnostics().cleanup.complete,true);
 });
