@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Project 9 offline synthetic market-rule alerts and rejection demo.">
+<title>Project 09 · Alert research preview</title>
+<link rel="stylesheet" href="/styles.css">
+<link rel="stylesheet" href="/alert-preview.css">
+<script type="module" src="/alert-preview.js"></script>
+</head>
+<body>
+<div class="frame">
+<aside class="rail">
+  <a class="brand" href="/"><span class="symbol">09<span>.</span></span><span>PROJECT<br><b>NINE</b></span></a>
+  <div class="rail-sep"></div>
+  <div class="rail-label">RESEARCH LAB</div>
+  <a class="nav" href="/workstation.html">⌁ &nbsp; Swing workstation</a>
+  <a class="nav" href="/research.html">⌗ &nbsp; Historical research</a>
+  <a class="nav selected" href="/alert-preview.html">◉ &nbsp; Alert preview</a>
+  <div class="rail-bottom"><div class="shield">◉ &nbsp; OFFLINE DEMONSTRATION</div>
+    <p>Invented historical data only. No actual notifications, paper tickets, brokers, or real-money orders.</p></div>
+</aside>
+<main class="main">
+  <header class="topbar"><div>PROJECT 09 <span>/ ALERT PREVIEW</span></div>
+  <div class="top-right">SYNTHETIC ONLY <span class="top-sep">|</span> LOCAL HOST</div></header>
+  <section class="content">
+    <div class="eyebrow">RULE ACCEPTANCE <span class="dot"></span> EXERCISE</div>
+    <div class="title-row">
+      <div><h1>Alert research<span class="period">.</span></h1>
+      <p>See what the rule detected, when, why—and why a real alert is still blocked.</p></div>
+      <span class="status-chip">PREVIEW · NO DELIVERY</span>
+    </div>
+    <div class="notice"><b>ENGINEERED SYNTHETIC DATA</b><span>These historical examples are invented, not current market observations or trading recommendations. A detected rule does not make a notification eligible. This page never creates a paper ticket or places an order.</span></div>
+    <div class="ap-actions"><button id="run-preview" class="button main-button" type="button">Rerun read-only preview</button>
+    <a id="json-link" class="button secondary-button" href="/api/alerts/preview">Inspect raw JSON evidence</a></div>
+    <p class="supporting" id="preview-status" role="status">Loading synthetic rule examples…</p>
+    <div class="ap-summary" id="preview-summary"></div>
+    <div class="ap-grid" id="preview-cards" aria-live="polite"></div>
+    <article class="panel ap-explainer">
+      <div class="panel-kicker">ACCEPTANCE BOUNDARY</div>
+      <h2>What passing this demo means</h2>
+      <p class="supporting">The locked 20-day high and 50-session average rule can produce an explainable, reproducible example without sending any alert. To send real-market informational notices later, Project 9 still needs independently accepted data, exchange-session validation and side-effect gating in Issues #43, #44 and #45.</p>
+    </article>
+  </section>
+</main>
+</div>
+</body>
+</html>
