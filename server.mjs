@@ -8,12 +8,14 @@ import {modelCommentary} from './src/ai.mjs';
 import {evaluateSwingSetup} from './src/market-intelligence.mjs';
 import {fetchMassiveDailyDataset} from './src/providers/massive.mjs';
 import {WorkstationStore} from './src/workstation-store.mjs';
+import {buildSyntheticAlertPreview} from './src/synthetic-alert-preview.mjs';
 
 const root=dirname(fileURLToPath(import.meta.url));
 const staticFiles=new Map([
   ['/','index.html'],['/index.html','index.html'],['/styles.css','styles.css'],['/app.js','app.js'],
   ['/research.html','research.html'],['/research.js','research.js'],['/research-core.mjs','research-core.mjs'],
   ['/workstation.html','workstation.html'],['/workstation.js','workstation.js'],
+  ['/alert-preview.html','alert-preview.html'],['/alert-preview.js','alert-preview.js'],['/alert-preview.css','alert-preview.css'],
   ['/decision-map.js','decision-map.js'],['/decision-map-core.mjs','decision-map-core.mjs']
 ]);
 const types={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.mjs':'text/javascript; charset=utf-8'};
@@ -76,6 +78,11 @@ export async function createApp({
       if(req.method==='GET'&&url.pathname==='/api/state')return json(res,200,report(store.state,generateScenario(store.state.seed)));
       if(req.method==='GET'&&url.pathname==='/api/experiment')return json(res,200,historicalExperiment(store.state.seed));
       if(req.method==='GET'&&url.pathname==='/api/workstation')return json(res,200,workstation.snapshot());
+      // Synthetic examples only: deterministic, read-only; do not touch the workstation store.
+      if(req.method==='GET'&&url.pathname==='/api/alerts/preview'){
+        if(url.search)return json(res,400,{error:'Preview does not accept parameters'});
+        return json(res,200,buildSyntheticAlertPreview());
+      }
       if(req.method==='GET'&&staticFiles.has(url.pathname)){
         const file=staticFiles.get(url.pathname),contents=await readFile(join(root,'public',file));
         res.writeHead(200,{...headers,'Content-Type':types[file.slice(file.lastIndexOf('.'))]});return res.end(contents);
