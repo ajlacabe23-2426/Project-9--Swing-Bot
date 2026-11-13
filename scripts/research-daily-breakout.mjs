@@ -4,6 +4,7 @@ import {createHash} from 'node:crypto';
 import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {analyzeDailyBreakout} from '../src/daily-breakout-research.mjs';
+import {researchManifest} from '../src/research-manifest.mjs';
 
 export async function inspectDailyBreakoutFiles(paths,{asOf=null}={}){
   if(!Array.isArray(paths)||paths.length===0||paths.length>20)
@@ -16,10 +17,11 @@ export async function inspectDailyBreakoutFiles(paths,{asOf=null}={}){
     const result=analyzeDailyBreakout(data,{asOf});
     if(symbols.has(result.symbol))throw new Error('Duplicate market symbol');
     symbols.add(result.symbol);
-    results.push({...result,inputSha256:createHash('sha256').update(bytes).digest('hex')});
+    const inputSha256=createHash('sha256').update(bytes).digest('hex');
+    results.push({...result,inputSha256,...await researchManifest(result,inputSha256,data)});
   }
   return {
-    schema:'project9-daily-breakout-multi-symbol-report-v1',
+    schema:'project9-daily-breakout-multi-symbol-report-v2',
     mode:'OFFLINE_DAILY_CLOSE_PAPER_RESEARCH',
     datasetCount:results.length,
     realOrdersCreated:false,

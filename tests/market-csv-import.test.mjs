@@ -29,7 +29,7 @@ test('authorized synthetic CSV becomes conservative, auditable v2 contract',()=>
   assert.equal(d.provenance.licensing,'USER_ASSERTED_PERMITTED');
   assert.equal(Object.hasOwn(d.provenance,'contract'),false);
   assert.doesNotThrow(()=>normalizeMarketDataset(d));
-  assert.equal(analyzeDailyBreakout(d).schema,'project9-locked-daily-breakout-research-v1');
+  assert.equal(analyzeDailyBreakout(d).schema,'project9-locked-daily-breakout-research-v2');
 });
 test('unknown rights, invalid prices and duplicate history are rejected',()=>{
   assert.throws(()=>convertAuthorizedMarketCSV(csv(),{...config,confirmedResearchPermission:false}),/permission/);

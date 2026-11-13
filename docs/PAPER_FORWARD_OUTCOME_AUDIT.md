@@ -1,5 +1,10 @@
 # Project 9 — Historical paper-forward outcome audit
 
+New output is schema v2: percentage-return aliases now use entry cash outlay
+including entry fees. The former entry-reference basis remains separately named.
+See [return/window contract v2](RETURN_WINDOW_CONTRACT_V2.md); archived v1 evidence
+is not rewritten and different strategy windows must not be conflated.
+
 This adds a research-only analysis that evaluates the existing completed-bar swing scanner at historical dates, then observes later prices in strictly non-overlapping windows. It **does not place trades**.
 
 ## Mac command
