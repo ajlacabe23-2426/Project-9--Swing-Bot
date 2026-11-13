@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {spawn} from 'node:child_process';
-import {mkdtemp,readFile,rm} from 'node:fs/promises';
+import {mkdtemp,rm} from 'node:fs/promises';
+import {launchChromium} from './chromium-startup.mjs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createApp} from '../server.mjs';
@@ -80,7 +80,7 @@ async function connectCDP(port){
 
 test('real headless Chromium operates loopback workstation and preserves state when refresh is stale',
   {skip:process.env.RUN_BROWSER_ACCEPTANCE!=='1',timeout:90000},
-  async()=>{
+  async t=>{
     const dir=await mkdtemp(join(tmpdir(),'project9-browser-'));
     const port=47000+Math.floor(Math.random()*1500);
     const base='http://127.0.0.1:'+port;
@@ -93,22 +93,13 @@ test('real headless Chromium operates loopback workstation and preserves state w
         marketFetcher:async()=>structuredClone(market)
       });
       await new Promise((resolve,reject)=>app.once('error',reject).listen(port,'127.0.0.1',resolve));
-      chrome=spawn(process.env.CHROME_BIN||'google-chrome',[
+      chrome=await launchChromium({binary:process.env.CHROME_BIN||'google-chrome',profile:join(dir,'browser'),args:[
         '--headless=new','--no-sandbox','--disable-gpu','--disable-dev-shm-usage',
         '--no-first-run','--no-default-browser-check',
         '--user-data-dir='+join(dir,'browser'),'--remote-debugging-port=0',base+'/workstation.html'
-      ],{stdio:'ignore'});
-      chrome.once('error',error=>{chrome.launchError=error;});
-      let chromePort;
-      await eventually(async()=>{
-        if(chrome.launchError)throw chrome.launchError;
-        try{
-          const data=await readFile(join(dir,'browser','DevToolsActivePort'),'utf8');
-          chromePort=Number(data.split('\n')[0]);
-          return Number.isInteger(chromePort)&&chromePort>0;
-        }catch{return false;}
-      },'Chromium debugging port');
-      connection=await connectCDP(chromePort);
+      ]});
+      t.diagnostic('Chromium startup '+JSON.stringify(chrome.diagnostics()));
+      connection=await connectCDP(chrome.port);
       const js=connection.evaluate;
       await connection.command('Emulation.setDeviceMetricsOverride',{width:1440,height:1080,deviceScaleFactor:1,mobile:false});
       await connection.command('Network.enable');
@@ -213,7 +204,7 @@ test('real headless Chromium operates loopback workstation and preserves state w
 
     }finally{
       connection?.close();
-      chrome?.kill('SIGTERM');
+      if(chrome)await chrome.stop();
       if(app)await new Promise(resolve=>app.close(resolve));
       await rm(dir,{recursive:true,force:true,maxRetries:3,retryDelay:200});
     }
