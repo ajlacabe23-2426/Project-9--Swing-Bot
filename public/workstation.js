@@ -214,7 +214,8 @@ $('demo-advance').addEventListener('click',()=>runAction($('demo-advance'),async
   if(!canAdvanceDemo(state?.lastScans?.[selectedSymbol]))
     throw new Error('Choose and refresh SIM09/SIM10 to run an invented scenario.');
   return request('/api/workstation/demo/advance',{
-    symbol:selectedSymbol,scenario:$('demo-scenario').value
+    symbol:selectedSymbol,scenario:$('demo-scenario').value,
+    expectedAsOf:state.lastScans[selectedSymbol].asOf
   });
 }));
 request('/api/workstation').then(value=>{state=value;render();}).catch(error=>{$('workstation-status').textContent='Workstation unavailable: '+error.message;});
