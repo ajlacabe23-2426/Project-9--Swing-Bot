@@ -105,7 +105,7 @@ export async function auditLocalPaperForwardFiles(files,options){
     if(symbols.has(output.symbol))throw new Error('Duplicate market symbol');
     symbols.add(output.symbol);
     const fileSha256=createHash('sha256').update(bytes).digest('hex');
-    results.push({...output,fileSha256,...await researchManifest(output,fileSha256)});
+    results.push({...output,fileSha256,...await researchManifest(output,fileSha256,input)});
   }
   return {
     schema:'project9-paper-forward-batch-v2',

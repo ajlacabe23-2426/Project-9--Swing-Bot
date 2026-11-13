@@ -38,3 +38,11 @@ Both engines include existing data-quality/provenance reasons through the review
 `node --test tests/return-window-contract.test.mjs tests/daily-breakout-research.test.mjs tests/paper-forward-audit.test.mjs`
 
 Then `npm run check`, `npm run security:secrets`, `npm run security:baseline`; Chromium acceptance separately where available. Check exact manifest hashes and data-byte preservation. Independent review is required; passing software tests is not a strategy-efficacy claim.
+
+## Sprint #42 hardening
+
+The shared return helper now rejects non-numeric, non-positive or non-finite prices, out-of-range costs, and non-finite derived values before JSON serialization. Ratios divide before multiplying by 100 to avoid unnecessary intermediate overflow. Raw means scale each observation before summation and reject non-finite inputs/results; daily display means use that same guarded aggregation. This does not validate extreme-price indicator behavior or data authenticity.
+
+Manifests additionally disclose report schema, dataset declarations (including currency, adjustment and source-as-of), input coverage, effective report parameters, Node runtime and cutoff quality/provenance reasons. Every selected engine byte is compared against its Git commit blob; an untracked or ignored dependency cannot claim `COMMITTED_TRACKED_ENGINE`. The selected-engine identity is not a full repository cleanliness guarantee. Retain full candidate SHA/status and output-byte digests in external execution evidence.
+
+Added regressions cover invalid helper inputs, ratio/product overflow, representable large ratios, aggregate overflow, both actual engines rejecting unrepresentable outcomes, complete dataset declarations, and dirty/untracked/ignored dependency identity. Tests use disposable data, not archived `.data` files.

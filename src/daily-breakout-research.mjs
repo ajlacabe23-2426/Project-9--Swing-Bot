@@ -111,7 +111,7 @@ export function analyzeDailyBreakout(input,{
     closedPaperObservations:outcomes.length,
     positiveOutcomeRatePct:outcomes.length?round(100*positiveCount/outcomes.length):null,
     meanModeledAfterCostChangePct:outcomes.length?
-      round(changes.reduce((a,b)=>a+b,0)/changes.length):null,
+      round(meanReturn(outcomes,'cashOutlayReturnPct')):null,
     worstModeledAfterCostChangePct:outcomes.length?round(Math.min(...changes)):null,
     outcomes,
     caveats:{

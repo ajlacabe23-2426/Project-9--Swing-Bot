@@ -9,8 +9,19 @@ const enginePaths=['src/daily-breakout-research.mjs','scripts/paper-forward-audi
   'src/research-return-contract.mjs','src/market-intelligence.mjs','src/engine.mjs',
   'src/research-manifest.mjs','scripts/research-daily-breakout.mjs'];
 
+/** Require every dependency byte to exist in the claimed commit, including new files. */
+export function committedEngineMatches(directory,sha,engineSha256){
+  return Object.entries(engineSha256).every(([path,digest])=>{
+    try{
+      return hash(execFileSync('git',['show',`${sha}:${path}`],{
+        cwd:directory,stdio:['ignore','pipe','pipe']
+      }))===digest;
+    }catch{return false;}
+  });
+}
+
 /** Byte identity and Git revision are reproducibility evidence, not authenticity. */
-export async function researchManifest(result,inputSha256){
+export async function researchManifest(result,inputSha256,input){
   let sourceSha=null,sourceRevisionStatus='GIT_UNAVAILABLE',workingDiffSha256=null;
   try{
     sourceSha=execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
@@ -20,7 +31,18 @@ export async function researchManifest(result,inputSha256){
   }catch{/* An exported source tree can still carry exact engine byte hashes. */}
   const engineSha256={};
   for(const path of enginePaths)engineSha256[path]=hash(await readFile(new URL('../'+path,import.meta.url)));
+  if(sourceSha&&!committedEngineMatches(root,sourceSha,engineSha256)){
+    sourceRevisionStatus='WORKING_TREE_DIFF';
+  }
   const manifest={schema:'project9-research-manifest-v2',sourceSha,sourceRevisionStatus,
+    reportSchema:result.schema,
+    datasetIdentity:{symbol:input.symbol,currency:input.currency,source:input.source,
+      mode:input.mode,sourceAsOf:input.sourceAsOf,priceAdjustment:input.priceAdjustment},
+    dataQuality:result.dataQuality,
+    inputCoverage:{schema:input.schema,rows:input.bars.length,
+      firstDate:input.bars[0].date,lastDate:input.bars.at(-1).date},
+    effectiveParameters:result.parameters??{holdingBars:result.holdingBars,...result.modeledCosts},
+    runtime:{node:process.version},
     workingDiffSha256,engineSha256,inputSha256,strategy:result.strategy,
     returnContract:result.returnContract,windowDefinition:result.windowDefinition,
     costs:result.modeledCosts??{

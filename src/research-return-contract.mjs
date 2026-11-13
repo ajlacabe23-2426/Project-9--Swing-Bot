@@ -10,16 +10,26 @@ export const RETURN_CONTRACT=Object.freeze({
 });
 
 export function modeledReturns(open,close,{feeBps,slippageBps}){
+  for(const value of [open,close]){
+    if(!Number.isFinite(value)||value<=0)throw new Error('Prices must be finite and positive');
+  }
+  for(const value of [feeBps,slippageBps]){
+    if(!Number.isFinite(value)||value<0||value>250)throw new Error('Costs must be 0–250 basis points');
+  }
   const fee=feeBps/10000,slippage=slippageBps/10000;
   const entryReference=open*(1+slippage),exitReference=close*(1-slippage);
   const entryFee=entryReference*fee,exitFee=exitReference*fee;
   const entryCashOutlay=entryReference*(1+fee);
   const exitCashProceeds=exitReference*(1-fee);
   const netPLPerUnit=exitCashProceeds-entryCashOutlay;
-  return {rawEntryOpen:open,rawExitClose:close,entryReference,exitReference,
+  const result={rawEntryOpen:open,rawExitClose:close,entryReference,exitReference,
     entryFee,exitFee,entryCashOutlay,exitCashProceeds,netPLPerUnit,
-    cashOutlayReturnPct:100*netPLPerUnit/entryCashOutlay,
-    referenceReturnPct:100*netPLPerUnit/entryReference};
+    cashOutlayReturnPct:(netPLPerUnit/entryCashOutlay)*100,
+    referenceReturnPct:(netPLPerUnit/entryReference)*100};
+  if(entryReference<=0||entryCashOutlay<=0||!Object.values(result).every(Number.isFinite)){
+    throw new Error('Modeled return arithmetic must remain finite with positive denominators');
+  }
+  return result;
 }
 
 export function observationWindow(bars,i,holdingBars){
@@ -37,5 +47,14 @@ export function windowDefinition(firstSignalIndex,holdingBars){
 }
 
 export function meanReturn(outcomes,key){
-  return outcomes.length?outcomes.reduce((sum,o)=>sum+o.returns[key],0)/outcomes.length:null;
+  if(!outcomes.length)return null;
+  // Scale before summing so finite same-sign observations do not overflow their mean.
+  let mean=0;
+  for(const outcome of outcomes){
+    const value=outcome.returns[key];
+    if(!Number.isFinite(value))throw new Error('Mean return observations must be finite');
+    mean+=value/outcomes.length;
+  }
+  if(!Number.isFinite(mean))throw new Error('Mean return must remain finite');
+  return mean;
 }

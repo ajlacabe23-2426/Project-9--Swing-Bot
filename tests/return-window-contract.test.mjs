@@ -118,3 +118,72 @@ test('both file entry points bind deterministic manifests to input bytes and eng
     }
   }finally{await rm(dir,{recursive:true,force:true});}
 });
+
+// These are fail-closed checks: JSON must never silently serialize NaN/Infinity as null.
+test('return helper rejects invalid values and unrepresentable arithmetic', async()=>{
+  const {modeledReturns,meanReturn}=await import('../src/research-return-contract.mjs');
+  for(const value of [NaN,Infinity,-Infinity,0,-1,'100',null]){
+    assert.throws(()=>modeledReturns(value,110,{feeBps:10,slippageBps:10}),/finite|positive/);
+    assert.throws(()=>modeledReturns(100,value,{feeBps:10,slippageBps:10}),/finite|positive/);
+  }
+  for(const value of [NaN,Infinity,-1,251,'10',null]){
+    assert.throws(()=>modeledReturns(100,110,{feeBps:value,slippageBps:10}),/basis points/);
+    assert.throws(()=>modeledReturns(100,110,{feeBps:10,slippageBps:value}),/basis points/);
+  }
+  assert.throws(()=>modeledReturns(Number.MIN_VALUE,Number.MAX_VALUE,{feeBps:0,slippageBps:0}),/finite/);
+  assert.throws(()=>modeledReturns(Number.MAX_VALUE,100,{feeBps:250,slippageBps:250}),/finite/);
+  // Divide before scaling: a representable return must not fail due to 100 * PL overflow.
+  near(modeledReturns(1e307,2e307,{feeBps:0,slippageBps:0}).cashOutlayReturnPct,100);
+  assert.throws(()=>meanReturn([{returns:{x:NaN}}],'x'),/finite/);
+  assert.equal(meanReturn([{returns:{x:1e308}},{returns:{x:1e308}}],'x'),1e308);
+});
+
+for(const [name,run,index] of engines){
+  test(`${name}: actual engine refuses an overflowing outcome instead of emitting null`,()=>{
+    const data=fixture(Number.MAX_VALUE,index);
+    data.bars[index+5].high=Number.MAX_VALUE;
+    data.bars[index+1].open=Number.MIN_VALUE;
+    data.bars[index+1].low=Number.MIN_VALUE;
+    assert.throws(()=>run(data,{feeBps:0,slippageBps:0}),/finite/);
+  });
+}
+
+test('file manifests retain full dataset declarations and report schema',async()=>{
+  const dir=await mkdtemp(join(tmpdir(),'p9-manifest-declarations-'));
+  try{
+    const data=buildDemoDataset('SIM09'),path=join(dir,'input.json');
+    await writeFile(path,JSON.stringify(data));
+    for(const run of [inspectDailyBreakoutFiles,auditLocalPaperForwardFiles]){
+      const result=(await run([path],{asOf:data.sourceAsOf})).results[0];
+      assert.equal(result.manifest.reportSchema,result.schema);
+      assert.deepEqual(result.manifest.datasetIdentity,{
+        symbol:data.symbol,currency:data.currency,source:data.source,mode:data.mode,
+        sourceAsOf:data.sourceAsOf,priceAdjustment:data.priceAdjustment
+      });
+      assert.deepEqual(result.manifest.dataQuality,result.dataQuality);
+    }
+  }finally{await rm(dir,{recursive:true,force:true});}
+});
+
+test('manifest commit identity detects dirty, untracked and ignored engine bytes',async()=>{
+  const {execFileSync}=await import('node:child_process');
+  const {committedEngineMatches}=await import('../src/research-manifest.mjs');
+  const dir=await mkdtemp(join(tmpdir(),'p9-commit-identity-'));
+  const digest=value=>createHash('sha256').update(value).digest('hex');
+  const git=(...args)=>execFileSync('git',args,{cwd:dir,encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
+  try{
+    git('init');
+    await writeFile(join(dir,'engine.mjs'),'original');
+    await writeFile(join(dir,'.gitignore'),'ignored.mjs\n');
+    git('add','.');
+    git('-c','user.name=Test','-c','user.email=test@example.invalid','-c','commit.gpgsign=false','commit','-m','fixture');
+    const sha=git('rev-parse','HEAD');
+    assert.equal(committedEngineMatches(dir,sha,{'engine.mjs':digest('original')}),true);
+    await writeFile(join(dir,'engine.mjs'),'changed');
+    assert.equal(committedEngineMatches(dir,sha,{'engine.mjs':digest('changed')}),false);
+    for(const path of ['untracked.mjs','ignored.mjs']){
+      await writeFile(join(dir,path),'new');
+      assert.equal(committedEngineMatches(dir,sha,{[path]:digest('new')}),false);
+    }
+  }finally{await rm(dir,{recursive:true,force:true});}
+});

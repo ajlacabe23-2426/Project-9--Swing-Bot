@@ -18,7 +18,7 @@ export async function inspectDailyBreakoutFiles(paths,{asOf=null}={}){
     if(symbols.has(result.symbol))throw new Error('Duplicate market symbol');
     symbols.add(result.symbol);
     const inputSha256=createHash('sha256').update(bytes).digest('hex');
-    results.push({...result,inputSha256,...await researchManifest(result,inputSha256)});
+    results.push({...result,inputSha256,...await researchManifest(result,inputSha256,data)});
   }
   return {
     schema:'project9-daily-breakout-multi-symbol-report-v2',
