@@ -25,9 +25,18 @@ function scans(){
 function statusClass(value){
   return value==='PAPER_SETUP_STRONG'?'classification-strong':value==='PAPER_SETUP_WATCH'?'classification-watch':'classification-none';
 }
+const DEMO_LABEL='Project 9 ENGINEERED SYNTHETIC DEMO - NOT REAL MARKET DATA';
+function hasExistingPaperObservation(scan){
+  return !!scan&&(state?.tickets||[]).some(ticket=>ticket.symbol===scan.symbol&&
+    (ticket.openedAsOf===scan.asOf||ticket.outcome?.status==='OPEN_PAPER_OBSERVATION'));
+}
 function canCreatePaperTicket(scan){
   return !!scan&&scan.classification!=='NO_PAPER_SETUP'&&
-    Number.isFinite(scan.paperRiskPlan?.maxPaperUnits)&&scan.paperRiskPlan.maxPaperUnits>=0.001;
+    Number.isFinite(scan.paperRiskPlan?.maxPaperUnits)&&scan.paperRiskPlan.maxPaperUnits>=0.001&&
+    !hasExistingPaperObservation(scan);
+}
+function canAdvanceDemo(scan){
+  return !!scan&&['SIM09','SIM10'].includes(scan.symbol)&&scan.source?.name===DEMO_LABEL;
 }
 function drawSetupChart(scan,ticket){
   const svg=$('setup-chart'),ns='http://www.w3.org/2000/svg';svg.replaceChildren();
@@ -152,11 +161,30 @@ function renderStatus(){
   }
   $('workstation-status').textContent=state?.lastRefresh?'Last completed-bar refresh: '+new Date(state.lastRefresh).toLocaleString()+'.':'Watchlist saved locally. Refresh uses a matching .data/SYMBOL.json cache when no provider key is active; otherwise it fetches read-only provider data.';
 }
+function renderDemoPanel(){
+  const scan=state?.lastScans?.[selectedSymbol];
+  const allowed=canAdvanceDemo(scan);
+  $('demo-advance').disabled=!allowed;
+  const step=state?.syntheticStep;
+  if(step&&step.symbol===selectedSymbol){
+    $('demo-step-status').textContent='Invented session '+step.previousSession+' → '+step.session+
+      ' · '+step.scenario+' · open paper observations now: '+step.ticketsStillOpen+
+      '. The paper outcome journal below has been recalculated.';
+  }else if(allowed){
+    const pending=(state?.tickets||[]).filter(ticket=>ticket.symbol===scan.symbol&&
+      ticket.outcome?.status==='OPEN_PAPER_OBSERVATION').length;
+    $('demo-step-status').textContent=scan.symbol+' · most recent stored bar '+scan.asOf+
+      ' · '+pending+' open paper observation'+(pending===1?'':'s')+
+      '. Choose the next fictional bar scenario.';
+  }else{
+    $('demo-step-status').textContent='This control only works for seeded SIM09/SIM10 data. Select the synthetic symbol, then refresh the workstation.';
+  }
+}
 function render(){
   if(!state)return;
   if(document.activeElement!==$('watchlist'))$('watchlist').value=state.watchlist.join(', ');
   const ranked=scans();if(!selectedSymbol||!state.lastScans[selectedSymbol])selectedSymbol=ranked[0]?.symbol||null;
-  renderStatus();renderScanner();renderDetail();renderAlerts();renderTickets();
+  renderStatus();renderScanner();renderDetail();renderAlerts();renderTickets();renderDemoPanel();
 }
 async function runAction(button,fn){
   if(busy)return;busy=true;const original=button.textContent;button.disabled=true;
@@ -165,7 +193,9 @@ async function runAction(button,fn){
     busy=false;
     button.disabled=button.id==='create-ticket'
       ?!canCreatePaperTicket(state?.lastScans?.[selectedSymbol])
-      :false;
+      :button.id==='demo-advance'
+        ?!canAdvanceDemo(state?.lastScans?.[selectedSymbol])
+        :false;
     button.textContent=original;
   }
 }
@@ -179,5 +209,12 @@ $('create-ticket').addEventListener('click',()=>runAction($('create-ticket'),asy
   const paperUnits=Number($('paper-units').value);
   if(!selectedSymbol||!Number.isFinite(paperUnits)||paperUnits<=0)throw new Error('Choose a scanned setup and valid virtual-unit amount.');
   return request('/api/workstation/tickets',{symbol:selectedSymbol,paperUnits});
+}));
+$('demo-advance').addEventListener('click',()=>runAction($('demo-advance'),async()=>{
+  if(!canAdvanceDemo(state?.lastScans?.[selectedSymbol]))
+    throw new Error('Choose and refresh SIM09/SIM10 to run an invented scenario.');
+  return request('/api/workstation/demo/advance',{
+    symbol:selectedSymbol,scenario:$('demo-scenario').value
+  });
 }));
 request('/api/workstation').then(value=>{state=value;render();}).catch(error=>{$('workstation-status').textContent='Workstation unavailable: '+error.message;});
