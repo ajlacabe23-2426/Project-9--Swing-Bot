@@ -4,7 +4,7 @@
 
 ## Run locally
 
-Install Node.js **22 or later**. No package install, account, secret or network access is needed for the offline research simulator.
+Install a supported **security-patched Node.js runtime**: **22.23.5 or later on 22.x**, **24.22.3 or later on 24.x**, or **26.13.1 or later on 26.x**. The local server now refuses outdated and unsupported runtimes before listening. No package install, account, secret or network access is needed for the offline research simulator.
 
 ```bash
 npm run check
