@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
+import {execFileSync,spawnSync} from 'node:child_process';
 import {mkdtemp,readFile,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
@@ -84,4 +85,12 @@ test('read-only preview endpoint never calls market fetch or mutates workstation
     if(app)await new Promise(resolve=>app.close(resolve));
     await rm(dir,{recursive:true,force:true});
   }
+});
+
+test('the documented offline CLI prints the same deterministic report and rejects extra args',()=>{
+  const json=execFileSync(process.execPath,['scripts/preview-alerts.mjs'],{encoding:'utf8'});
+  assert.deepEqual(JSON.parse(json),buildSyntheticAlertPreview());
+  const extra=spawnSync(process.execPath,['scripts/preview-alerts.mjs','unexpected'],{encoding:'utf8'});
+  assert.equal(extra.status,2);
+  assert.match(extra.stderr,/no arguments/);
 });
