@@ -78,6 +78,12 @@ test('one local synthetic endpoint step updates all four preserved legacy ticket
         id:'P9-'+String(i).padStart(4,'0')});
       return state;
     });
+    const previewPage=await fetch(base+'/workstation.html');
+    assert.equal(previewPage.status,200);
+    const html=await previewPage.text();
+    assert.match(html,/id="demo-advance"/);
+    assert.match(html,/id="demo-scenario"/);
+    assert.match(html,/invented session/i);
     const beforePaper=await readFile(join(dir,'paper.json'),'utf8');
     const beforeBars=JSON.parse(await readFile(join(dir,'SIM09.json'),'utf8')).bars;
     const invalid=await request('/api/workstation/demo/advance',{
