@@ -119,15 +119,15 @@ export async function createApp({
           return json(res,200,{...next,refreshWindow:{from,to}});
         }
         if(url.pathname==='/api/workstation/demo/advance'){
-          if(Object.keys(body).length!==2||!('symbol' in body)||!('scenario' in body))
-            return json(res,400,{error:'Demo session step requires symbol and scenario'});
+          if(Object.keys(body).length!==3||!('symbol' in body)||!('scenario' in body)||!('expectedAsOf' in body))
+            return json(res,400,{error:'Demo session step requires symbol, scenario and expectedAsOf'});
           if(process.env.MASSIVE_API_KEY)
             return json(res,409,{error:'Synthetic session step is unavailable when a real-data provider is configured'});
           // Local-only explicit demo route: works on built-in SIM09/SIM10 files,
           // never invokes the provider, ticket creator, trade execution or alert delivery.
           return json(res,200,await advanceSyntheticPaperSession({
             workstation,dataDir:dirname(workstation.file),
-            symbol:body.symbol,scenario:body.scenario
+            symbol:body.symbol,scenario:body.scenario,expectedAsOf:body.expectedAsOf
           }));
         }
         if(url.pathname==='/api/workstation/tickets'){
