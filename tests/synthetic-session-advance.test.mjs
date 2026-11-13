@@ -42,7 +42,7 @@ test('neutral, target, stop and same-bar ambiguous outcomes use a new invented d
 test('only exact seeded synthetic prefix can advance; real-labeled/corrupt inputs rejected',()=>{
   const input=buildDemoDataset('SIM09');
   assert.throws(()=>appendSyntheticSession({...input,source:'A vendor feed'},{scenario:'HOLD'}),/Only intact/);
-  const tampered=structuredClone(input);tampered.bars[0].close+=1;
+  const tampered=structuredClone(input);tampered.bars[0].volume+=1;
   assert.throws(()=>appendSyntheticSession(tampered,{scenario:'HOLD'}),/Only intact/);
   assert.throws(()=>appendSyntheticSession(input,{scenario:'TARGET'}),/paper observation/);
   assert.throws(()=>appendSyntheticSession(input,{scenario:'NOT_A_SCENARIO'}),/Unsupported/);
