@@ -64,7 +64,8 @@ test('decision-time and acquired-after-decision checks prevent false point-in-ti
   const {sidecar}=fixture();
   sidecar.timeline.acquiredAt='2026-07-01T00:00:00.000Z';
   const later=assess({sidecar});
-  assert.equal(later.status,'RETROSPECTIVE_UNVERIFIED_PIT');
+  assert.equal(later.status,'QUARANTINED');
+  assert.ok(later.reasonCodes.includes('ACQUIRED_AFTER_DECISION'));
   sidecar.timeline.availableAt='2026-07-02T00:00:00.000Z';
   assert.ok(assess({sidecar}).reasonCodes.includes('EVIDENCE_NOT_KNOWN_AT_DECISION'));
   assert.throws(()=>assess({}, {decisionAt:'2026-02-30T00:00:00.000Z'}),/canonical decisionAt/);
@@ -89,4 +90,54 @@ test('universe known after decision fails, synthetic source cannot clear preflig
   const result=assess({datasetBytes:syntheticBytes,sidecar});
   assert.equal(result.status,'QUARANTINED');
   assert.ok(result.reasonCodes.includes('SYNTHETIC_DATA'));
+});
+
+test('hashed retrieval provenance cannot be hidden by a pre-decision sidecar',()=>{
+  const {datasetBytes,sidecar}=fixture();const data=JSON.parse(datasetBytes);
+  data.provenance.retrievedAt='2026-07-02T12:00:00.000Z';
+  const raw=JSON.stringify(data);sidecar.datasetSha256=hash(raw);
+  const result=assess({datasetBytes:raw,sidecar});
+  assert.equal(result.status,'QUARANTINED');
+  assert.ok(result.reasonCodes.includes('DATASET_RETRIEVED_AFTER_DECISION'));
+  assert.ok(result.reasonCodes.includes('DATASET_ACQUISITION_TIMESTAMP_MISMATCH'));
+});
+test('availability covers the last bar and precedes acquisition and knowledge',()=>{
+  for(const timeline of [
+    {availableAt:'2026-01-01T00:00:00.000Z'},
+    {availableAt:'2026-06-02T00:00:00.000Z'},
+    {knownAt:'2026-05-31T00:00:00.000Z'}
+  ]){
+    const {sidecar}=fixture();Object.assign(sidecar.timeline,timeline);
+    const result=assess({sidecar});
+    assert.equal(result.status,'QUARANTINED');
+    assert.ok(result.reasonCodes.includes('EVIDENCE_TIMELINE_INCONSISTENT'));
+  }
+});
+test('provider aliases and blank required identities fail preflight',()=>{
+  for(const independentProvider of ['Recorded vendor ','RECORDED VENDOR','Recorded  vendor']){
+    const {sidecar}=fixture();sidecar.reconciliation.independentProvider=independentProvider;
+    assert.ok(assess({sidecar}).reasonCodes.includes('INDEPENDENT_RECONCILIATION_UNPROVEN'));
+  }
+  const {sidecar}=fixture();sidecar.securityId='  ';
+  assert.ok(assess({sidecar}).reasonCodes.includes('INSTRUMENT_IDENTITY_INCOMPLETE'));
+});
+test('synthetic quarantine outranks retrospective status; promotion is always prohibited',()=>{
+  for(const source of ['Synthetic fixture','Demo generated prices','Simulated prices']){
+    const {datasetBytes,sidecar}=fixture();const data=JSON.parse(datasetBytes);
+    data.source=source;data.provenance.retrievedAt='2026-07-01T12:00:00.000Z';
+    const raw=JSON.stringify(data);sidecar.datasetSha256=hash(raw);
+    sidecar.timeline.acquiredAt=data.provenance.retrievedAt;
+    sidecar.timeline.knownAt=data.provenance.retrievedAt;
+    const result=assess({datasetBytes:raw,sidecar});
+    assert.equal(result.status,'QUARANTINED');
+    assert.ok(result.reasonCodes.includes('SYNTHETIC_DATA'));
+    for(const key of ['dataAuthenticityVerified','researchAccepted','alertEligible','brokerConnected','realOrdersAllowed'])
+      assert.equal(result[key],false);
+  }
+});
+test('legacy provenance with no retrieval instant is quarantined',()=>{
+  const {datasetBytes,sidecar}=fixture();const data=JSON.parse(datasetBytes);
+  data.schema='project9-market-data-v1';delete data.provenance;
+  const raw=JSON.stringify(data);sidecar.datasetSha256=hash(raw);
+  assert.ok(assess({datasetBytes:raw,sidecar}).reasonCodes.includes('DATASET_RETRIEVAL_TIMESTAMP_MISSING'));
 });

@@ -4,7 +4,7 @@ import {normalizeMarketDataset,isStrictISODate} from './market-intelligence.mjs'
 export const EVIDENCE_SCHEMA='project9-market-evidence-sidecar-v1';
 const SHA=/^[a-f0-9]{64}$/;
 const MIC=/^[A-Z0-9]{4}$/;
-const safeText=value=>typeof value==='string'&&value.length>=2&&value.length<=120&&
+const safeText=value=>typeof value==='string'&&value.trim().length>=2&&value.length<=120&&
   !/[\r\n]/.test(value)&&!/(?:https?:\/\/|api[_-]?key|bearer |token=)/i.test(value);
 const sha=value=>createHash('sha256').update(value).digest('hex');
 const isObject=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
@@ -14,6 +14,7 @@ function canonicalInstant(value){
 }
 const allSha=(obj,keys)=>isObject(obj)&&keys.every(k=>SHA.test(obj[k]??''));
 const requiredText=(obj,keys)=>isObject(obj)&&keys.every(k=>safeText(obj[k]));
+const providerIdentity=value=>typeof value==='string'?value.trim().replace(/\s+/g,' ').toLowerCase():'';
 const timesBefore=(sidecar,decisionAt)=>['availableAt','knownAt'].every(k=>
   canonicalInstant(sidecar.timeline?.[k])&&sidecar.timeline[k]<=decisionAt);
 
@@ -32,6 +33,8 @@ export function assessMarketEvidence({datasetBytes,sidecar=null,decisionAt}={}){
   const digest=sha(bytes);
   const reasons=[];
   if(dataset.sourceAsOf>decisionAt.slice(0,10))reasons.push('SOURCE_AS_OF_AFTER_DECISION');
+  if(!dataset.provenance.retrievedAt)reasons.push('DATASET_RETRIEVAL_TIMESTAMP_MISSING');
+  else if(dataset.provenance.retrievedAt>decisionAt)reasons.push('DATASET_RETRIEVED_AFTER_DECISION');
   if(!isObject(sidecar)){
     reasons.push('MISSING_EVIDENCE_SIDECAR');
   }else{
@@ -48,6 +51,13 @@ export function assessMarketEvidence({datasetBytes,sidecar=null,decisionAt}={}){
     else{
       if(!timesBefore(sidecar,decisionAt))reasons.push('EVIDENCE_NOT_KNOWN_AT_DECISION');
       if(sidecar.timeline.acquiredAt>decisionAt)reasons.push('ACQUIRED_AFTER_DECISION');
+      if(sidecar.timeline.availableAt>sidecar.timeline.acquiredAt||
+        sidecar.timeline.acquiredAt>sidecar.timeline.knownAt||
+        sidecar.timeline.availableAt.slice(0,10)<dataset.sourceAsOf)
+        reasons.push('EVIDENCE_TIMELINE_INCONSISTENT');
+      if(dataset.provenance.retrievedAt&&
+        sidecar.timeline.acquiredAt!==dataset.provenance.retrievedAt)
+        reasons.push('DATASET_ACQUISITION_TIMESTAMP_MISMATCH');
     }
     if(!Array.isArray(sidecar.rights)||!sidecar.rights.some(r=>isObject(r)&&
       r.scope==='PRIVATE_RESEARCH'&&SHA.test(r.documentSha256??'')&&
@@ -55,7 +65,7 @@ export function assessMarketEvidence({datasetBytes,sidecar=null,decisionAt}={}){
       r.validFrom<=decisionAt.slice(0,10)&&r.validThrough>=decisionAt.slice(0,10)))
       reasons.push('DATED_PRIVATE_RESEARCH_RIGHTS_MISSING');
     if(!isObject(sidecar.reconciliation)||!safeText(sidecar.reconciliation.independentProvider)||
-      sidecar.reconciliation.independentProvider===sidecar.provider?.name||
+      providerIdentity(sidecar.reconciliation.independentProvider)===providerIdentity(sidecar.provider?.name)||
       !SHA.test(sidecar.reconciliation.reportSha256??'')||
       sidecar.reconciliation.discrepanciesResolved!==true)
       reasons.push('INDEPENDENT_RECONCILIATION_UNPROVEN');
@@ -70,14 +80,15 @@ export function assessMarketEvidence({datasetBytes,sidecar=null,decisionAt}={}){
       reasons.push('REVIEWER_RECORD_MISSING');
     if('status' in sidecar||'verified' in sidecar)reasons.push('SELF_ASSERTED_VERIFICATION_IGNORED');
   }
-  if(/synthetic|fictitious|invented/i.test(dataset.source))reasons.push('SYNTHETIC_DATA');
+  if(/synthetic|fictitious|invented|\bdemo\b|\bgenerated\b|\bsimulated\b/i.test(dataset.source))reasons.push('SYNTHETIC_DATA');
   const reasonCodes=[...new Set(reasons)].sort();
+  const retrospectiveReasons=new Set(['ACQUIRED_AFTER_DECISION','DATASET_RETRIEVED_AFTER_DECISION']);
   return {
     schema:'project9-market-evidence-preflight-v1',
     symbol:dataset.symbol,rawDatasetSha256:digest,
     decisionAt,sourceAsOf:dataset.sourceAsOf,
-    status:reasonCodes.includes('ACQUIRED_AFTER_DECISION')?'RETROSPECTIVE_UNVERIFIED_PIT':
-      reasonCodes.length?'QUARANTINED':'EVIDENCE_REVIEW_PENDING',
+    status:reasonCodes.some(reason=>!retrospectiveReasons.has(reason))?'QUARANTINED':
+      reasonCodes.length?'RETROSPECTIVE_UNVERIFIED_PIT':'EVIDENCE_REVIEW_PENDING',
     reasonCodes,
     dataAuthenticityVerified:false,
     researchAccepted:false,
