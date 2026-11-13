@@ -86,6 +86,13 @@ test('identities preserve distinct rules/start offsets and expose real window tu
   assert.notDeepEqual(daily.outcomes.map(o=>o.window),scanner.outcomes.map(o=>o.window));
 });
 
+test('both research seams reject reviews after declared source availability',()=>{
+  const data=buildDemoDataset('SIM09');
+  for(const [,run] of engines){
+    assert.throws(()=>run(data,{asOf:'2026-02-17'}),/source-as-of/);
+  }
+});
+
 test('actual tuple intersection separates arithmetic from unmatched strategy windows',()=>{
   const data=buildDemoDataset('SIM09');
   for(const h of [1,3,5,30]){
@@ -120,6 +127,16 @@ test('both file entry points bind deterministic manifests to input bytes and eng
 });
 
 // These are fail-closed checks: JSON must never silently serialize NaN/Infinity as null.
+for(const [name,run] of engines){
+  test(`${name}: overflowing upstream indicators fail before classification`,()=>{
+    const data=buildDemoDataset('SIM09');
+    for(const bar of data.bars){
+      bar.open=1e308;bar.high=1.1e308;bar.low=9e307;bar.close=1e308;
+    }
+    assert.throws(()=>run(data,{}),/indicators must remain finite/);
+  });
+}
+
 test('return helper rejects invalid values and unrepresentable arithmetic', async()=>{
   const {modeledReturns,meanReturn}=await import('../src/research-return-contract.mjs');
   for(const value of [NaN,Infinity,-Infinity,0,-1,'100',null]){

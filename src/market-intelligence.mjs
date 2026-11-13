@@ -223,6 +223,10 @@ export function evaluateSwingSetup(input,{asOfIndex=null,paperCapital=10_000,pap
   const averageVolume=average(previous20.map(bar=>bar.volume));
   const relativeVolume=averageVolume>0?current.volume/averageVolume:null;
 
+  if(![fast,slow,momentum,range,priorHigh,averageVolume].every(Number.isFinite)||
+     (relativeVolume!==null&&!Number.isFinite(relativeVolume)))
+    throw new Error('Swing strategy indicators must remain finite');
+
   const checks={
     above20:current.close>fast,
     trendAligned:fast>slow,
@@ -240,6 +244,11 @@ export function evaluateSwingSetup(input,{asOfIndex=null,paperCapital=10_000,pap
   const entryReference=current.close;
   const stopReference=riskPerUnit?Math.max(0.01,entryReference-riskPerUnit):null;
   const targetReference=riskPerUnit?entryReference+riskPerUnit*2:null;
+
+  if(![riskPerUnit,paperRiskBudget,paperUnits].every(Number.isFinite)||
+     (stopReference!==null&&!Number.isFinite(stopReference))||
+     (targetReference!==null&&!Number.isFinite(targetReference)))
+    throw new Error('Swing strategy risk references must remain finite');
 
   return {
     schema:'project9-swing-evaluation-v1',

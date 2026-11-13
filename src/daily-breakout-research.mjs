@@ -18,6 +18,8 @@ function classifyAt(bars,index){
     throw new Error('Daily strategy requires 50 completed bars through the signal date');
   const prior20High=Math.max(...bars.slice(index-20,index).map(bar=>bar.high));
   const average50=sma(bars,index,50);
+  if(!Number.isFinite(average50)||!Number.isFinite(prior20High))
+    throw new Error('Daily strategy indicators must remain finite');
   const close=bars[index].close;
   const above50DayAverage=close>average50;
   const brokePrior20DayHigh=close>prior20High;

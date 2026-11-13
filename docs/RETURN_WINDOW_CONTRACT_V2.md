@@ -41,7 +41,9 @@ Then `npm run check`, `npm run security:secrets`, `npm run security:baseline`; C
 
 ## Sprint #42 hardening
 
-The shared return helper now rejects non-numeric, non-positive or non-finite prices, out-of-range costs, and non-finite derived values before JSON serialization. Ratios divide before multiplying by 100 to avoid unnecessary intermediate overflow. Raw means scale each observation before summation and reject non-finite inputs/results; daily display means use that same guarded aggregation. This does not validate extreme-price indicator behavior or data authenticity.
+The shared return helper now rejects non-numeric, non-positive or non-finite prices, out-of-range costs, and non-finite derived values before JSON serialization. Ratios divide before multiplying by 100 to avoid unnecessary intermediate overflow. Raw means scale each observation before summation and reject non-finite inputs/results; daily display means use that same guarded aggregation. Daily and scanner research also reject non-finite derived indicators before classification, and swing risk references before serialization. These checks fail closed rather than redesigning indicator arithmetic; finite extreme-price accuracy and data authenticity are not established.
+
+Both v2 research seams reject a review date after the declared source-as-of date. This is a deliberate scanner v1 compatibility change: use a review cutoff within the declaration, not an invented later source availability. The restriction and both seams are regression-tested; it does not prove point-in-time availability.
 
 Manifests additionally disclose report schema, dataset declarations (including currency, adjustment and source-as-of), input coverage, effective report parameters, Node runtime and cutoff quality/provenance reasons. Every selected engine byte is compared against its Git commit blob; an untracked or ignored dependency cannot claim `COMMITTED_TRACKED_ENGINE`. The selected-engine identity is not a full repository cleanliness guarantee. Retain full candidate SHA/status and output-byte digests in external execution evidence.
 
