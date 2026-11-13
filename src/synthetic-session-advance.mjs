@@ -81,7 +81,7 @@ export function appendSyntheticSession(input,{scenario,referenceTicket=null}={})
 }
 
 export async function advanceSyntheticPaperSession({
-  workstation,dataDir,symbol,scenario,now=new Date()
+  workstation,dataDir,symbol,scenario,expectedAsOf,now=new Date()
 }={}){
   if(!DEMO_SYMBOLS.includes(symbol))throw error('Only SIM09/SIM10 engineered demo symbols can advance',400);
   if(!SYNTHETIC_STEP_SCENARIOS.includes(scenario))
@@ -93,6 +93,8 @@ export async function advanceSyntheticPaperSession({
   const before=workstation.snapshot();
   if(!before.watchlist.includes(symbol))throw error('Add the demo symbol to the watchlist first');
   if(!before.lastScans[symbol])throw error('Refresh the demo symbol before advancing');
+  if(typeof expectedAsOf!=='string'||expectedAsOf!==before.lastScans[symbol].asOf)
+    throw error('Demo session changed since the screen was loaded; refresh before retrying');
 
   const file=join(resolve(dataDir),symbol+'.json');
   let raw;
