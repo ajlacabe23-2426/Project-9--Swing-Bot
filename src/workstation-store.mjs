@@ -115,7 +115,7 @@ export class WorkstationStore{
       return state;
     });
   }
-  async applyRefresh(entries,{refreshedAt,errors=[]}={}){
+  async applyRefresh(entries,{refreshedAt,errors=[],suppressAlerts=false}={}){
     if(!Array.isArray(entries))throw new Error('Refresh entries are required');
     if(typeof refreshedAt!=='string'||!refreshedAt)throw new Error('Refresh timestamp is required');
     const normalizedErrors=errors.slice(0,20).map(error=>({symbol:String(error.symbol||''),message:String(error.message||'Market-data refresh failed').slice(0,160)}));
@@ -129,7 +129,7 @@ export class WorkstationStore{
           throw new Error('Refresh evidence date must match the latest completed market bar');
         if(previous&&evaluation.asOf<previous.asOf)
           throw new Error('Stale market refresh cannot replace newer research evidence');
-        if(previous&&previous.classification!==evaluation.classification){
+        if(!suppressAlerts&&previous&&previous.classification!==evaluation.classification){
           state.alerts.unshift({
             id:'A'+(state.alerts.length+1)+'-'+dataset.symbol+'-'+evaluation.asOf,
             symbol:dataset.symbol,
@@ -169,6 +169,10 @@ export class WorkstationStore{
       if(!evaluation)throw new Error('Refresh the symbol before creating a paper ticket');
       if(evaluation.classification==='NO_PAPER_SETUP')throw new Error('Paper ticket requires a watch or strong research classification');
       if(paperUnits>evaluation.paperRiskPlan.maxPaperUnits)throw new Error('Paper units exceed the frozen paper-risk reference');
+      if(state.tickets.some(ticket=>ticket.symbol===normalized&&
+        (ticket.openedAsOf===evaluation.asOf||
+         ticket.outcome?.status==='OPEN_PAPER_OBSERVATION')))
+        throw Object.assign(new Error('A paper observation already exists for this symbol/session, or an earlier one is still open'),{status:409});
       const sequence=state.tickets.length+1;
       state.tickets.unshift({
         id:'P9-'+String(sequence).padStart(4,'0'),
