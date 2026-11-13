@@ -8,6 +8,7 @@ import {modelCommentary} from './src/ai.mjs';
 import {evaluateSwingSetup} from './src/market-intelligence.mjs';
 import {fetchMassiveDailyDataset} from './src/providers/massive.mjs';
 import {WorkstationStore} from './src/workstation-store.mjs';
+import {assertPatchedNodeRuntime} from './src/runtime-security.mjs';
 
 const root=dirname(fileURLToPath(import.meta.url));
 const staticFiles=new Map([
@@ -149,6 +150,12 @@ export async function createApp({
   });return server;
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
+  try {
+    assertPatchedNodeRuntime();
+  } catch (error) {
+    console.error(error.message);
+    process.exit(1);
+  }
   const port=Number(process.env.PORT||4179);
   const store=new PaperStore(process.env.PROJECT9_DATA_FILE||resolve(root,'.data/paper.json'));
   createApp({port,store}).then(server=>server.listen(port,'127.0.0.1',()=>console.log('Project 9 local-only research platform at http://127.0.0.1:'+port))).catch(error=>{console.error(error);process.exitCode=1;});
