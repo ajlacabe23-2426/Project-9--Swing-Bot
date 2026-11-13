@@ -8,6 +8,7 @@ import {modelCommentary} from './src/ai.mjs';
 import {evaluateSwingSetup} from './src/market-intelligence.mjs';
 import {fetchMassiveDailyDataset} from './src/providers/massive.mjs';
 import {WorkstationStore} from './src/workstation-store.mjs';
+import {advanceSyntheticPaperSession} from './src/synthetic-session-advance.mjs';
 
 const root=dirname(fileURLToPath(import.meta.url));
 const staticFiles=new Map([
@@ -82,7 +83,8 @@ export async function createApp({
       }
       const postRoutes=[
         '/api/step','/api/run','/api/reset','/api/ai-report',
-        '/api/workstation/watchlist','/api/workstation/refresh','/api/workstation/tickets'
+        '/api/workstation/watchlist','/api/workstation/refresh','/api/workstation/tickets',
+        '/api/workstation/demo/advance'
       ];
       if(req.method==='POST'&&postRoutes.includes(url.pathname)){
         if(!allowedOrigin(req.headers.origin,port)||
@@ -115,6 +117,18 @@ export async function createApp({
           }
           const next=await workstation.applyRefresh(entries,{refreshedAt:new Date().toISOString(),errors});
           return json(res,200,{...next,refreshWindow:{from,to}});
+        }
+        if(url.pathname==='/api/workstation/demo/advance'){
+          if(Object.keys(body).length!==2||!('symbol' in body)||!('scenario' in body))
+            return json(res,400,{error:'Demo session step requires symbol and scenario'});
+          if(process.env.MASSIVE_API_KEY)
+            return json(res,409,{error:'Synthetic session step is unavailable when a real-data provider is configured'});
+          // Local-only explicit demo route: works on built-in SIM09/SIM10 files,
+          // never invokes the provider, ticket creator, trade execution or alert delivery.
+          return json(res,200,await advanceSyntheticPaperSession({
+            workstation,dataDir:dirname(workstation.file),
+            symbol:body.symbol,scenario:body.scenario
+          }));
         }
         if(url.pathname==='/api/workstation/tickets'){
           if(Object.keys(body).length!==2||!('symbol' in body)||!('paperUnits' in body))
