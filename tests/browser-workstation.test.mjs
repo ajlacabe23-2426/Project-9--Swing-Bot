@@ -1,12 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
-import {mkdtemp,readFile,rm} from 'node:fs/promises';
+import {mkdtemp,readFile,writeFile,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createApp} from '../server.mjs';
 import {PaperStore} from '../src/store.mjs';
 import {MARKET_DATA_SCHEMA} from '../src/market-intelligence.mjs';
+import {buildDemoDataset} from '../scripts/seed-workstation-demo.mjs';
 
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 async function eventually(check,description,limit=15000){
@@ -84,13 +85,14 @@ test('real headless Chromium operates loopback workstation and preserves state w
     const dir=await mkdtemp(join(tmpdir(),'project9-browser-'));
     const port=47000+Math.floor(Math.random()*1500);
     const base='http://127.0.0.1:'+port;
-    const source=dataset();
+    const source=dataset(),demo=buildDemoDataset('SIM09');
+    await writeFile(join(dir,'SIM09.json'),JSON.stringify(demo));
     let market=structuredClone(source),chrome=null,connection=null,app=null;
     try{
       app=await createApp({
         port,
         store:new PaperStore(join(dir,'paper.json')),
-        marketFetcher:async()=>structuredClone(market)
+        marketFetcher:async({symbol})=>structuredClone(symbol==='SIM09'?demo:market)
       });
       await new Promise((resolve,reject)=>app.once('error',reject).listen(port,'127.0.0.1',resolve));
       chrome=spawn(process.env.CHROME_BIN||'google-chrome',[
@@ -198,6 +200,26 @@ test('real headless Chromium operates loopback workstation and preserves state w
       await js("document.querySelector('#reference-view').value='current';document.querySelector('#reference-view').dispatchEvent(new Event('change'))");
       assert.equal(await js("document.querySelector('#map-summary').textContent.startsWith('Current scan')"),true);
       assert.equal(await js("document.querySelectorAll('#setup-chart [data-outcome]').length"),0,'current scan does not mix in a frozen outcome');
+      // Exercise the actual new controls in the browser using the fictional fixture.
+      await js("document.querySelector('#watchlist').value='SIM09';document.querySelector('#save-watchlist').click()");
+      await eventually(()=>js("document.querySelector('#watchlist').value==='SIM09' && !document.querySelector('#save-watchlist').disabled && !document.querySelector('#setup-title').textContent.includes('TEST')"),'synthetic watchlist rendered');
+      await js("document.querySelector('#refresh').click()");
+      await eventually(()=>js("document.querySelector('#setup-title').textContent.includes('SIM09') && !document.querySelector('#refresh').disabled && !document.querySelector('#demo-advance').disabled"),'source-bound fictional scan');
+      await js("document.querySelector('#paper-units').value='1';document.querySelector('#create-ticket').click()");
+      await eventually(()=>js("document.querySelector('#ticket-body').textContent.includes('P9-0002') && document.querySelector('#create-ticket').disabled"),'synthetic paper journal and duplicate guard');
+      const frozenDemo=(await(await fetch(base+'/api/workstation')).json()).tickets.find(t=>t.symbol==='SIM09');
+      await js("document.querySelector('#demo-scenario').value='HOLD';document.querySelector('#demo-advance').click()");
+      await eventually(()=>js("document.querySelector('#demo-step-status').textContent.includes('2026-02-17') && document.querySelector('#setup-title').textContent.includes('2026-02-17') && !document.querySelector('#demo-advance').disabled"),'browser fictional session advancement');
+      await js("document.querySelector('#demo-scenario').value='TARGET';document.querySelector('#demo-advance').click()");
+      await eventually(()=>js("document.querySelector('#setup-title').textContent.includes('2026-02-18') && [...document.querySelectorAll('#ticket-body tr')].some(row=>row.textContent.includes('P9-0002') && row.textContent.includes('TARGET REFERENCE TOUCHED'))"),'browser fictional paper outcome');
+      const finalDemo=await(await fetch(base+'/api/workstation')).json();
+      const demoTicket=finalDemo.tickets.find(t=>t.id===frozenDemo.id);
+      assert.equal(demoTicket.outcome.status,'TARGET_REFERENCE_TOUCHED');
+      assert.equal(demoTicket.entryReference,frozenDemo.entryReference);
+      assert.equal(demoTicket.stopReference,frozenDemo.stopReference);
+      assert.equal(demoTicket.targetReference,frozenDemo.targetReference);
+      assert.deepEqual(finalDemo.tickets.find(t=>t.symbol==='TEST'),updated.tickets.find(t=>t.symbol==='TEST'));
+      assert.equal(finalDemo.syntheticReplay.SIM09.bars.length,demo.bars.length+2);
       await connection.command('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
       assert.equal(await js("document.querySelector('#map-node-list [data-node=entry]').getBoundingClientRect().width>0"),true,'mobile node controls visible');
       assert.equal(await js("document.documentElement.scrollWidth<=document.documentElement.clientWidth"),true,'map scroll is contained on mobile');
