@@ -1,7 +1,31 @@
-import {readFile,mkdir,writeFile,rename} from 'node:fs/promises';
+import {readFile,mkdir,writeFile,rename,rm} from 'node:fs/promises';
 import {dirname,resolve} from 'node:path';
+import {createHash} from 'node:crypto';
 import {normalizeMarketDataset} from './market-intelligence.mjs';
 
+// Reserved fictional symbols. Binding is an internal identity check, not source authentication.
+export const REPLAY_SYMBOLS=Object.freeze(['SIM09','SIM10']);
+const REPLAY_LABEL='Project 9 ENGINEERED SYNTHETIC DEMO - NOT REAL MARKET DATA';
+const SHA=/^[a-f0-9]{64}$/;
+export function syntheticReplayBinding(input,through=null){
+  const d=normalizeMarketDataset(input);
+  if(!REPLAY_SYMBOLS.includes(d.symbol)||d.source!==REPLAY_LABEL||d.mode!=='HISTORICAL'||
+    d.currency!=='USD'||d.priceAdjustment!=='RAW'||d.provenance.adjustmentMethod!=='RAW_UNADJUSTED')return null;
+  const end=through===null?d.bars.length-1:d.bars.findIndex(b=>b.date===through);
+  if(end<0)return null;
+  return createHash('sha256').update(JSON.stringify({
+    symbol:d.symbol,source:d.source,mode:d.mode,currency:d.currency,
+    basis:d.priceAdjustment,bars:d.bars.slice(0,end+1)
+  })).digest('hex');
+}
+function validSyntheticReplay(replay){
+  if(replay===undefined)return true; // Preserve version-1 legacy state without migration.
+  if(!replay||typeof replay!=='object'||Array.isArray(replay))return false;
+  try{return Object.entries(replay).every(([symbol,d])=>
+    REPLAY_SYMBOLS.includes(symbol)&&d?.symbol===symbol&&!!syntheticReplayBinding(d)&&
+    d.bars.at(-1).date===d.sourceAsOf);
+  }catch{return false;}
+}
 export const WORKSTATION_VERSION=1;
 const SYMBOL=/^[A-Z0-9.\-]{1,15}$/;
 const round=(value,places=4)=>Number(value.toFixed(places));
@@ -69,13 +93,14 @@ function validTicket(ticket){
     typeof ticket.openedAsOf==='string'&&Number.isFinite(ticket.paperUnits)&&ticket.paperUnits>0&&
     Number.isFinite(ticket.entryReference)&&Number.isFinite(ticket.stopReference)&&Number.isFinite(ticket.targetReference)&&
     ticket.stopReference<ticket.entryReference&&ticket.targetReference>ticket.entryReference&&
-    typeof ticket.classificationAtOpen==='string'&&Number.isFinite(ticket.scoreAtOpen);
+    typeof ticket.classificationAtOpen==='string'&&Number.isFinite(ticket.scoreAtOpen)&&
+    (ticket.syntheticBinding===undefined||(REPLAY_SYMBOLS.includes(ticket.symbol)&&typeof ticket.syntheticBinding==='string'&&SHA.test(ticket.syntheticBinding)));
 }
 export function isValidWorkstationState(state){
   return !!state&&typeof state==='object'&&state.version===WORKSTATION_VERSION&&
     Array.isArray(state.watchlist)&&state.watchlist.length<=20&&state.watchlist.every(symbol=>SYMBOL.test(symbol))&&
     new Set(state.watchlist).size===state.watchlist.length&&state.lastScans&&typeof state.lastScans==='object'&&!Array.isArray(state.lastScans)&&
-    Array.isArray(state.alerts)&&state.alerts.length<=100&&Array.isArray(state.tickets)&&state.tickets.length<=500&&
+    validSyntheticReplay(state.syntheticReplay)&&Array.isArray(state.alerts)&&state.alerts.length<=100&&Array.isArray(state.tickets)&&state.tickets.length<=500&&
     state.tickets.every(validTicket)&&Array.isArray(state.lastRefreshErrors)&&state.lastRefreshErrors.length<=20;
 }
 
@@ -97,8 +122,10 @@ export class WorkstationStore{
     if(!isValidWorkstationState(state))throw new Error('Refusing invalid workstation state');
     await mkdir(dirname(this.file),{recursive:true,mode:0o700});
     const temporary=this.file+'.'+process.pid+'.tmp';
-    await writeFile(temporary,JSON.stringify(state,null,2)+'\n',{encoding:'utf8',mode:0o600});
-    await rename(temporary,this.file);
+    try{
+      await writeFile(temporary,JSON.stringify(state,null,2)+'\n',{encoding:'utf8',mode:0o600});
+      await rename(temporary,this.file);
+    }finally{await rm(temporary,{force:true}).catch(()=>{});}
   }
   async mutate(updater){
     const operation=this.queue.then(async()=>{
@@ -115,7 +142,7 @@ export class WorkstationStore{
       return state;
     });
   }
-  async applyRefresh(entries,{refreshedAt,errors=[]}={}){
+  async applyRefresh(entries,{refreshedAt,errors=[],suppressAlerts=false}={}){
     if(!Array.isArray(entries))throw new Error('Refresh entries are required');
     if(typeof refreshedAt!=='string'||!refreshedAt)throw new Error('Refresh timestamp is required');
     const normalizedErrors=errors.slice(0,20).map(error=>({symbol:String(error.symbol||''),message:String(error.message||'Market-data refresh failed').slice(0,160)}));
@@ -129,7 +156,16 @@ export class WorkstationStore{
           throw new Error('Refresh evidence date must match the latest completed market bar');
         if(previous&&evaluation.asOf<previous.asOf)
           throw new Error('Stale market refresh cannot replace newer research evidence');
-        if(previous&&previous.classification!==evaluation.classification){
+        const reserved=REPLAY_SYMBOLS.includes(dataset.symbol);
+        delete evaluation.syntheticReplayBinding;
+        if(reserved){
+          const binding=syntheticReplayBinding(entry.dataset);
+          if(binding)evaluation.syntheticReplayBinding=binding;
+          const committed=state.syntheticReplay?.[dataset.symbol];
+          if(committed&&binding!==syntheticReplayBinding(committed))
+            throw Object.assign(new Error('Synthetic replay changed; refresh the saved replay state'),{status:409});
+        }
+        if(!reserved&&!suppressAlerts&&previous&&previous.classification!==evaluation.classification){
           state.alerts.unshift({
             id:'A'+(state.alerts.length+1)+'-'+dataset.symbol+'-'+evaluation.asOf,
             symbol:dataset.symbol,
@@ -151,7 +187,10 @@ export class WorkstationStore{
       state.lastRefreshErrors=normalizedErrors;
       state.tickets=state.tickets.map(ticket=>{
         const dataset=datasets.get(ticket.symbol);
-        return dataset?{...ticket,outcome:evaluatePaperTicket(ticket,dataset)}:ticket;
+        // Reserved symbols can only update source-bound observations in the
+        // explicit atomic demo step. Preserve all unbound legacy records.
+        return dataset&&!REPLAY_SYMBOLS.includes(ticket.symbol)&&!ticket.syntheticBinding?
+          {...ticket,outcome:evaluatePaperTicket(ticket,dataset)}:ticket;
       });
       return state;
     });
@@ -169,10 +208,18 @@ export class WorkstationStore{
       if(!evaluation)throw new Error('Refresh the symbol before creating a paper ticket');
       if(evaluation.classification==='NO_PAPER_SETUP')throw new Error('Paper ticket requires a watch or strong research classification');
       if(paperUnits>evaluation.paperRiskPlan.maxPaperUnits)throw new Error('Paper units exceed the frozen paper-risk reference');
+      if(state.tickets.some(ticket=>ticket.symbol===normalized&&
+        (ticket.openedAsOf===evaluation.asOf||
+         ticket.outcome?.status==='OPEN_PAPER_OBSERVATION')))
+        throw Object.assign(new Error('A paper observation already exists for this symbol/session, or an earlier one is still open'),{status:409});
+      const reserved=REPLAY_SYMBOLS.includes(normalized);
+      if(reserved&&!SHA.test(evaluation.syntheticReplayBinding??''))
+        throw Object.assign(new Error('Refresh the fictional source before creating a source-bound demo observation'),{status:409});
       const sequence=state.tickets.length+1;
       state.tickets.unshift({
         id:'P9-'+String(sequence).padStart(4,'0'),
         symbol:normalized,
+        ...(reserved?{syntheticBinding:evaluation.syntheticReplayBinding}:{}),
         createdAt,
         openedAsOf:evaluation.asOf,
         paperUnits:round(paperUnits,3),
