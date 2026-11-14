@@ -33,10 +33,10 @@ function hasExistingPaperObservation(scan){
 function canCreatePaperTicket(scan){
   return !!scan&&scan.classification!=='NO_PAPER_SETUP'&&
     Number.isFinite(scan.paperRiskPlan?.maxPaperUnits)&&scan.paperRiskPlan.maxPaperUnits>=0.001&&
-    !hasExistingPaperObservation(scan);
+    !hasExistingPaperObservation(scan)&&(!['SIM09','SIM10'].includes(scan.symbol)||canAdvanceDemo(scan));
 }
 function canAdvanceDemo(scan){
-  return !!scan&&['SIM09','SIM10'].includes(scan.symbol)&&scan.source?.name===DEMO_LABEL;
+  return !!scan&&['SIM09','SIM10'].includes(scan.symbol)&&scan.source?.name===DEMO_LABEL&&/^[a-f0-9]{64}$/.test(scan.syntheticReplayBinding??'');
 }
 function drawSetupChart(scan,ticket){
   const svg=$('setup-chart'),ns='http://www.w3.org/2000/svg';svg.replaceChildren();
@@ -169,15 +169,15 @@ function renderDemoPanel(){
   if(step&&step.symbol===selectedSymbol){
     $('demo-step-status').textContent='Invented session '+step.previousSession+' → '+step.session+
       ' · '+step.scenario+' · open paper observations now: '+step.ticketsStillOpen+
-      '. The paper outcome journal below has been recalculated.';
+      '. Source-unbound or mismatched observations preserved without recalculation: '+step.unboundOrMismatchedPreserved+'.';
   }else if(allowed){
     const pending=(state?.tickets||[]).filter(ticket=>ticket.symbol===scan.symbol&&
-      ticket.outcome?.status==='OPEN_PAPER_OBSERVATION').length;
+      ticket.outcome?.status==='OPEN_PAPER_OBSERVATION'&&!!ticket.syntheticBinding).length;
     $('demo-step-status').textContent=scan.symbol+' · most recent stored bar '+scan.asOf+
-      ' · '+pending+' open paper observation'+(pending===1?'':'s')+
+      ' · '+pending+' source-bound open paper observation'+(pending===1?'':'s')+
       '. Choose the next fictional bar scenario.';
   }else{
-    $('demo-step-status').textContent='This control only works for seeded SIM09/SIM10 data. Select the synthetic symbol, then refresh the workstation.';
+    $('demo-step-status').textContent='Select and refresh the seeded SIM09/SIM10 data to establish source identity. Older unbound tickets are preserved, not replayed.';
   }
 }
 function render(){
