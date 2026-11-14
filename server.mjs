@@ -7,7 +7,7 @@ import {PaperStore} from './src/store.mjs';
 import {modelCommentary} from './src/ai.mjs';
 import {evaluateSwingSetup} from './src/market-intelligence.mjs';
 import {fetchMassiveDailyDataset} from './src/providers/massive.mjs';
-import {WorkstationStore} from './src/workstation-store.mjs';
+import {WorkstationStore,REPLAY_SYMBOLS} from './src/workstation-store.mjs';
 import {advanceSyntheticPaperSession} from './src/synthetic-session-advance.mjs';
 
 const root=dirname(fileURLToPath(import.meta.url));
@@ -105,7 +105,11 @@ export async function createApp({
           const {from,to}=completedMarketWindow(),entries=[],errors=[];
           for(const symbol of current.watchlist){
             try{
-              const dataset=await marketFetcher({symbol,from,to});
+              // In a fictional replay the committed workstation state is authoritative.
+              // A configured provider must never fetch these reserved demo symbols.
+              if(REPLAY_SYMBOLS.includes(symbol)&&process.env.MASSIVE_API_KEY)
+                throw new Error('Reserved synthetic symbol unavailable with provider configured');
+              const dataset=current.syntheticReplay?.[symbol]??await marketFetcher({symbol,from,to});
               const evaluation=evaluateSwingSetup(dataset);
               evaluation.chartBars=dataset.bars.slice(-60).map(bar=>({
                 date:bar.date,open:bar.open,high:bar.high,low:bar.low,close:bar.close,volume:bar.volume
