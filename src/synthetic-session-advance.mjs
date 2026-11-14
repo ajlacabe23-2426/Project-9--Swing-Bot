@@ -8,7 +8,7 @@ import {readFile,stat} from 'node:fs/promises';
 import {join,resolve} from 'node:path';
 import {buildDemoDataset,DEMO_SYMBOLS} from '../scripts/seed-workstation-demo.mjs';
 import {normalizeMarketDataset,evaluateSwingSetup} from './market-intelligence.mjs';
-import {writeReviewedMarketDataset} from './reviewed-market-write.mjs';
+import {syntheticReplayBinding,evaluatePaperTicket} from './workstation-store.mjs';
 
 export const SYNTHETIC_STEP_SCENARIOS=Object.freeze(['HOLD','TARGET','STOP','BOTH']);
 const round=value=>Number(value.toFixed(4));
@@ -88,59 +88,68 @@ export async function advanceSyntheticPaperSession({
     throw error('Choose a supported synthetic scenario',400);
   if(!(now instanceof Date)||!Number.isFinite(now.getTime()))
     throw error('Invalid request time',400);
-  if(!workstation||typeof workstation.applyRefresh!=='function')
+  if(!workstation||typeof workstation.mutate!=='function')
     throw new Error('Workstation storage is required');
+
+  // The original demo file is read-only. New sessions and their observations
+  // are committed in a single queued, atomic workstation-state replacement.
   const before=workstation.snapshot();
-  if(!before.watchlist.includes(symbol))throw error('Add the demo symbol to the watchlist first');
-  if(!before.lastScans[symbol])throw error('Refresh the demo symbol before advancing');
-  if(typeof expectedAsOf!=='string'||expectedAsOf!==before.lastScans[symbol].asOf)
-    throw error('Demo session changed since the screen was loaded; refresh before retrying');
-
-  const file=join(resolve(dataDir),symbol+'.json');
-  let raw;
-  try{
-    const fileInfo=await stat(file);
-    if(!fileInfo.isFile()||fileInfo.size>2_000_000)
-      throw error('Demo dataset is missing or exceeds the bounded file size');
-    raw=await readFile(file,'utf8');
-  }catch(cause){
-    if(cause?.code==='ENOENT')throw error('Synthetic dataset missing; run npm run demo:seed first');
-    throw cause;
-  }
-  let dataset;
-  try{dataset=JSON.parse(raw);}catch{throw error('Synthetic dataset JSON is invalid; refusing to overwrite');}
-  const normal=normalizeMarketDataset(dataset);
-  if(normal.bars.at(-1).date!==before.lastScans[symbol].asOf)
-    throw error('Workstation and demo file disagree on the latest session; Refresh completed bars first');
-  const openTickets=before.tickets.filter(t=>t.symbol===symbol&&
-    t.outcome?.status==='OPEN_PAPER_OBSERVATION');
-  const referenceTicket=openTickets.at(-1)||null;
-  const next=appendSyntheticSession(dataset,{scenario,referenceTicket});
-  const evaluation=evaluateSwingSetup(next.dataset);
-  evaluation.chartBars=next.dataset.bars.slice(-60).map(bar=>({...bar}));
-
-  // Append-only, lock-protected and atomic on disk; never silently revise history.
-  await writeReviewedMarketDataset(file,next.dataset);
-  // Reuse the same ticket evaluator as regular refresh, but do not generate
-  // unverified market classification alerts from this synthetic-only step.
-  const state=await workstation.applyRefresh(
-    [{dataset:next.dataset,evaluation}],
-    {refreshedAt:now.toISOString(),errors:[],suppressAlerts:true});
-  return {
-    ...state,
-    syntheticStep:{
-      mode:'ENGINEERED_SYNTHETIC_ONLY',
-      symbol,scenario,session:next.bar.date,
-      previousSession:normal.bars.at(-1).date,
-      bar:next.bar,
-      ticketsBefore:openTickets.length,
-      ticketsStillOpen:state.tickets.filter(t=>t.symbol===symbol&&
-        t.outcome?.status==='OPEN_PAPER_OBSERVATION').length,
-      paperTicketsCreated:0,
-      classificationAlertsCreated:0,
-      realOrdersCreated:0,
-      brokerConnected:false,
-      note:'Invented historical exercise only; no executable market prices, actual fills or real trades.'
+  let seed=null;
+  if(!before.syntheticReplay?.[symbol]){
+    const file=join(resolve(dataDir),symbol+'.json');
+    let raw;
+    try{
+      const info=await stat(file);
+      if(!info.isFile()||info.size>2_000_000)
+        throw error('Demo dataset is missing or exceeds the bounded file size');
+      raw=await readFile(file,'utf8');
+    }catch(cause){
+      if(cause?.code==='ENOENT')throw error('Synthetic dataset missing; run npm run demo:seed first');
+      throw cause;
     }
-  };
+    try{seed=JSON.parse(raw);}catch{throw error('Synthetic dataset JSON is invalid; refusing to modify state');}
+  }
+  let step;
+  const state=await workstation.mutate(current=>{
+    if(!current.watchlist.includes(symbol))throw error('Add the demo symbol to the watchlist first');
+    const scan=current.lastScans[symbol];
+    if(!scan)throw error('Refresh the demo symbol before advancing');
+    if(typeof expectedAsOf!=='string'||expectedAsOf!==scan.asOf)
+      throw error('Demo session changed since the screen was loaded; refresh before retrying');
+    const dataset=current.syntheticReplay?.[symbol]??seed;
+    const normal=normalizeMarketDataset(dataset);
+    const binding=syntheticReplayBinding(dataset);
+    if(!binding)throw error('Only intact built-in synthetic demo history may be advanced');
+    if(normal.symbol!==symbol||normal.bars.at(-1).date!==scan.asOf||
+       binding!==scan.syntheticReplayBinding)
+      throw error('Workstation and demo data identity disagree; Refresh completed bars first');
+
+    const matches=t=>t.symbol===symbol&&!!t.syntheticBinding&&
+      t.syntheticBinding===syntheticReplayBinding(dataset,t.openedAsOf);
+    const eligible=current.tickets.filter(matches);
+    const open=eligible.filter(t=>t.outcome?.status==='OPEN_PAPER_OBSERVATION');
+    const next=appendSyntheticSession(dataset,{scenario,referenceTicket:open.at(-1)||null});
+    const evaluation=evaluateSwingSetup(next.dataset);
+    evaluation.chartBars=next.dataset.bars.slice(-60).map(bar=>({...bar}));
+    evaluation.syntheticReplayBinding=syntheticReplayBinding(next.dataset);
+    const ids=new Set(eligible.map(t=>t.id));
+    current.tickets=current.tickets.map(t=>ids.has(t.id)&&matches(t)?
+      {...t,outcome:evaluatePaperTicket(t,next.dataset)}:t);
+    current.syntheticReplay={...current.syntheticReplay,[symbol]:next.dataset};
+    current.lastScans[symbol]=evaluation;
+    current.lastRefresh=now.toISOString();
+    current.lastRefreshErrors=current.lastRefreshErrors.filter(e=>e.symbol!==symbol);
+    step={
+      mode:'ENGINEERED_SYNTHETIC_ONLY',symbol,scenario,session:next.bar.date,
+      previousSession:normal.bars.at(-1).date,bar:next.bar,
+      ticketsBefore:open.length,
+      ticketsStillOpen:current.tickets.filter(t=>ids.has(t.id)&&matches(t)&&
+        t.outcome?.status==='OPEN_PAPER_OBSERVATION').length,
+      unboundOrMismatchedPreserved:current.tickets.filter(t=>t.symbol===symbol&&!matches(t)).length,
+      paperTicketsCreated:0,classificationAlertsCreated:0,realOrdersCreated:0,brokerConnected:false,
+      note:'Invented historical exercise only; no executable market prices, actual fills or real trades.'
+    };
+    return current;
+  });
+  return {...state,syntheticStep:step};
 }
