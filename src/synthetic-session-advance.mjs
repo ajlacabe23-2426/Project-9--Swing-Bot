@@ -6,7 +6,7 @@
  */
 import {readFile,stat} from 'node:fs/promises';
 import {join,resolve} from 'node:path';
-import {buildDemoDataset,DEMO_SYMBOLS} from '../scripts/seed-workstation-demo.mjs';
+import {buildDemoDataset,DEMO_SYMBOLS} from './synthetic-demo-fixture.mjs';
 import {normalizeMarketDataset,evaluateSwingSetup} from './market-intelligence.mjs';
 import {syntheticReplayBinding,evaluatePaperTicket} from './workstation-store.mjs';
 
