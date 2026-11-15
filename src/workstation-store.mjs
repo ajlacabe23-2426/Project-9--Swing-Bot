@@ -195,7 +195,7 @@ export class WorkstationStore{
       return state;
     });
   }
-  async createTicket(symbol,paperUnits,{createdAt}={}){
+  async createTicket(symbol,paperUnits,{createdAt,reviewedScan}={}){
     const normalized=String(symbol||'').trim().toUpperCase();
     if(!SYMBOL.test(normalized))throw new Error('Invalid paper-ticket symbol');
     if(!Number.isFinite(paperUnits)||paperUnits<0.001||
@@ -206,6 +206,16 @@ export class WorkstationStore{
     return this.mutate(state=>{
       const evaluation=state.lastScans[normalized];
       if(!evaluation)throw new Error('Refresh the symbol before creating a paper ticket');
+      // For fictional demo records, compare the actual reviewed scan inside the
+      // serialized mutation, before creating or changing any observation.
+      if(REPLAY_SYMBOLS.includes(normalized)){
+        const p=evaluation.paperRiskPlan;
+        const expected={asOf:evaluation.asOf,binding:evaluation.syntheticReplayBinding,
+          entry:p.entryReference,stop:p.stopReference,target:p.targetReference};
+        if(!reviewedScan||Object.keys(reviewedScan).length!==5||
+           Object.keys(expected).some(key=>!Object.hasOwn(reviewedScan,key)||reviewedScan[key]!==expected[key]))
+          throw Object.assign(new Error('Fictional scan changed or was not reviewed; refresh before recording'),{status:409});
+      }
       if(evaluation.classification==='NO_PAPER_SETUP')throw new Error('Paper ticket requires a watch or strong research classification');
       if(paperUnits>evaluation.paperRiskPlan.maxPaperUnits)throw new Error('Paper units exceed the frozen paper-risk reference');
       if(state.tickets.some(ticket=>ticket.symbol===normalized&&
