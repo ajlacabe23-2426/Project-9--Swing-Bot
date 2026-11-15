@@ -208,7 +208,15 @@ $('refresh').addEventListener('click',()=>runAction($('refresh'),async()=>reques
 $('create-ticket').addEventListener('click',()=>runAction($('create-ticket'),async()=>{
   const paperUnits=Number($('paper-units').value);
   if(!selectedSymbol||!Number.isFinite(paperUnits)||paperUnits<=0)throw new Error('Choose a scanned setup and valid virtual-unit amount.');
-  return request('/api/workstation/tickets',{symbol:selectedSymbol,paperUnits});
+  const scan=state?.lastScans?.[selectedSymbol];
+  const body={symbol:selectedSymbol,paperUnits};
+  if(['SIM09','SIM10'].includes(selectedSymbol)){
+    if(!canAdvanceDemo(scan))throw new Error('Refresh the fictional scan before recording');
+    const p=scan.paperRiskPlan;
+    body.reviewedScan={asOf:scan.asOf,binding:scan.syntheticReplayBinding,
+      entry:p.entryReference,stop:p.stopReference,target:p.targetReference};
+  }
+  return request('/api/workstation/tickets',body);
 }));
 $('demo-advance').addEventListener('click',()=>runAction($('demo-advance'),async()=>{
   if(!canAdvanceDemo(state?.lastScans?.[selectedSymbol]))
