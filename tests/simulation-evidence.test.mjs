@@ -63,3 +63,19 @@ test('read-only evidence endpoint is local, rejects parameters and does not writ
     await rm(dir,{recursive:true,force:true});
   }
 });
+
+test('fictional observation metadata never claims legacy or outcome verification',()=>{
+  const base=buildDemoDataset('SIM09');
+  const record={id:'P9-0001',symbol:'SIM09',openedAsOf:base.sourceAsOf,
+    syntheticBinding:syntheticReplayBinding(base),outcome:{paperPnl:999}};
+  const body=readFictionalContractStatus({seed:73,cursor:29},{lastScans:{},tickets:[
+    record,{...record,id:'P9-0002',syntheticBinding:undefined},
+    {...record,id:'P9-0003',symbol:'OTHER'}]});
+  assert.equal(body.simulation.accountingMode,'FILLED_SIMULATION');
+  assert.equal(body.observationRecords.length,2);
+  assert.ok(body.observationRecords.every(x=>x.accountingMode==='OBSERVATION_REFERENCE'&&x.outcomeVerification==='NOT_CERTIFIED_BY_METADATA'));
+  assert.equal(body.observationRecords[0].openingContract.mode,'OBSERVATION_REFERENCE');
+  assert.equal(body.observationRecords[1].openingContract,null);
+  assert.equal(body.observationRecords[1].openingEvidenceStatus,'UNVERIFIED_OPENING_PREFIX');
+  assert.ok(body.observationRecords.every(x=>!Object.hasOwn(x,'paperPnl')&&!Object.hasOwn(x,'outcome')));
+});
