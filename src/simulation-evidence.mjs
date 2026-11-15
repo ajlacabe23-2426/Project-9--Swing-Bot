@@ -60,6 +60,17 @@ export function readFictionalContractStatus(paper,workstation){
       sourceId,asOf:base.sourceAsOf,cursor:base.bars.length-1,bars:base.bars
     })};
   });
-  return {scope:'FICTIONAL_OFFLINE',simulation:{status:'BUILT_IN_PREFIX_VERIFIED',contract:simulation},
-    observations,notes:'Metadata only. Seed identity is not proof of observation arithmetic, extended scenario lineage or actual market provenance.'};
+  // Metadata projection only: never aggregate, recompute or expose monetary amounts.
+  // Legacy/extended observations are not silently assigned verified contracts.
+  const observationRecords=(workstation.tickets??[]).filter(t=>demoSymbols.includes(t.symbol)).map(t=>{
+    const base=buildDemoDataset(t.symbol);
+    const matched=t.openedAsOf===base.sourceAsOf&&t.syntheticBinding===syntheticReplayBinding(base);
+    return {id:t.id,sourceId:t.symbol,accountingMode:ACCOUNTING_MODE.OBSERVATION_REFERENCE,
+      openingEvidenceStatus:matched?'SEED_IDENTITY_MATCH':'UNVERIFIED_OPENING_PREFIX',
+      openingContract:matched?verifyBuiltInPrefix({sourceId:t.symbol,asOf:base.sourceAsOf,
+        cursor:base.bars.length-1,bars:base.bars}):null,
+      outcomeVerification:'NOT_CERTIFIED_BY_METADATA'};
+  });
+  return {scope:'FICTIONAL_OFFLINE',simulation:{status:'BUILT_IN_PREFIX_VERIFIED',accountingMode:ACCOUNTING_MODE.FILLED_SIMULATION,contract:simulation},
+    observations,observationRecords,notes:'Metadata only. Seed identity is not proof of observation arithmetic, extended scenario lineage or actual market provenance.'};
 }
