@@ -68,9 +68,21 @@ test('one local synthetic endpoint step updates bound observations and preserves
     assert.equal(refreshed.status,200);
     assert.equal(refreshed.body.lastScans.SIM09.classification,'PAPER_SETUP_STRONG');
     const startDate=refreshed.body.lastScans.SIM09.asOf;
-    const one=await request('/api/workstation/tickets',{symbol:'SIM09',paperUnits:1});
+    const scan=refreshed.body.lastScans.SIM09;
+    const p=scan.paperRiskPlan;
+    const reviewedScan={asOf:scan.asOf,binding:scan.syntheticReplayBinding,
+      entry:p.entryReference,stop:p.stopReference,target:p.targetReference};
+    const ticketBody={symbol:'SIM09',paperUnits:1,reviewedScan};
+    const beforeStale=await readFile(join(dir,'workstation.json'),'utf8');
+    for(const patch of [{asOf:'2026-02-13'},{binding:'0'.repeat(64)},{stop:p.stopReference+0.01}]){
+      const stale=await request('/api/workstation/tickets',{...ticketBody,reviewedScan:{...reviewedScan,...patch}});
+      assert.equal(stale.status,409);
+    }
+    assert.equal((await request('/api/workstation/tickets',{symbol:'SIM09',paperUnits:1})).status,409);
+    assert.equal(await readFile(join(dir,'workstation.json'),'utf8'),beforeStale);
+    const one=await request('/api/workstation/tickets',ticketBody);
     assert.equal(one.status,200);
-    const duplicate=await request('/api/workstation/tickets',{symbol:'SIM09',paperUnits:1});
+    const duplicate=await request('/api/workstation/tickets',ticketBody);
     assert.equal(duplicate.status,409);
     // Construct four explicitly source-bound legacy duplicates plus separate
     // unbound and mismatched rows. Never infer the legacy rows' source.
