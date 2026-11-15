@@ -20,3 +20,6 @@ The standalone validator rejects unknown sources, missing or incompatible accoun
 P1 neutral fixture/indicator extraction, P2 fictional monetary semantics, P3 distinct observation and virtual ledger policies, P4 state validation, P5 offline adapters, P6 end-to-end acceptance. No deployment or new execution behavior.
 
 Focused test: `node --test tests/simulation-contract.test.mjs tests/simulation-evidence.test.mjs`
+
+## P1 fixture extraction
+Shared pure fixture generation now lives in `src/synthetic-fixtures.mjs`; `src/synthetic-demo-fixture.mjs` retains the original validation adapter. The original engine and CLI exports remain compatible. Runtime replay and evidence modules import the fixture adapter rather than the CLI. Existing calculations, persistence format and fictional dataset values are unchanged. `tests/synthetic-fixtures.test.mjs` covers prefix consistency, wire shape, known fixture identity and copy isolation. P1 indicator extraction and independent end-to-end verification remain open.
