@@ -82,7 +82,16 @@ export async function runOperationalCycle({
     }
     const paperUnits=paperUnitsFor(scan.paperRiskPlan);
     if(paperUnits===null){actions.push({symbol,status:'NO_PAPER_CAPACITY'});continue;}
-    state=await callLocal(fetcher,base,'/api/workstation/tickets','POST',{symbol,paperUnits});
+    const body={symbol,paperUnits};
+    if(['SIM09','SIM10'].includes(symbol)){
+      if(!allowSyntheticDemo||!synthetic||!(/^[a-f0-9]{64}$/).test(scan.syntheticReplayBinding??'')){
+        actions.push({symbol,status:'FICTIONAL_SCAN_IDENTITY_REQUIRED'});continue;
+      }
+      const p=scan.paperRiskPlan;
+      body.reviewedScan={asOf:scan.asOf,binding:scan.syntheticReplayBinding,
+        entry:p.entryReference,stop:p.stopReference,target:p.targetReference};
+    }
+    state=await callLocal(fetcher,base,'/api/workstation/tickets','POST',body);
     actions.push({symbol,status:'PAPER_TICKET_CREATED',paperUnits,asOf:scan.asOf,
       ticketId:state.tickets?.[0]?.id||null});
   }
