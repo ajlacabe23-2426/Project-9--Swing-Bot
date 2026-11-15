@@ -2,6 +2,7 @@
  * Synthetic-only educational research simulator. No market-data provider, broker
  * integration, order-placement API, investment guidance or future-bar access.
  */
+import {ACCOUNTING_MODE} from './simulation-contract.mjs';
 export const VERSION=1;
 export const INITIAL_CASH=10_000;
 export const START_CURSOR=29;
@@ -104,7 +105,7 @@ export function report(state,bars=generateScenario(state.seed)){
     counterevidence:'The prior completed bar had 5-bar and 20-bar means of '+prior.fast?.toFixed(2)+' and '+prior.slow?.toFixed(2)+'. Averages lag observed prices and do not predict the next session.',
     uncertainty:'Synthetic generated data, no real-market validation. Simulated fills and costs omit many actual market conditions.',
     lastEvent:last?last.message:'No hypothetical order has been queued yet.',evidence};
-  return {mode:'SYNTHETIC_ONLY',environment:'LOCAL_PAPER_ONLY',market:'SIM-01 · generated hypothetical instrument',
+  return {accountingMode:ACCOUNTING_MODE.FILLED_SIMULATION,mode:'SYNTHETIC_ONLY',environment:'LOCAL_PAPER_ONLY',market:'SIM-01 · generated hypothetical instrument',
     seed:state.seed,cursor:state.cursor,totalBars:bars.length,date:now.date,
     bars:visibleBars.slice(-85).map((bar,i)=>({...bar,ma5:sma(visibleBars,visibleBars.length-Math.min(85,visibleBars.length)+i,5),ma20:sma(visibleBars,visibleBars.length-Math.min(85,visibleBars.length)+i,20)})),
     cash:round(state.cash,2),quantity:state.quantity,portfolioValue:value,pnl:round(value-INITIAL_CASH,2),
@@ -116,7 +117,7 @@ export function historicalExperiment(seed=73){
   const bars=generateScenario(seed);
   const one=run(initialState(seed),60,bars),two=run(one.state,60,bars),three=run(two.state,60,bars);
   const final=run(three.state,60,bars).state,summary=report(final,bars);
-  return {seed,strategy:'5/20 crossover, next-open simulation',start:bars[START_CURSOR].date,end:summary.date,
+  return {accountingMode:ACCOUNTING_MODE.FILLED_SIMULATION,seed,strategy:'5/20 crossover, next-open simulation',start:bars[START_CURSOR].date,end:summary.date,
     simulatedReturnPct:summary.returnPct,benchmarkPct:summary.benchmarkPct,peakDrawdownPct:summary.peakDrawdownPct,
     tradeCount:final.trades.length,caveat:'In-sample demonstration using generated, not historical market data. Not predictive or indicative of attainable real returns.'};
 }
