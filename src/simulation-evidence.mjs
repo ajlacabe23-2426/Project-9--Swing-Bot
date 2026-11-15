@@ -15,7 +15,10 @@ function canonicalBar(bar){
   return fields.map(k=>bar[k]);
 }
 function fixture(sourceId,seed){
-  if(sourceId==='SIM-01')return {bars:generateScenario(seed),exerciseVersion:'generated-v1-seed-'+seed};
+  if(sourceId==='SIM-01'){
+    if(!Number.isSafeInteger(seed)||seed<1||seed>1_000_000)throw new TypeError('Explicit fictional seed required');
+    return {bars:generateScenario(seed),exerciseVersion:'generated-v1-seed-'+seed};
+  }
   if(demoSymbols.includes(sourceId))return {bars:buildDemoDataset(sourceId).bars,exerciseVersion:'seeded-demo-v1'};
   throw new TypeError('Unrecognized fictional fixture');
 }
