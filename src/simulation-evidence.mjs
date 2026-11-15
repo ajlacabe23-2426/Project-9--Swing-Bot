@@ -1,8 +1,8 @@
 // Read-only evidence identity for built-in fictional classroom fixtures.
 // No provider access, user-supplied market input, financial calculations or persistence.
 import {createHash} from 'node:crypto';
-import {generateScenario} from './engine.mjs';
-import {buildDemoDataset} from '../scripts/seed-workstation-demo.mjs';
+import {generateScenario} from './synthetic-fixtures.mjs';
+import {buildDemoDataset} from './synthetic-demo-fixture.mjs';
 import {syntheticReplayBinding} from './workstation-store.mjs';
 import {ACCOUNTING_MODE,validateSimulationContract} from './simulation-contract.mjs';
 
