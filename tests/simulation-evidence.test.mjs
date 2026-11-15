@@ -21,6 +21,7 @@ test('built-in prefix identity is stable when only unseen bars change',()=>{
   assert.throws(()=>verifyBuiltInPrefix({...args,sourceId:'REAL'}),/Unrecognized/);
   assert.throws(()=>verifyBuiltInPrefix({...args,asOf:'2026-01-01'}),/cursor or date/);
   assert.throws(()=>verifyBuiltInPrefix({...args,seed:74}),/does not match/);
+  assert.throws(()=>verifyBuiltInPrefix({...args,seed:undefined}),/Explicit fictional seed/);
 });
 test('seed identity is checked; missing or extended evidence is not elevated',()=>{
   const base=buildDemoDataset('SIM09'),paper={seed:73,cursor:29};
