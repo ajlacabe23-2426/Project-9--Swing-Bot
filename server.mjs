@@ -9,6 +9,7 @@ import {evaluateSwingSetup} from './src/market-intelligence.mjs';
 import {fetchMassiveDailyDataset} from './src/providers/massive.mjs';
 import {WorkstationStore,REPLAY_SYMBOLS} from './src/workstation-store.mjs';
 import {advanceSyntheticPaperSession} from './src/synthetic-session-advance.mjs';
+import {readFictionalContractStatus} from './src/simulation-evidence.mjs';
 
 const root=dirname(fileURLToPath(import.meta.url));
 const staticFiles=new Map([
@@ -74,6 +75,10 @@ export async function createApp({
     try{
       if(!allowedHost(req.headers.host,port))return json(res,403,{error:'Host not allowed'});
       const url=new URL(req.url,'http://127.0.0.1:'+port);
+      if(req.method==='GET'&&url.pathname==='/api/simulation-contracts'){
+        if(url.search)return json(res,400,{error:'Contract status accepts no parameters'});
+        return json(res,200,readFictionalContractStatus(store.state,workstation.snapshot()));
+      }
       if(req.method==='GET'&&url.pathname==='/api/state')return json(res,200,report(store.state,generateScenario(store.state.seed)));
       if(req.method==='GET'&&url.pathname==='/api/experiment')return json(res,200,historicalExperiment(store.state.seed));
       if(req.method==='GET'&&url.pathname==='/api/workstation')return json(res,200,workstation.snapshot());
