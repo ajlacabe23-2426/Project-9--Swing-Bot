@@ -140,9 +140,14 @@ export async function createApp({
           }));
         }
         if(url.pathname==='/api/workstation/tickets'){
-          if(Object.keys(body).length!==2||!('symbol' in body)||!('paperUnits' in body))
-            return json(res,400,{error:'symbol and paperUnits required'});
-          return json(res,200,await workstation.createTicket(body.symbol,body.paperUnits,{createdAt:new Date().toISOString()}));
+          const fictional=typeof body.symbol==='string'&&REPLAY_SYMBOLS.includes(body.symbol.trim().toUpperCase());
+          const allowed=fictional?['symbol','paperUnits','reviewedScan']:['symbol','paperUnits'];
+          if(Object.keys(body).some(key=>!allowed.includes(key))||!Object.hasOwn(body,'symbol')||!Object.hasOwn(body,'paperUnits'))
+            return json(res,400,{error:'Invalid observation parameters'});
+          if(fictional&&(!body.reviewedScan||typeof body.reviewedScan!=='object'||Array.isArray(body.reviewedScan)))
+            return json(res,409,{error:'Refresh and review the fictional scan before recording'});
+          return json(res,200,await workstation.createTicket(body.symbol,body.paperUnits,
+            {createdAt:new Date().toISOString(),reviewedScan:body.reviewedScan}));
         }
 
         const keys=Object.keys(body),expected=url.pathname==='/api/reset'?['seed']:url.pathname==='/api/run'?['count']:[];
