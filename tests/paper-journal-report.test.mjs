@@ -14,6 +14,9 @@ const makeTicket=(id,status,paperPnl,rMultiple)=>({
 test('a fresh workstation exports a zero-activity non-revenue report',()=>{
   const report=summarizePaperJournal(sample());
   assert.equal(report.paperTicketCount,0);
+  assert.equal(report.accountingMode,'OBSERVATION_REFERENCE');
+  assert.equal(report.outcomeVerification,'STORED_REFERENCES_NOT_CERTIFIED');
+  assert.equal(report.eligibleForVirtualLedgerAggregation,false);
   assert.equal(report.sumHypotheticalReferencePnl,0);
   assert.equal(report.meanHypotheticalRMultiple,null);
   assert.equal(report.realMoneyPnlAvailable,false);
