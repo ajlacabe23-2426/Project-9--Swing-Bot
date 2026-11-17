@@ -7,7 +7,9 @@ import {PaperStore} from './src/store.mjs';
 import {modelCommentary} from './src/ai.mjs';
 import {evaluateSwingSetup} from './src/market-intelligence.mjs';
 import {fetchMassiveDailyDataset} from './src/providers/massive.mjs';
-import {WorkstationStore} from './src/workstation-store.mjs';
+import {WorkstationStore,REPLAY_SYMBOLS} from './src/workstation-store.mjs';
+import {advanceSyntheticPaperSession} from './src/synthetic-session-advance.mjs';
+import {readFictionalContractStatus} from './src/simulation-evidence.mjs';
 import {buildSyntheticAlertPreview} from './src/synthetic-alert-preview.mjs';
 import {assertPatchedNodeRuntime} from './src/runtime-security.mjs';
 
@@ -76,10 +78,14 @@ export async function createApp({
     try{
       if(!allowedHost(req.headers.host,port))return json(res,403,{error:'Host not allowed'});
       const url=new URL(req.url,'http://127.0.0.1:'+port);
+      if(req.method==='GET'&&url.pathname==='/api/simulation-contracts'){
+        if(url.search)return json(res,400,{error:'Contract status accepts no parameters'});
+        return json(res,200,readFictionalContractStatus(store.state,workstation.snapshot()));
+      }
       if(req.method==='GET'&&url.pathname==='/api/state')return json(res,200,report(store.state,generateScenario(store.state.seed)));
       if(req.method==='GET'&&url.pathname==='/api/experiment')return json(res,200,historicalExperiment(store.state.seed));
       if(req.method==='GET'&&url.pathname==='/api/workstation')return json(res,200,workstation.snapshot());
-      // Synthetic examples only: deterministic, read-only; do not touch the workstation store.
+      // Synthetic read-only preview: never creates notifications, paper tickets, market fetches or orders.
       if(req.method==='GET'&&url.pathname==='/api/alerts/preview'){
         if(url.search)return json(res,400,{error:'Preview does not accept parameters'});
         return json(res,200,buildSyntheticAlertPreview());
@@ -90,7 +96,8 @@ export async function createApp({
       }
       const postRoutes=[
         '/api/step','/api/run','/api/reset','/api/ai-report',
-        '/api/workstation/watchlist','/api/workstation/refresh','/api/workstation/tickets'
+        '/api/workstation/watchlist','/api/workstation/refresh','/api/workstation/tickets',
+        '/api/workstation/demo/advance'
       ];
       if(req.method==='POST'&&postRoutes.includes(url.pathname)){
         if(!allowedOrigin(req.headers.origin,port)||
@@ -111,7 +118,11 @@ export async function createApp({
           const {from,to}=completedMarketWindow(),entries=[],errors=[];
           for(const symbol of current.watchlist){
             try{
-              const dataset=await marketFetcher({symbol,from,to});
+              // In a fictional replay the committed workstation state is authoritative.
+              // A configured provider must never fetch these reserved demo symbols.
+              if(REPLAY_SYMBOLS.includes(symbol)&&process.env.MASSIVE_API_KEY)
+                throw new Error('Reserved synthetic symbol unavailable with provider configured');
+              const dataset=current.syntheticReplay?.[symbol]??await marketFetcher({symbol,from,to});
               const evaluation=evaluateSwingSetup(dataset);
               evaluation.chartBars=dataset.bars.slice(-60).map(bar=>({
                 date:bar.date,open:bar.open,high:bar.high,low:bar.low,close:bar.close,volume:bar.volume
@@ -124,10 +135,27 @@ export async function createApp({
           const next=await workstation.applyRefresh(entries,{refreshedAt:new Date().toISOString(),errors});
           return json(res,200,{...next,refreshWindow:{from,to}});
         }
+        if(url.pathname==='/api/workstation/demo/advance'){
+          if(Object.keys(body).length!==3||!('symbol' in body)||!('scenario' in body)||!('expectedAsOf' in body))
+            return json(res,400,{error:'Demo session step requires symbol, scenario and expectedAsOf'});
+          if(process.env.MASSIVE_API_KEY)
+            return json(res,409,{error:'Synthetic session step is unavailable when a real-data provider is configured'});
+          // Local-only explicit demo route: works on built-in SIM09/SIM10 files,
+          // never invokes the provider, ticket creator, trade execution or alert delivery.
+          return json(res,200,await advanceSyntheticPaperSession({
+            workstation,dataDir:dirname(workstation.file),
+            symbol:body.symbol,scenario:body.scenario,expectedAsOf:body.expectedAsOf
+          }));
+        }
         if(url.pathname==='/api/workstation/tickets'){
-          if(Object.keys(body).length!==2||!('symbol' in body)||!('paperUnits' in body))
-            return json(res,400,{error:'symbol and paperUnits required'});
-          return json(res,200,await workstation.createTicket(body.symbol,body.paperUnits,{createdAt:new Date().toISOString()}));
+          const fictional=typeof body.symbol==='string'&&REPLAY_SYMBOLS.includes(body.symbol.trim().toUpperCase());
+          const allowed=fictional?['symbol','paperUnits','reviewedScan']:['symbol','paperUnits'];
+          if(Object.keys(body).some(key=>!allowed.includes(key))||!Object.hasOwn(body,'symbol')||!Object.hasOwn(body,'paperUnits'))
+            return json(res,400,{error:'Invalid observation parameters'});
+          if(fictional&&(!body.reviewedScan||typeof body.reviewedScan!=='object'||Array.isArray(body.reviewedScan)))
+            return json(res,409,{error:'Refresh and review the fictional scan before recording'});
+          return json(res,200,await workstation.createTicket(body.symbol,body.paperUnits,
+            {createdAt:new Date().toISOString(),reviewedScan:body.reviewedScan}));
         }
 
         const keys=Object.keys(body),expected=url.pathname==='/api/reset'?['seed']:url.pathname==='/api/run'?['count']:[];

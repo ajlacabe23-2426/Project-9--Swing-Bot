@@ -2,49 +2,12 @@
 import {readFile,writeFile,mkdir} from 'node:fs/promises';
 import {dirname,join,resolve} from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
-import {CURRENT_MARKET_DATA_SCHEMA,normalizeMarketDataset,evaluateSwingSetup} from '../src/market-intelligence.mjs';
+import {normalizeMarketDataset,evaluateSwingSetup} from '../src/market-intelligence.mjs';
 import {WorkstationStore} from '../src/workstation-store.mjs';
+import {buildDemoDataset,DEMO_SYMBOLS,LABEL} from '../src/synthetic-demo-fixture.mjs';
+export {buildDemoDataset,DEMO_SYMBOLS};
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
-const LABEL='Project 9 ENGINEERED SYNTHETIC DEMO - NOT REAL MARKET DATA';
-export const DEMO_SYMBOLS=['SIM09','SIM10'];
-
-export function buildDemoDataset(symbol,{retrievedAt='2026-10-24T00:00:00.000Z'}={}){
-  if(!DEMO_SYMBOLS.includes(symbol))throw new Error('Unknown demo symbol');
-  const upward=symbol==='SIM09';
-  const bars=[],date=new Date('2025-09-01T00:00:00.000Z');
-  while(bars.length<120){
-    date.setUTCDate(date.getUTCDate()+1);
-    if([0,6].includes(date.getUTCDay()))continue;
-    const index=bars.length;
-    const close=Number((upward?100+index*0.22:145-index*0.18).toFixed(4));
-    const open=Number((close+(upward?-0.08:0.08)).toFixed(4));
-    bars.push({date:date.toISOString().slice(0,10),open,
-      high:Number((Math.max(open,close)+0.12).toFixed(4)),
-      low:Number((Math.min(open,close)-0.12).toFixed(4)),
-      close,volume:100_000+index*20});
-  }
-  if(upward){
-    const last=bars.at(-1),previous=bars.at(-2);
-    last.open=Number((previous.close+0.03).toFixed(4));
-    last.close=Number((Math.max(...bars.slice(-21,-1).map(b=>b.high))*1.025).toFixed(4));
-    last.high=Number((last.close+0.15).toFixed(4));
-    last.low=Number((last.open-0.15).toFixed(4));
-    last.volume=350_000;
-  }
-  const dataset={
-    schema:CURRENT_MARKET_DATA_SCHEMA,symbol,currency:'USD',
-    source:LABEL,mode:'HISTORICAL',sourceAsOf:bars.at(-1).date,
-    priceAdjustment:'RAW',
-    provenance:{retrievedAt,adjustmentMethod:'RAW_UNADJUSTED',
-      corporateActions:'NOT_VERIFIED',survivorship:'NOT_ASSESSED',
-      licensing:'NOT_VERIFIED'},
-    bars
-  };
-  normalizeMarketDataset(dataset);
-  return dataset;
-}
-
 export async function seedWorkstationDemo({dataDir=join(root,'.data')}={}){
   dataDir=resolve(dataDir);
   const store=new WorkstationStore(join(dataDir,'workstation.json'));
