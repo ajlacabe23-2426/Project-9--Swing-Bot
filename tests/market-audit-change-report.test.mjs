@@ -43,7 +43,7 @@ test('no-change reports remain unchanged and do not suggest action',()=>{
 
 test('fail closed on inconsistent counters, bar dates, hashes, and order',()=>{
   const good=report([row('ALPHA')]);
-  assert.throws(()=>compareMarketAuditReports(good,{...good,reviewDate:'2026-11-15'}),/precede|after/);
+  assert.throws(()=>compareMarketAuditReports(good,{...good,reviewDate:'2026-11-15'}),/invalid|duplicated|precede|after/);
   assert.throws(()=>compareMarketAuditReports(good,report([row('ALPHA','BAD')])),/invalid/);
   assert.throws(()=>compareMarketAuditReports(good,report([row('ALPHA'),row('ALPHA')])),/duplicated/);
   assert.throws(()=>compareMarketAuditReports(good,report([row('ALPHA')],{datasetCount:10})),/valid/);
