@@ -129,17 +129,11 @@ export class WorkstationStore{
           throw new Error('Refresh evidence date must match the latest completed market bar');
         if(previous&&evaluation.asOf<previous.asOf)
           throw new Error('Stale market refresh cannot replace newer research evidence');
-        if(previous&&previous.classification!==evaluation.classification){
-          state.alerts.unshift({
-            id:'A'+(state.alerts.length+1)+'-'+dataset.symbol+'-'+evaluation.asOf,
-            symbol:dataset.symbol,
-            from:previous.classification,
-            to:evaluation.classification,
-            scoreFrom:previous.score,
-            scoreTo:evaluation.score,
-            asOf:evaluation.asOf
-          });
-        }
+        // Never turn an unverified scan classification change into a stored
+        // opportunity alert. The current wire dataset has no independently
+        // accepted vintage/rights/session attestation; a source label is NOT
+        // approval. Preserve any historical records for audit only.
+        // A future alert feature must enforce eligibility BEFORE this mutation.
         state.lastScans[dataset.symbol]=evaluation;
         // Keep the original validated wire contract: normalizeMarketDataset adds an
         // internal provenance.contract field that is not valid on re-import.
