@@ -19,6 +19,9 @@ export async function analyzeLocalRegimeFiles(files,reviewDate,windowBars=20){
   }
   return analyzeMarketRegimeWindows(entries,{reviewDate,windowBars});
 }
+export function analyzeMissionSnapshot(entries,reviewDate,windowBars=20){
+  return analyzeMarketRegimeWindows(entries,{reviewDate,windowBars});
+}
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   const args=process.argv.slice(2);
   if(args.length<3||args[0]!=='--as-of'){

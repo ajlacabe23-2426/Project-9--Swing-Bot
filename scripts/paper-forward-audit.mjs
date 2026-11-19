@@ -115,6 +115,16 @@ export async function auditLocalPaperForwardFiles(files,options){
     results
   };
 }
+export async function auditMissionSnapshot(entries,options){
+  const symbols=new Set(),results=[];
+  for(const entry of entries){
+    const output=auditPaperForward(entry.data,options);
+    if(symbols.has(output.symbol))throw new Error('Duplicate market symbol');
+    symbols.add(output.symbol);
+    results.push({...output,fileSha256:entry.sha256,...await researchManifest(output,entry.sha256,entry.data)});
+  }
+  return {schema:'project9-paper-forward-batch-v2',datasetCount:results.length,researchOnly:true,realOrdersCreated:false,results};
+}
 
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   const args=process.argv.slice(2);
