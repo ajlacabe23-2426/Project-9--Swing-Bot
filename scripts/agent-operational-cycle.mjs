@@ -64,6 +64,12 @@ export async function runOperationalCycle({
     }
     const sourceName=typeof scan.source==='object'&&scan.source!==null?String(scan.source.name||''):String(scan.source||'');
     const synthetic=SYNTHETIC_SOURCE.test(sourceName);
+    // A declared provider name and recent bar do not prove eligibility for
+    // unattended ticket creation. Keep only explicitly opted-in fiction here.
+    if(!synthetic){
+      actions.push({symbol,status:'UNVERIFIED_SOURCE_AUTO_PAPER_BLOCKED',asOf:scan.asOf});
+      continue;
+    }
     if(synthetic&&!allowSyntheticDemo){
       actions.push({symbol,status:'SYNTHETIC_REQUIRES_DEMO_OPT_IN'});continue;
     }
@@ -82,7 +88,16 @@ export async function runOperationalCycle({
     }
     const paperUnits=paperUnitsFor(scan.paperRiskPlan);
     if(paperUnits===null){actions.push({symbol,status:'NO_PAPER_CAPACITY'});continue;}
-    state=await callLocal(fetcher,base,'/api/workstation/tickets','POST',{symbol,paperUnits});
+    const body={symbol,paperUnits};
+    if(['SIM09','SIM10'].includes(symbol)){
+      if(!allowSyntheticDemo||!synthetic||!(/^[a-f0-9]{64}$/).test(scan.syntheticReplayBinding??'')){
+        actions.push({symbol,status:'FICTIONAL_SCAN_IDENTITY_REQUIRED'});continue;
+      }
+      const p=scan.paperRiskPlan;
+      body.reviewedScan={asOf:scan.asOf,binding:scan.syntheticReplayBinding,
+        entry:p.entryReference,stop:p.stopReference,target:p.targetReference};
+    }
+    state=await callLocal(fetcher,base,'/api/workstation/tickets','POST',body);
     actions.push({symbol,status:'PAPER_TICKET_CREATED',paperUnits,asOf:scan.asOf,
       ticketId:state.tickets?.[0]?.id||null});
   }

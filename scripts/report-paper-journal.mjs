@@ -3,6 +3,8 @@ import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {isValidWorkstationState} from '../src/workstation-store.mjs';
 
+import {ACCOUNTING_MODE} from '../src/simulation-contract.mjs';
+
 const OUTCOMES=new Set([
   'TARGET_REFERENCE_TOUCHED','STOP_REFERENCE_TOUCHED',
   'AMBIGUOUS_SAME_BAR','OPEN_PAPER_OBSERVATION'
@@ -36,6 +38,9 @@ export function summarizePaperJournal(state){
   const closed=counts.TARGET_REFERENCE_TOUCHED+counts.STOP_REFERENCE_TOUCHED;
   return {
     schema:'project9-paper-journal-audit-v1',
+    accountingMode:ACCOUNTING_MODE.OBSERVATION_REFERENCE,
+    outcomeVerification:'STORED_REFERENCES_NOT_CERTIFIED',
+    eligibleForVirtualLedgerAggregation:false,
     researchOnly:true,
     brokerConnected:false,
     realMoneyPnlAvailable:false,

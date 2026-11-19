@@ -30,6 +30,19 @@
 </article>
 </div>
 
+<article class="panel" id="synthetic-session-lab">
+<div class="panel-head"><div><div class="panel-kicker">SYNTHETIC REPLAY / PAPER JOURNAL</div><h2>Advance one invented session</h2></div><span class="tag outline">DEMO ONLY · NO MARKET FEED</span></div>
+<p class="supporting">SIM09/SIM10 only. A refresh re-reads the same stored bar; this control deliberately appends one fictional weekday bar and recalculates matching source-bound paper observations. Older unbound observations remain unchanged. Select a scenario to exercise the outcome journal; it is not a price forecast or a simulated broker fill.</p>
+<div class="ticket-controls"><label for="demo-scenario">Scenario</label>
+<select id="demo-scenario">
+<option value="HOLD">Stay between stop and target</option>
+<option value="TARGET">Touch frozen target reference</option>
+<option value="STOP">Touch frozen stop reference</option>
+<option value="BOTH">Touch stop and target in same bar (ambiguous)</option>
+</select><button id="demo-advance" class="button main-button" type="button" disabled>Advance synthetic session →</button></div>
+<p id="demo-step-status" class="supporting" role="status">Choose a built-in synthetic watchlist symbol and refresh it first.</p>
+<p class="supporting">No existing tickets are deleted. New duplicate tickets for the same session or an open symbol are blocked. Bar dates use fictional weekday progression, not an exchange holiday calendar.</p>
+</article>
 <article class="panel decision-panel"><div class="panel-head"><div><div class="panel-kicker">DECISION PATH / CODE STRUCTURE</div><h2>Explore entry &amp; exit references</h2></div><span class="tag">READ-ONLY 3D MAP</span></div>
 <p class="supporting">Follow completed bars through scanner rules, paper risk references, and outcomes. Switch to code labels to see the functions behind each step.</p>
 <div class="map-controls"><button type="button" id="map-left" class="button secondary-button" aria-label="Rotate map left">Rotate left</button><button type="button" id="map-right" class="button secondary-button" aria-label="Rotate map right">Rotate right</button><button type="button" id="map-reset" class="button secondary-button">Reset view</button><button type="button" id="map-flat" class="button secondary-button" aria-pressed="false">Flat view</button><button type="button" id="map-code" class="button secondary-button" aria-pressed="false">Code labels</button></div>
@@ -40,7 +53,7 @@
 </article>
 
 <div class="secondary-grid workstation-lower">
-<article class="panel"><div class="panel-head"><div><div class="panel-kicker">03 / CHANGE DETECTION</div><h2>Classification alerts</h2></div><span class="tag" id="alert-count">0 ALERTS</span></div><div id="alerts" class="alert-list"><div class="empty">No classification changes recorded.</div></div></article>
+<article class="panel"><div class="panel-head"><div><div class="panel-kicker">03 / CHANGE DETECTION</div><h2>Archived classification changes</h2></div><span class="tag" id="alert-count">0 RECORDS</span></div><p class="supporting">Old classification records are unverified historical notes. New automatic alerts are disabled until independent source eligibility is established.</p><div id="alerts" class="alert-list"><div class="empty">No archived classification records.</div></div></article>
 <article class="panel ledger"><div class="panel-head"><div><div class="panel-kicker">04 / PAPER OUTCOME JOURNAL</div><h2>Expected vs observed</h2></div><span class="tag mint" id="ticket-count">0 TICKETS</span></div>
 <div class="ledger-scroll"><table><thead><tr><th>ID</th><th>SYMBOL</th><th>OPENED</th><th>ENTRY REF</th><th>STOP REF</th><th>TARGET REF</th><th>STATUS</th><th>PAPER P/L</th><th>R</th></tr></thead><tbody id="ticket-body"><tr><td colspan="9" class="empty">No paper tickets yet.</td></tr></tbody></table></div>
 <div class="ledger-foot">Outcomes use completed daily OHLC bars. If stop and target both appear in one bar, the result is marked ambiguous rather than inventing intraday order.</div></article>
