@@ -39,9 +39,9 @@ test('port is strictly loopback with bounded port; paper sizing cannot exceed on
   assert.equal(paperUnitsFor({maxPaperUnits:500}),1);
   assert.equal(paperUnitsFor({maxPaperUnits:0.00001}),null);
 });
-test('refresh plus explicit opt-in creates one persistent paper ticket',async()=>{
-  const m=mockServer();
-  const report=await runOperationalCycle({now:NOW,fetcher:m.fetcher,autoPaper:true});
+test('only explicit fictional demo can create an unattended virtual ticket',async()=>{
+  const m=mockServer({source:'Project 9 ENGINEERED SYNTHETIC DEMO - NOT REAL MARKET DATA'});
+  const report=await runOperationalCycle({now:NOW,fetcher:m.fetcher,autoPaper:true,allowSyntheticDemo:true});
   assert.deepEqual(m.actions.map(x=>x.path),[
     '/api/workstation','/api/workstation/refresh','/api/workstation/tickets']);
   assert.equal(m.actions[2].headers.Origin,'http://127.0.0.1:4179');
@@ -82,18 +82,22 @@ test('structured provider source metadata blocks synthetic tickets without demo 
   assert.equal(demo.actions[0].status,'PAPER_TICKET_CREATED');
 });
 
-test('stale or future bars do not create paper tickets',async()=>{
-  for(const asOf of ['2026-10-01','2026-11-09']){
-    const m=mockServer({asOf});
-    const r=await runOperationalCycle({now:NOW,fetcher:m.fetcher,autoPaper:true});
-    assert.equal(r.actions[0].status,'STALE_OR_FUTURE_BAR');
-    assert.equal(m.state.tickets.length,0);
+test('external sources never auto-create virtual tickets, regardless of freshness',async()=>{
+  for(const asOf of ['2026-10-01','2026-11-06','2026-11-09']){
+    for(const allowSyntheticDemo of [false,true]){
+      const m=mockServer({asOf});
+      const r=await runOperationalCycle({now:NOW,fetcher:m.fetcher,autoPaper:true,allowSyntheticDemo});
+      assert.equal(r.actions[0].status,'UNVERIFIED_SOURCE_AUTO_PAPER_BLOCKED');
+      assert.equal(r.mutations.virtualTicketsCreated,0);
+      assert.deepEqual(m.actions.map(x=>x.path),['/api/workstation','/api/workstation/refresh']);
+      assert.equal(m.state.tickets.length,0);
+    }
   }
 });
-test('open or same-bar paper tickets prevent duplicate creation',async()=>{
-  const m=mockServer({existingTickets:[{symbol:'TEST',openedAsOf:'2026-11-01',
+test('fictional open or same-bar paper tickets prevent duplicate creation',async()=>{
+  const m=mockServer({source:'Project 9 ENGINEERED SYNTHETIC DEMO - NOT REAL MARKET DATA',existingTickets:[{symbol:'TEST',openedAsOf:'2026-11-01',
     outcome:{status:'OPEN_PAPER_OBSERVATION'}}]});
-  const report=await runOperationalCycle({now:NOW,fetcher:m.fetcher,autoPaper:true});
+  const report=await runOperationalCycle({now:NOW,fetcher:m.fetcher,autoPaper:true,allowSyntheticDemo:true});
   assert.equal(report.actions[0].status,'ALREADY_TRACKED');
   assert.equal(m.state.tickets.length,1);
 });
