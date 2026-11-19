@@ -4,13 +4,14 @@
  * This is invoked by a trusted StarNet Workbench or an ordinary local terminal.
  * AI agents do not choose or route market orders.
  */
-import {mkdir,readFile,rename,writeFile} from 'node:fs/promises';
+import {mkdir,rename,writeFile} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
-import {dirname,join,resolve} from 'node:path';
+import {basename,dirname,join,resolve} from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
-import {auditLocalMarketFiles} from './audit-watchlist-data.mjs';
-import {analyzeLocalRegimeFiles} from './research-market-regimes.mjs';
-import {auditLocalPaperForwardFiles} from './paper-forward-audit.mjs';
+import {auditMissionSnapshot} from './audit-watchlist-data.mjs';
+import {analyzeMissionSnapshot} from './research-market-regimes.mjs';
+import {auditMissionSnapshot as auditPaperMissionSnapshot} from './paper-forward-audit.mjs';
+import {assertMissionInputSnapshot,createMissionInputSnapshot,snapshotEntries} from '../src/mission-input-snapshot.mjs';
 import {runOperationalCycle,validatePort} from './agent-operational-cycle.mjs';
 import {isStrictISODate} from '../src/market-intelligence.mjs';
 
@@ -135,23 +136,24 @@ export async function runStarNetMission({
   if(typeof paperAuto!=='boolean'||typeof demo!=='boolean')throw new Error('Invalid mission mode');
   port=validatePort(port);
   dataDir=resolve(dataDir);
-  const paths=[];
-  for(const symbol of symbols){
-    const path=join(dataDir,symbol+'.json');
-    const bytes=await readFile(path);
-    if(bytes.byteLength>2_000_000)throw new Error('Dataset exceeds 2 MB: '+symbol);
-    const dataset=JSON.parse(bytes.toString('utf8'));
-    if(dataset.symbol!==symbol)throw new Error('Dataset symbol does not match local filename: '+symbol);
-    if(demo&&!syntheticName.test(dataset.source||''))
+  const paths=symbols.map(symbol=>join(dataDir,symbol+'.json'));
+  const snapshot=await createMissionInputSnapshot(paths,{validate(data,absolute){
+    const symbol=basename(absolute,'.json');
+    if(data.symbol!==symbol)throw new Error('Dataset symbol does not match local filename: '+symbol);
+    if(demo&&!syntheticName.test(data.source||''))
       throw new Error('Explicit demo mode accepts labeled synthetic datasets only: '+symbol);
-    paths.push(path);
-  }
+  }});
+  const entries=snapshotEntries(snapshot);
   // Run every independent research verification BEFORE write-capable cycle.
   // If any input or historical evaluation fails, no paper ticket is created.
-  const audit=await auditLocalMarketFiles(paths,asOf);
-  const regimes=await analyzeLocalRegimeFiles(paths,asOf,windowBars);
-  const paperForward=await auditLocalPaperForwardFiles(paths,{asOf,holdingBars:5,feeBps:10,slippageBps:10});
+  const audit=auditMissionSnapshot(entries,asOf);
+  await assertMissionInputSnapshot(snapshot);
+  const regimes=analyzeMissionSnapshot(entries,asOf,windowBars);
+  await assertMissionInputSnapshot(snapshot);
+  const paperForward=await auditPaperMissionSnapshot(entries,{asOf,holdingBars:5,feeBps:10,slippageBps:10});
+  await assertMissionInputSnapshot(snapshot);
   const paperCycle=paperAuto?await cycleRunner({port,autoPaper:true,allowSyntheticDemo:demo,now}):null;
+  await assertMissionInputSnapshot(snapshot);
   const report={
     schema:'project9-starnet-crew-mission-v1',
     runId:randomUUID(),generatedAt:now.toISOString(),
