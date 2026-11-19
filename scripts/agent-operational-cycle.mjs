@@ -64,6 +64,12 @@ export async function runOperationalCycle({
     }
     const sourceName=typeof scan.source==='object'&&scan.source!==null?String(scan.source.name||''):String(scan.source||'');
     const synthetic=SYNTHETIC_SOURCE.test(sourceName);
+    // A declared provider name and recent bar do not prove eligibility for
+    // unattended ticket creation. Keep only explicitly opted-in fiction here.
+    if(!synthetic){
+      actions.push({symbol,status:'UNVERIFIED_SOURCE_AUTO_PAPER_BLOCKED',asOf:scan.asOf});
+      continue;
+    }
     if(synthetic&&!allowSyntheticDemo){
       actions.push({symbol,status:'SYNTHETIC_REQUIRES_DEMO_OPT_IN'});continue;
     }
