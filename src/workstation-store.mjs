@@ -165,17 +165,10 @@ export class WorkstationStore{
           if(committed&&binding!==syntheticReplayBinding(committed))
             throw Object.assign(new Error('Synthetic replay changed; refresh the saved replay state'),{status:409});
         }
-        if(!reserved&&!suppressAlerts&&previous&&previous.classification!==evaluation.classification){
-          state.alerts.unshift({
-            id:'A'+(state.alerts.length+1)+'-'+dataset.symbol+'-'+evaluation.asOf,
-            symbol:dataset.symbol,
-            from:previous.classification,
-            to:evaluation.classification,
-            scoreFrom:previous.score,
-            scoreTo:evaluation.score,
-            asOf:evaluation.asOf
-          });
-        }
+        // Classification changes are retained in local scans but cannot
+        // create opportunity alerts from an unverified source. Existing legacy
+        // records remain archived. Synthetic replay likewise has no alerts.
+        // No independent market-evidence eligibility gate exists yet.
         state.lastScans[dataset.symbol]=evaluation;
         // Keep the original validated wire contract: normalizeMarketDataset adds an
         // internal provenance.contract field that is not valid on re-import.
