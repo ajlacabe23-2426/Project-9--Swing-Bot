@@ -64,6 +64,13 @@ export async function runOperationalCycle({
     }
     const sourceName=typeof scan.source==='object'&&scan.source!==null?String(scan.source.name||''):String(scan.source||'');
     const synthetic=SYNTHETIC_SOURCE.test(sourceName);
+    // Authenticated provider/point-in-time acceptance is not available on
+    // this API. A claimed source name, completed date or demo flag cannot
+    // establish eligibility for unattended paper-ticket side effects.
+    if(!synthetic){
+      actions.push({symbol,status:'UNVERIFIED_SOURCE_AUTO_PAPER_BLOCKED',asOf:scan.asOf});
+      continue;
+    }
     if(synthetic&&!allowSyntheticDemo){
       actions.push({symbol,status:'SYNTHETIC_REQUIRES_DEMO_OPT_IN'});continue;
     }

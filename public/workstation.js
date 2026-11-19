@@ -125,8 +125,8 @@ function renderReferenceView(scan){
   return ticket;
 }
 function renderAlerts(){
-  const box=$('alerts');box.replaceChildren();const alerts=state?.alerts||[];$('alert-count').textContent=alerts.length+' ALERT'+(alerts.length===1?'':'S');
-  if(!alerts.length){const empty=document.createElement('div');empty.className='empty';empty.textContent='No classification changes recorded.';box.append(empty);return;}
+  const box=$('alerts');box.replaceChildren();const alerts=state?.alerts||[];$('alert-count').textContent=alerts.length+' RECORD'+(alerts.length===1?'':'S');
+  if(!alerts.length){const empty=document.createElement('div');empty.className='empty';empty.textContent='No archived classification records. Automatic alerts are disabled.';box.append(empty);return;}
   for(const alert of alerts.slice(0,12)){
     const card=document.createElement('div');card.className='alert-card';
     const title=document.createElement('strong');title.textContent=alert.symbol+' · '+alert.from.replaceAll('_',' ')+' → '+alert.to.replaceAll('_',' ');
