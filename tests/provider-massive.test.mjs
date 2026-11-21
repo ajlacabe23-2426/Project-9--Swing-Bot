@@ -114,14 +114,15 @@ test('provider rejects impossible calendar dates before requesting market data',
 });
 
 
-test('provider rejects coerced, absent or fractional OHLCV fields and intraday timestamps',async()=>{
+test('provider rejects invalid OHLCV fields and intraday timestamps',async()=>{
   const request={symbol:'AAPL',from:'2026-01-01',to:'2026-06-30',apiKey:'test-key-123'};
   const valid=results();
   const wrong=[
     {v:null},
     {v:undefined},
     {v:'100000'},
-    {v:100.5},
+    {v:Infinity},
+    {v:Number.MAX_SAFE_INTEGER+1},
     {v:-1},
     {o:'100'},
     {h:null},
@@ -143,6 +144,7 @@ test('provider rejects coerced, absent or fractional OHLCV fields and intraday t
 
 test('accepts delayed daily data across the Eastern daylight saving change',async()=>{
   const bars=results();
+  bars[34].v=100034.25;
   assert.equal(new Date(bars[0].t).toISOString(),'2026-01-02T05:00:00.000Z');
   assert.equal(new Date(bars.find(bar=>new Date(bar.t).toISOString().startsWith('2026-03-09')).t).toISOString(),
     '2026-03-09T04:00:00.000Z');
@@ -151,5 +153,8 @@ test('accepts delayed daily data across the Eastern daylight saving change',asyn
     fetchImpl:async()=>({ok:true,status:200,json:async()=>({status:'DELAYED',ticker:'AAPL',results:bars})})
   });
   assert.equal(dataset.bars[0].date,'2026-01-02');
+  assert.equal(dataset.bars[34].volume,100034.25);
+  assert.equal(normalizeMarketDataset(dataset).bars[34].volume,100034.25);
+  assert.equal(analyzeDailyBreakout(dataset).symbol,'AAPL');
   assert.ok(dataset.bars.some(bar=>bar.date==='2026-03-09'));
 });
