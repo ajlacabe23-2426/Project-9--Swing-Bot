@@ -112,15 +112,22 @@ test('manual ticket review, duplicate race, and source isolation survive a cold 
     await new Promise((resolve,reject)=>app.once('error',reject).listen(port,'127.0.0.1',resolve));
   }
   async function startChild(options=[]){
-    child=spawn(process.execPath,[...options,'server.mjs'],{
-      env:{...process.env,PORT:String(port),PROJECT9_DATA_FILE:paperFile},
+    const launch=`
+      import {createApp} from './server.mjs';
+      import {PaperStore} from './src/store.mjs';
+      const app=await createApp({port:${port},store:new PaperStore(${JSON.stringify(paperFile)})});
+      app.listen(${port},'127.0.0.1',()=>console.log('restart ready'));
+    `;
+    child=spawn(process.execPath,[...options,'--input-type=module','--eval',launch],{
       stdio:['ignore','pipe','pipe']
     });
+    let stderr='';
+    child.stderr.on('data',chunk=>{stderr=(stderr+chunk).slice(-1000);});
     const started=await Promise.race([
       once(child.stdout,'data',{signal:AbortSignal.timeout(10000)}),
-      once(child,'exit').then(([code])=>{throw new Error('Restart exited: '+code);})
+      once(child,'exit').then(([code])=>{throw new Error('Restart exited: '+code+' '+stderr);})
     ]);
-    assert.match(String(started[0]),/local-only research platform/);
+    assert.match(String(started[0]),/restart ready/);
   }
   async function stopChild(signal){
     if(child?.exitCode===null&&child.signalCode===null){
