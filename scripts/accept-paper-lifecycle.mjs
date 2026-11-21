@@ -104,7 +104,7 @@ export async function runPaperLifecycleAcceptance(){
     const noSetup=await post('/api/workstation/tickets',{
       symbol:'SIM10',paperUnits:0.001,
       reviewedScan:reviewed(initial.body.lastScans.SIM10)});
-    assert.equal(noSetup.status,400);
+    assert.equal(noSetup.status,409);
     assert.match(noSetup.body.error,/watch or strong research classification/);
 
     const attempted={symbol:'SIM09',paperUnits:0.001,
