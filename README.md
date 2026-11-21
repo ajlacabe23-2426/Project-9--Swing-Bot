@@ -241,3 +241,14 @@ and calendar revision. Review `refreshErrors` before trusting a summary.
 Start the workstation with `npm start` or `npm run agent:launch` using the same
 session-policy configuration. Run recurring refreshes against the existing
 loopback server so one process owns the workstation journal.
+
+## Phase 3 synthetic paper-ticket lifecycle acceptance (draft)
+
+A separate offline acceptance runner checks that a nonqualifying engineered scan cannot open a ticket, while a qualifying **fictional** scan is subject to reviewed-scan binding, concurrency rejection, restart persistence, and subsequent synthetic observation updates. It never reads the workstation's existing `.data`, fetches real market data, enables scheduling, or creates an actual order.
+
+```bash
+npm run accept:paper-lifecycle
+node --test tests/paper-lifecycle-acceptance.test.mjs
+```
+
+Read the [Phase 3 ticket lifecycle acceptance matrix](docs/PHASE3_PAPER_TICKET_LIFECYCLE_ACCEPTANCE_2026-11-21.md) before treating a test report as evidence. This is distinct from the AAPL `NO_PAPER_SETUP` scan, which correctly created no ticket.
