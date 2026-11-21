@@ -1,6 +1,10 @@
 import {normalizeMarketDataset,CURRENT_MARKET_DATA_SCHEMA,isStrictISODate} from '../market-intelligence.mjs';
 
 const BASE_URL='https://api.massive.com';
+const exchangeTimestamp=new Intl.DateTimeFormat('sv-SE',{
+  timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit',
+  hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'
+});
 function normalizedSymbol(value){
   const symbol=String(value||'').trim().toUpperCase();
   if(!/^[A-Z0-9.\-]{1,15}$/.test(symbol))throw new Error('Invalid Massive stock symbol');
@@ -34,7 +38,7 @@ export async function fetchMassiveDailyDataset({symbol,from,to,apiKey,fetchImpl=
   if(!response||!response.ok)throw new Error('Massive market-data request failed with status '+(response?.status??'unknown'));
   let payload;
   try{payload=await response.json();}catch{throw new Error('Massive returned invalid JSON');}
-  if(!payload||payload.status!=='OK'||!Array.isArray(payload.results))throw new Error('Massive returned an invalid aggregate response');
+  if(!payload||!['OK','DELAYED'].includes(payload.status)||!Array.isArray(payload.results))throw new Error('Massive returned an invalid aggregate response');
   // A successful HTTP response does not establish that the data is for the requested symbol.
   // Never attribute another instrument's prices to this research watchlist entry.
   if(payload.ticker!==ticker)throw new Error('Massive aggregate ticker does not match the requested symbol');
@@ -49,12 +53,12 @@ export async function fetchMassiveDailyDataset({symbol,from,to,apiKey,fetchImpl=
        !['o','h','l','c'].every(key=>typeof item[key]==='number'&&Number.isFinite(item[key])&&item[key]>0))
       throw malformed();
     const instant=new Date(item.t);
-    if(!Number.isFinite(instant.getTime())||
-       instant.getUTCHours()!==0||instant.getUTCMinutes()!==0||
-       instant.getUTCSeconds()!==0||instant.getUTCMilliseconds()!==0)
+    if(!Number.isFinite(instant.getTime())||instant.getUTCMilliseconds()!==0)
       throw malformed();
+    const [date,localTime]=exchangeTimestamp.format(instant).split(' ');
+    if(localTime!=='00:00:00')throw malformed();
     const bar={
-      date:instant.toISOString().slice(0,10),
+      date,
       open:item.o,high:item.h,low:item.l,close:item.c,volume:item.v
     };
     if(bar.date<from||bar.date>to)

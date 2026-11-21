@@ -10,7 +10,8 @@ function results(count=90){
     date.setUTCDate(date.getUTCDate()+1);
     if([0,6].includes(date.getUTCDay()))continue;
     const open=price,close=price*1.002,high=Math.max(open,close)*1.005,low=Math.min(open,close)*0.995;
-    out.push({t:date.getTime(),o:open,h:high,l:low,c:close,v:100000+out.length});
+    const easternOffset=date<new Date('2026-03-08')?5:4;
+    out.push({t:date.getTime()+easternOffset*3600000,o:open,h:high,l:low,c:close,v:100000+out.length});
     price=close;
   }
   return out;
@@ -77,12 +78,12 @@ test('provider refuses a successful response for another ticker or a bar outside
     ...request,fetchImpl:async()=>({ok:true,status:200,json:async()=>({status:'OK',results:results()})})
   }),/ticker does not match/);
   const outOfWindow=results();
-  outOfWindow[0]={...outOfWindow[0],t:Date.parse('2025-12-31T00:00:00.000Z')};
+  outOfWindow[0]={...outOfWindow[0],t:Date.parse('2025-12-31T05:00:00.000Z')};
   await assert.rejects(()=>fetchMassiveDailyDataset({
     ...request,fetchImpl:async()=>({ok:true,status:200,json:async()=>({status:'OK',ticker:'AAPL',results:outOfWindow})})
   }),/outside the requested date range/);
   const afterWindow=results();
-  afterWindow[afterWindow.length-1]={...afterWindow.at(-1),t:Date.parse('2026-07-01T00:00:00.000Z')};
+  afterWindow[afterWindow.length-1]={...afterWindow.at(-1),t:Date.parse('2026-07-01T04:00:00.000Z')};
   await assert.rejects(()=>fetchMassiveDailyDataset({
     ...request,fetchImpl:async()=>({ok:true,status:200,json:async()=>({status:'OK',ticker:'AAPL',results:afterWindow})})
   }),/outside the requested date range/);
@@ -138,4 +139,17 @@ test('provider rejects coerced, absent or fractional OHLCV fields and intraday t
       })})
     }),/Massive aggregate 0 is malformed/);
   }
+});
+
+test('accepts delayed daily data across the Eastern daylight saving change',async()=>{
+  const bars=results();
+  assert.equal(new Date(bars[0].t).toISOString(),'2026-01-02T05:00:00.000Z');
+  assert.equal(new Date(bars.find(bar=>new Date(bar.t).toISOString().startsWith('2026-03-09')).t).toISOString(),
+    '2026-03-09T04:00:00.000Z');
+  const dataset=await fetchMassiveDailyDataset({
+    symbol:'AAPL',from:'2026-01-01',to:'2026-06-30',apiKey:'test-key-123',
+    fetchImpl:async()=>({ok:true,status:200,json:async()=>({status:'DELAYED',ticker:'AAPL',results:bars})})
+  });
+  assert.equal(dataset.bars[0].date,'2026-01-02');
+  assert.ok(dataset.bars.some(bar=>bar.date==='2026-03-09'));
 });
