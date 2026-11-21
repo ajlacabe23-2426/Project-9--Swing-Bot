@@ -8,7 +8,7 @@ test('Phase 3: isolated synthetic lifecycle proves denied, persisted, restarted,
   assert.equal(report.mode,'OFFLINE_ENGINEERED_SYNTHETIC_ONLY');
   assert.deepEqual(report.fixtureSymbols,['SIM09','SIM10']);
   assert.equal(report.defaultCycleTickets,0);
-  assert.equal(report.noSetupDenialStatus,400);
+  assert.equal(report.noSetupDenialStatus,409);
   assert.equal(report.missingReviewDenialStatus,409);
   assert.equal(report.forgedReviewDenialStatus,409);
   assert.deepEqual(report.simultaneousCreateStatuses,[200,409]);
