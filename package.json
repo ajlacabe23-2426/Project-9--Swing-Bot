@@ -23,6 +23,7 @@
     "research:paper-forward": "node scripts/paper-forward-audit.mjs",
     "research:daily": "node scripts/research-daily-breakout.mjs",
     "agent:cycle": "node scripts/agent-operational-cycle.mjs",
+    "accept:paper-lifecycle": "node scripts/accept-paper-lifecycle.mjs",
     "agent:launch": "node scripts/launch-operator.mjs",
     "starnet:mission": "node scripts/starnet-crew-mission.mjs",
     "demo:alerts": "node scripts/preview-alerts.mjs"
