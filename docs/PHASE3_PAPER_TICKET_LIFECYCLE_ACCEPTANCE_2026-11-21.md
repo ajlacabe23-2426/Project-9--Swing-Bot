@@ -27,7 +27,7 @@ The first command prints a structured JSON evidence summary. The Node test invok
 | Case | Expected result |
 | --- | --- |
 | Default manual cycle | Refresh and scan only; **zero** automatic ticket creations |
-| SIM10 `NO_PAPER_SETUP` | Ticket request refused; no persisted mutation |
+| SIM10 `NO_PAPER_SETUP` | HTTP 409 eligibility refusal; no persisted mutation |
 | SIM09 missing or forged reviewed-scan binding | HTTP 409; journal unchanged byte-for-byte |
 | Two simultaneous approved SIM09 requests | Exactly **one** HTTP 200 and **one** HTTP 409 |
 | Repeated create on same session | HTTP 409; journal unchanged byte-for-byte |
