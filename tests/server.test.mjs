@@ -7,7 +7,9 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createApp,fetchWorkstationDataset} from '../server.mjs';
 import {PaperStore} from '../src/store.mjs';
-import {MARKET_DATA_SCHEMA} from '../src/market-intelligence.mjs';
+import {runOperationalCycle} from '../scripts/agent-operational-cycle.mjs';
+import {compileSessionPolicy} from '../src/completed-market-session.mjs';
+import {MARKET_DATA_SCHEMA,MARKET_DATA_SCHEMA_V2} from '../src/market-intelligence.mjs';
 
 function marketDataset(symbol='TEST'){
   const bars=[];let price=100;const date=new Date('2026-01-01T00:00:00.000Z');
@@ -115,7 +117,7 @@ test('manual ticket review, duplicate race, and source isolation survive a cold 
     const launch=`
       import {createApp} from './server.mjs';
       import {PaperStore} from './src/store.mjs';
-      const app=await createApp({port:${port},store:new PaperStore(${JSON.stringify(paperFile)})});
+      const app=await createApp({port:${port},store:new PaperStore(${JSON.stringify(paperFile)}),requireSessionEvidence:false});
       app.listen(${port},'127.0.0.1',()=>console.log('restart ready'));
     `;
     child=spawn(process.execPath,[...options,'--input-type=module','--eval',launch],{
@@ -195,6 +197,72 @@ test('manual ticket review, duplicate race, and source isolation survive a cold 
   }finally{
     if(app?.listening)await new Promise(resolve=>app.close(resolve));
     await stopChild();
+    await rm(dir,{recursive:true,force:true});
+  }
+});
+
+test('reviewed session calendar gates refresh and manual paper creation over HTTP',async()=>{
+  const dir=await mkdtemp(join(tmpdir(),'p9-completed-sessions-'));
+  const port=51000+Math.floor(Math.random()*1000);
+  const base='http://127.0.0.1:'+port;
+  const post=(route,body={})=>fetch(base+'/api/workstation/'+route,{
+    method:'POST',headers:{'Content-Type':'application/json',Origin:base},body:JSON.stringify(body)
+  });
+  const fixture=marketDataset(),last=fixture.bars.at(-1).date;
+  const after=fixture.bars.at(-1).close;
+  const next='2026-05-08';
+  const sessions=[...fixture.bars.map(({date})=>({date,closeAt:date+'T21:00:00.000Z'})),
+    {date:next,closeAt:next+'T17:00:00.000Z'}];
+  const policy=compileSessionPolicy({source:fixture.source,symbols:['TEST'],
+    from:fixture.bars[0].date,through:'2026-05-10',sessions});
+  let clock=new Date(next+'T16:00:00Z');
+  const complete={...fixture,schema:MARKET_DATA_SCHEMA_V2,provenance:{
+    retrievedAt:clock.toISOString(),adjustmentMethod:'PROVIDER_ADJUSTED_UNVERIFIED',
+    corporateActions:'NOT_VERIFIED',survivorship:'NOT_ASSESSED',licensing:'NOT_VERIFIED'
+  }};
+  let response={...complete,bars:complete.bars.filter((_,index)=>index!==10)};
+  let requested;
+  const app=await createApp({port,store:new PaperStore(join(dir,'paper.json')),
+    requireSessionEvidence:true,sessionPolicy:policy,now:()=>clock,
+    marketFetcher:async args=>{requested=args;return response;}});
+  try{
+    await new Promise((resolve,reject)=>app.once('error',reject).listen(port,'127.0.0.1',resolve));
+    assert.equal((await post('watchlist',{symbols:['TEST']})).status,200);
+    const gap=await (await post('refresh')).json();
+    assert.deepEqual(gap.lastScans,{});
+    assert.match(gap.lastRefreshErrors[0].message,/expected completed sessions/);
+    assert.equal(requested.to,last);
+    response=complete;
+    const cycle=await runOperationalCycle({port,autoPaper:true,now:clock});
+    assert.equal(cycle.actions[0].status,'MANUAL_REVIEW_REQUIRED');
+    assert.equal(cycle.actions[0].asOf,last);
+    assert.equal(cycle.mutations.virtualTicketsCreated,0);
+    const accepted=await (await fetch(base+'/api/workstation')).json();
+    assert.equal(accepted.lastScans.TEST.sessionEvidence.asOf,last);
+    const review={symbol:'TEST',paperUnits:0.001,reviewedScan:{revision:accepted.lastScans.TEST.reviewRevision}};
+    response={...complete,source:'Different market source'};
+    const foreign=await (await post('refresh')).json();
+    assert.match(foreign.lastRefreshErrors[0].message,/does not match/);
+    assert.equal((await post('tickets',review)).status,409);
+    response=complete;
+    await post('refresh');
+    assert.equal((await post('tickets',review)).status,200);
+    clock=new Date(next+'T17:15:00Z');
+    const file=join(dir,'workstation.json'),before=await readFile(file,'utf8');
+    const stale=await post('tickets',review);
+    assert.equal(stale.status,409);
+    assert.match((await stale.json()).error,/latest completed exchange session/);
+    assert.equal(await readFile(file,'utf8'),before);
+    response={...complete,sourceAsOf:next,provenance:{...complete.provenance,retrievedAt:clock.toISOString()},
+      bars:[...complete.bars,{date:next,open:after,high:after+1,low:after-1,close:after,volume:150000}]};
+    clock=new Date('2026-05-09T18:00:00Z');
+    const weekend=await (await post('refresh')).json();
+    assert.equal(weekend.lastScans.TEST.asOf,next);
+    assert.equal(requested.to,next);
+    assert.equal(weekend.tickets.length,1);
+    assert.deepEqual(weekend.alerts,[]);
+  }finally{
+    if(app.listening)await new Promise(resolve=>app.close(resolve));
     await rm(dir,{recursive:true,force:true});
   }
 });

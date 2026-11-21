@@ -18,7 +18,7 @@ export function isStrictISODate(value){
   return Number.isFinite(timestamp)&&new Date(timestamp).toISOString().slice(0,10)===value;
 }
 
-function validateBar(bar,index,previousDate){
+function validateBar(bar,index,previousDate,schema){
   if(!isObject(bar))throw new Error('Market bar '+index+' must be an object');
   const keys=['date','open','high','low','close','volume'];
   if(Object.keys(bar).some(key=>!keys.includes(key))||keys.some(key=>!(key in bar)))
@@ -28,7 +28,11 @@ function validateBar(bar,index,previousDate){
   for(const key of ['open','high','low','close']){
     if(!Number.isFinite(bar[key])||bar[key]<=0)throw new Error('Market bar '+index+' has invalid '+key);
   }
-  if(!Number.isSafeInteger(bar.volume)||bar.volume<0)throw new Error('Market bar '+index+' has invalid volume');
+  const volume=bar.volume;
+  const validVolume=schema===MARKET_DATA_SCHEMA_V2
+    ?Number.isFinite(volume)&&volume<=Number.MAX_SAFE_INTEGER
+    :Number.isSafeInteger(volume);
+  if(!validVolume||volume<0)throw new Error('Market bar '+index+' has invalid volume');
   if(bar.high<Math.max(bar.open,bar.close)||bar.low>Math.min(bar.open,bar.close)||bar.low>bar.high)
     throw new Error('Market bar '+index+' has inconsistent OHLC values');
   return {date:bar.date,open:bar.open,high:bar.high,low:bar.low,close:bar.close,volume:bar.volume};
@@ -99,7 +103,7 @@ export function normalizeMarketDataset(input){
   if(!Array.isArray(input.bars)||input.bars.length<60||input.bars.length>3000)
     throw new Error('Market dataset requires 60–3000 completed daily bars');
   let previous=null;
-  const bars=input.bars.map((bar,index)=>{const normalized=validateBar(bar,index,previous);previous=normalized.date;return normalized;});
+  const bars=input.bars.map((bar,index)=>{const normalized=validateBar(bar,index,previous,input.schema);previous=normalized.date;return normalized;});
   if(input.sourceAsOf<bars.at(-1).date)throw new Error('Source as-of date cannot precede the latest market bar');
   const provenance=normalizeMarketProvenance(input.provenance,input.schema,input.priceAdjustment);
   if(provenance.retrievedAt&&provenance.retrievedAt.slice(0,10)<input.sourceAsOf)

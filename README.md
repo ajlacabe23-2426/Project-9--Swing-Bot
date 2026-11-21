@@ -200,3 +200,44 @@ Run `npm run check` for syntax checks and the offline unit/HTTP integration suit
 ### Entry/exit decision and code map
 
 The local workstation includes a rotatable 3D map linking scanner evidence, code functions, and existing paper entry/stop/target references. Select current scan levels or an individual frozen ticket, inspect each node, and switch to flat or code-label views. The chart distinguishes reference levels from subsequent paper touches. See [decision map usage and verification](docs/DECISION_MAP.md).
+
+## Pilot using completed U.S. market sessions
+
+Set `PROJECT9_SESSION_POLICY` to the absolute path of a locally reviewed JSON
+file. The file pins one exact dataset source label, a symbol allowlist, and an
+inclusive schedule coverage period. Supply every session in that period from a
+reviewed exchange schedule, including early closes. Omit holidays and weekends.
+The pilot uses New York session dates and canonical UTC close timestamps.
+The policy file is trusted operator input.
+
+```json
+{
+  "source": "Exact label in your dataset",
+  "symbols": ["YOUR_SYMBOL"],
+  "from": "2026-01-01",
+  "through": "2026-12-31",
+  "sessions": [
+    {"date": "2026-01-02", "closeAt": "2026-01-02T21:00:00.000Z"}
+  ]
+}
+```
+
+The example illustrates the format. Supply the complete schedule with at least
+60 expected sessions available to the scanner. The default server uses local
+cached datasets unless a market-data key has been configured. A reviewable
+dataset needs v2 retrieval metadata and one bar for every expected session in
+the requested window, ending on the latest completed session. A newly
+completed session requires a fresh scan before opening another paper ticket.
+Existing positions and scans remain available for inspection if refresh fails.
+
+This gate checks operator-supplied calendar alignment and data completeness.
+Provider finality, source authenticity, rights, corporate actions, executable
+fills, and strategy performance still require separate validation.
+
+With the workstation running locally, StarNet can invoke
+`npm run agent:cycle` to refresh the configured watchlist and produce a JSON
+report. A gated market scan reports `MANUAL_REVIEW_REQUIRED` with its session
+and calendar revision. Review `refreshErrors` before trusting a summary.
+Start the workstation with `npm start` or `npm run agent:launch` using the same
+session-policy configuration. Run recurring refreshes against the existing
+loopback server so one process owns the workstation journal.

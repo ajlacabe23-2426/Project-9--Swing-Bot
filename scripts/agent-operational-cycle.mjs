@@ -58,6 +58,11 @@ export async function runOperationalCycle({
     const scan=state.lastScans?.[symbol];
     if(failed.has(symbol)){actions.push({symbol,status:'REFRESH_FAILED'});continue;}
     if(!scan){actions.push({symbol,status:'NO_SCAN'});continue;}
+    if(scan.sessionEvidence){
+      actions.push({symbol,status:'MANUAL_REVIEW_REQUIRED',classification:scan.classification,
+        asOf:scan.sessionEvidence.asOf,calendarRevision:scan.sessionEvidence.revision});
+      continue;
+    }
     if(!autoPaper){actions.push({symbol,status:'SCANNED_ONLY',classification:scan.classification});continue;}
     if(!SETUP_CLASSES.has(scan.classification)){
       actions.push({symbol,status:'NO_ELIGIBLE_PAPER_SETUP',classification:scan.classification});continue;

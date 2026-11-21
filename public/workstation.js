@@ -178,7 +178,7 @@ function renderDemoPanel(){
       ' · '+pending+' source-bound open paper observation'+(pending===1?'':'s')+
       '. Choose the next fictional bar scenario.';
   }else{
-    $('demo-step-status').textContent='Select and refresh the seeded SIM09/SIM10 data to establish source identity. Older unbound tickets are preserved, not replayed.';
+    $('demo-step-status').textContent='Advance works with SIM09 or SIM10. If these symbols are missing, stop the server and run npm run demo:seed, then restart, refresh and select a demo symbol.';
   }
 }
 function render(){
