@@ -47,11 +47,17 @@ test('only exact seeded synthetic prefix can advance; real-labeled/corrupt input
   assert.throws(()=>appendSyntheticSession(input,{scenario:'TARGET'}),/paper observation/);
   assert.throws(()=>appendSyntheticSession(input,{scenario:'NOT_A_SCENARIO'}),/Unsupported/);
 });
-test('one local synthetic endpoint step updates bound observations and preserves unbound/unrelated records through restart',async()=>{
+test('one local synthetic endpoint step updates bound observations and preserves unbound/unrelated records through restart',async t=>{
   const dir=await mkdtemp(join(tmpdir(),'p9-paper-step-'));
   const port=48600+Math.floor(Math.random()*1000),base='http://127.0.0.1:'+port;
   let server;
   let providerCalls=0;
+  const priorKey=process.env.MASSIVE_API_KEY;
+  process.env.MASSIVE_API_KEY='configured-test-value';
+  t.after(()=>{
+    if(priorKey===undefined)delete process.env.MASSIVE_API_KEY;
+    else process.env.MASSIVE_API_KEY=priorKey;
+  });
   try{
     await seedWorkstationDemo({dataDir:dir});
     const workstation=new WorkstationStore(join(dir,'workstation.json'));
@@ -66,6 +72,8 @@ test('one local synthetic endpoint step updates bound observations and preserves
     };
     const refreshed=await request('/api/workstation/refresh',{});
     assert.equal(refreshed.status,200);
+    assert.deepEqual(refreshed.body.lastRefreshErrors,[]);
+    assert.equal(providerCalls,0);
     assert.equal(refreshed.body.lastScans.SIM09.classification,'PAPER_SETUP_STRONG');
     const startDate=refreshed.body.lastScans.SIM09.asOf;
     const scan=refreshed.body.lastScans.SIM09;
@@ -118,22 +126,11 @@ test('one local synthetic endpoint step updates bound observations and preserves
     },'http://evil.invalid');
     assert.equal(wrongOrigin.status,403);
     const args={symbol:'SIM09',scenario:'HOLD',expectedAsOf:startDate};
-    const beforeRejected=workstation.snapshot();
-    const providerBefore=providerCalls;
-    const priorKey=process.env.MASSIVE_API_KEY;
-    try{
-      process.env.MASSIVE_API_KEY='configured-test-value';
-      assert.equal((await request('/api/workstation/demo/advance',args)).status,409);
-    }finally{
-      if(priorKey===undefined)delete process.env.MASSIVE_API_KEY;
-      else process.env.MASSIVE_API_KEY=priorKey;
-    }
-    assert.equal(providerCalls,providerBefore);
-    assert.deepEqual(workstation.snapshot(),beforeRejected);
     const responses=await Promise.all([
       request('/api/workstation/demo/advance',args),request('/api/workstation/demo/advance',args)
     ]);
     assert.deepEqual(responses.map(r=>r.status).sort(),[200,409]);
+    assert.equal(providerCalls,0);
     const hold=responses.find(r=>r.status===200);
     assert.equal(hold.status,200,JSON.stringify(hold.body));
     assert.equal(hold.body.syntheticStep.previousSession,startDate);

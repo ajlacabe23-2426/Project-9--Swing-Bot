@@ -7,7 +7,7 @@ import {PaperStore} from './src/store.mjs';
 import {modelCommentary} from './src/ai.mjs';
 import {evaluateSwingSetup} from './src/market-intelligence.mjs';
 import {fetchMassiveDailyDataset} from './src/providers/massive.mjs';
-import {WorkstationStore,REPLAY_SYMBOLS} from './src/workstation-store.mjs';
+import {WorkstationStore,REPLAY_SYMBOLS,syntheticReplayBinding} from './src/workstation-store.mjs';
 import {advanceSyntheticPaperSession} from './src/synthetic-session-advance.mjs';
 import {readFictionalContractStatus} from './src/simulation-evidence.mjs';
 import {buildSyntheticAlertPreview} from './src/synthetic-alert-preview.mjs';
@@ -123,15 +123,19 @@ export async function createApp({
           let marketWindow;
           for(const symbol of current.watchlist){
             try{
-              // In a fictional replay the committed workstation state is authoritative.
-              // A configured provider must never fetch these reserved demo symbols.
-              if(REPLAY_SYMBOLS.includes(symbol)&&process.env.MASSIVE_API_KEY)
-                throw new Error('Reserved synthetic symbol unavailable with provider configured');
-              const gated=requireSessionEvidence&&!REPLAY_SYMBOLS.includes(symbol);
+              const synthetic=REPLAY_SYMBOLS.includes(symbol);
+              const gated=requireSessionEvidence&&!synthetic;
               if(gated&&!sessionPolicy)throw new Error('Configure a reviewed exchange calendar and data source first');
               const window=gated?sessionPolicy.window(now(),symbol):demoWindow;
               if(gated)marketWindow=window;
-              const dataset=current.syntheticReplay?.[symbol]??await marketFetcher({symbol,...window});
+              // Reserved symbols always use the local fixture or committed replay.
+              const dataset=synthetic
+                ? current.syntheticReplay?.[symbol]??await fetchWorkstationDataset({
+                    symbol,...window,dataDir:dirname(workstation.file),apiKey:null
+                  })
+                : await marketFetcher({symbol,...window});
+              if(synthetic&&(dataset.symbol!==symbol||!syntheticReplayBinding(dataset)))
+                throw new Error('Invalid local synthetic fixture for '+symbol);
               const sessionEvidence=gated?sessionPolicy.inspect(dataset,symbol,window,now()):null;
               const evaluation=evaluateSwingSetup(dataset);
               if(sessionEvidence)evaluation.sessionEvidence=sessionEvidence;
@@ -149,8 +153,6 @@ export async function createApp({
         if(url.pathname==='/api/workstation/demo/advance'){
           if(Object.keys(body).length!==3||!('symbol' in body)||!('scenario' in body)||!('expectedAsOf' in body))
             return json(res,400,{error:'Demo session step requires symbol, scenario and expectedAsOf'});
-          if(process.env.MASSIVE_API_KEY)
-            return json(res,409,{error:'Synthetic session step is unavailable when a real-data provider is configured'});
           // Local-only explicit demo route: works on built-in SIM09/SIM10 files,
           // never invokes the provider, ticket creator, trade execution or alert delivery.
           return json(res,200,await advanceSyntheticPaperSession({
