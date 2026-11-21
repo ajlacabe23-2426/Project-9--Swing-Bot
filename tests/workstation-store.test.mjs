@@ -35,7 +35,8 @@ test('workstation persists scans and freezes paper tickets without broker state'
     await store.applyRefresh([{dataset:input,evaluation}],{refreshedAt:'2026-10-05T15:00:00.000Z'});
     const units=Math.min(1,evaluation.paperRiskPlan.maxPaperUnits);
     assert.ok(units>0);
-    const state=await store.createTicket('TEST',units,{createdAt:'2026-10-05T15:01:00.000Z'});
+    const state=await store.createTicket('TEST',units,{createdAt:'2026-10-05T15:01:00.000Z',
+      reviewedScan:{revision:store.snapshot().lastScans.TEST.reviewRevision}});
     assert.equal(state.tickets.length,1);
     assert.equal(state.tickets[0].symbol,'TEST');
     assert.equal(state.tickets[0].outcome.status,'OPEN_PAPER_OBSERVATION');
@@ -131,7 +132,8 @@ test('paper tickets reject fractional units that would round into invalid stored
     );
     assert.equal(store.snapshot().tickets.length,0);
     if(evaluation.paperRiskPlan.maxPaperUnits>=0.001){
-      const valid=await store.createTicket('TEST',0.001,{createdAt});
+      const valid=await store.createTicket('TEST',0.001,{createdAt,
+        reviewedScan:{revision:store.snapshot().lastScans.TEST.reviewRevision}});
       assert.equal(valid.tickets[0].paperUnits,0.001);
     }
   }finally{await rm(dir,{recursive:true,force:true});}

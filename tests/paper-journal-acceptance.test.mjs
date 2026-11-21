@@ -37,7 +37,8 @@ test('paper entry, target observation and frozen journal survive actual store re
     }
     assert.ok(evaluation.paperRiskPlan.maxPaperUnits>=0.001);
     await store.applyRefresh([{dataset:source,evaluation}],{refreshedAt:'2026-10-16T12:00:00Z'});
-    const initial=await store.createTicket('TEST',0.001,{createdAt:'2026-10-16T12:01:00Z'});
+    const initial=await store.createTicket('TEST',0.001,{createdAt:'2026-10-16T12:01:00Z',
+      reviewedScan:{revision:store.snapshot().lastScans.TEST.reviewRevision}});
     const ticket=initial.tickets[0];
     assert.equal(ticket.outcome.status,'OPEN_PAPER_OBSERVATION');
     assert.equal('broker' in ticket,false);

@@ -33,7 +33,8 @@ function hasExistingPaperObservation(scan){
 function canCreatePaperTicket(scan){
   return !!scan&&scan.classification!=='NO_PAPER_SETUP'&&
     Number.isFinite(scan.paperRiskPlan?.maxPaperUnits)&&scan.paperRiskPlan.maxPaperUnits>=0.001&&
-    !hasExistingPaperObservation(scan)&&(!['SIM09','SIM10'].includes(scan.symbol)||canAdvanceDemo(scan));
+    !hasExistingPaperObservation(scan)&&(['SIM09','SIM10'].includes(scan.symbol)
+      ?canAdvanceDemo(scan):/^[a-f0-9]{64}$/.test(scan.reviewRevision??''));
 }
 function canAdvanceDemo(scan){
   return !!scan&&['SIM09','SIM10'].includes(scan.symbol)&&scan.source?.name===DEMO_LABEL&&/^[a-f0-9]{64}$/.test(scan.syntheticReplayBinding??'');
@@ -215,6 +216,9 @@ $('create-ticket').addEventListener('click',()=>runAction($('create-ticket'),asy
     const p=scan.paperRiskPlan;
     body.reviewedScan={asOf:scan.asOf,binding:scan.syntheticReplayBinding,
       entry:p.entryReference,stop:p.stopReference,target:p.targetReference};
+  }else{
+    if(!scan?.reviewRevision)throw new Error('Refresh and review the scan before recording');
+    body.reviewedScan={revision:scan.reviewRevision};
   }
   return request('/api/workstation/tickets',body);
 }));

@@ -148,12 +148,9 @@ export async function createApp({
           }));
         }
         if(url.pathname==='/api/workstation/tickets'){
-          const fictional=typeof body.symbol==='string'&&REPLAY_SYMBOLS.includes(body.symbol.trim().toUpperCase());
-          const allowed=fictional?['symbol','paperUnits','reviewedScan']:['symbol','paperUnits'];
+          const allowed=['symbol','paperUnits','reviewedScan'];
           if(Object.keys(body).some(key=>!allowed.includes(key))||!Object.hasOwn(body,'symbol')||!Object.hasOwn(body,'paperUnits'))
             return json(res,400,{error:'Invalid observation parameters'});
-          if(fictional&&(!body.reviewedScan||typeof body.reviewedScan!=='object'||Array.isArray(body.reviewedScan)))
-            return json(res,409,{error:'Refresh and review the fictional scan before recording'});
           return json(res,200,await workstation.createTicket(body.symbol,body.paperUnits,
             {createdAt:new Date().toISOString(),reviewedScan:body.reviewedScan}));
         }

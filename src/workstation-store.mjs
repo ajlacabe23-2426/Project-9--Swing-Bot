@@ -7,6 +7,12 @@ import {normalizeMarketDataset} from './market-intelligence.mjs';
 export const REPLAY_SYMBOLS=Object.freeze(['SIM09','SIM10']);
 const REPLAY_LABEL='Project 9 ENGINEERED SYNTHETIC DEMO - NOT REAL MARKET DATA';
 const SHA=/^[a-f0-9]{64}$/;
+const digest=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
+
+function paperSourceIdentity(dataset){
+  return digest([dataset.symbol,dataset.source,dataset.mode,dataset.currency,
+    dataset.priceAdjustment,dataset.provenance.contract,dataset.provenance.adjustmentMethod]);
+}
 export function syntheticReplayBinding(input,through=null){
   const d=normalizeMarketDataset(input);
   if(!REPLAY_SYMBOLS.includes(d.symbol)||d.source!==REPLAY_LABEL||d.mode!=='HISTORICAL'||
@@ -94,6 +100,8 @@ function validTicket(ticket){
     Number.isFinite(ticket.entryReference)&&Number.isFinite(ticket.stopReference)&&Number.isFinite(ticket.targetReference)&&
     ticket.stopReference<ticket.entryReference&&ticket.targetReference>ticket.entryReference&&
     typeof ticket.classificationAtOpen==='string'&&Number.isFinite(ticket.scoreAtOpen)&&
+    (ticket.paperSourceIdentity===undefined||(!REPLAY_SYMBOLS.includes(ticket.symbol)&&
+      typeof ticket.paperSourceIdentity==='string'&&SHA.test(ticket.paperSourceIdentity)))&&
     (ticket.syntheticBinding===undefined||(REPLAY_SYMBOLS.includes(ticket.symbol)&&typeof ticket.syntheticBinding==='string'&&SHA.test(ticket.syntheticBinding)));
 }
 export function isValidWorkstationState(state){
@@ -158,12 +166,17 @@ export class WorkstationStore{
           throw new Error('Stale market refresh cannot replace newer research evidence');
         const reserved=REPLAY_SYMBOLS.includes(dataset.symbol);
         delete evaluation.syntheticReplayBinding;
+        delete evaluation.paperSourceIdentity;
+        delete evaluation.reviewRevision;
         if(reserved){
           const binding=syntheticReplayBinding(entry.dataset);
           if(binding)evaluation.syntheticReplayBinding=binding;
           const committed=state.syntheticReplay?.[dataset.symbol];
           if(committed&&binding!==syntheticReplayBinding(committed))
             throw Object.assign(new Error('Synthetic replay changed; refresh the saved replay state'),{status:409});
+        }else{
+          evaluation.paperSourceIdentity=paperSourceIdentity(dataset);
+          evaluation.reviewRevision=digest([dataset,evaluation]);
         }
         if(!reserved&&!suppressAlerts&&previous&&previous.classification!==evaluation.classification){
           state.alerts.unshift({
@@ -180,17 +193,19 @@ export class WorkstationStore{
         // Keep the original validated wire contract: normalizeMarketDataset adds an
         // internal provenance.contract field that is not valid on re-import.
         // Paper outcome evaluation performs its own strict normalization.
-        datasets.set(dataset.symbol,entry.dataset);
+        datasets.set(dataset.symbol,{input:entry.dataset,dataset,identity:evaluation.paperSourceIdentity});
       }
       state.alerts=state.alerts.slice(0,100);
       state.lastRefresh=refreshedAt;
       state.lastRefreshErrors=normalizedErrors;
       state.tickets=state.tickets.map(ticket=>{
-        const dataset=datasets.get(ticket.symbol);
-        // Reserved symbols can only update source-bound observations in the
-        // explicit atomic demo step. Preserve all unbound legacy records.
-        return dataset&&!REPLAY_SYMBOLS.includes(ticket.symbol)&&!ticket.syntheticBinding?
-          {...ticket,outcome:evaluatePaperTicket(ticket,dataset)}:ticket;
+        const source=datasets.get(ticket.symbol);
+        // Fictional observations are handled by explicit replay. Legacy rows
+        // with no recorded identity cannot be assigned a source on refresh.
+        if(!ticket.paperSourceIdentity||source?.identity!==ticket.paperSourceIdentity||
+           source.dataset.bars.at(-1).date<(ticket.outcome?.observedThrough??ticket.openedAsOf)||
+           !source.dataset.bars.some(bar=>bar.date===ticket.openedAsOf))return ticket;
+        return {...ticket,outcome:evaluatePaperTicket(ticket,source.input)};
       });
       return state;
     });
@@ -205,31 +220,29 @@ export class WorkstationStore{
     if(typeof createdAt!=='string'||!createdAt)throw new Error('Paper-ticket timestamp is required');
     return this.mutate(state=>{
       const evaluation=state.lastScans[normalized];
-      if(!evaluation)throw new Error('Refresh the symbol before creating a paper ticket');
-      // For fictional demo records, compare the actual reviewed scan inside the
-      // serialized mutation, before creating or changing any observation.
-      if(REPLAY_SYMBOLS.includes(normalized)){
-        const p=evaluation.paperRiskPlan;
-        const expected={asOf:evaluation.asOf,binding:evaluation.syntheticReplayBinding,
-          entry:p.entryReference,stop:p.stopReference,target:p.targetReference};
-        if(!reviewedScan||Object.keys(reviewedScan).length!==5||
-           Object.keys(expected).some(key=>!Object.hasOwn(reviewedScan,key)||reviewedScan[key]!==expected[key]))
-          throw Object.assign(new Error('Fictional scan changed or was not reviewed; refresh before recording'),{status:409});
-      }
+      const reserved=REPLAY_SYMBOLS.includes(normalized);
+      const p=evaluation?.paperRiskPlan;
+      const expected=reserved
+        ? {asOf:evaluation?.asOf,binding:evaluation?.syntheticReplayBinding,
+          entry:p?.entryReference,stop:p?.stopReference,target:p?.targetReference}
+        : {revision:evaluation?.reviewRevision};
+      const binding=reserved?expected.binding:expected.revision;
+      if(!SHA.test(binding??'')||(!reserved&&!SHA.test(evaluation.paperSourceIdentity??''))||
+         !reviewedScan||typeof reviewedScan!=='object'||Array.isArray(reviewedScan)||
+         Object.keys(reviewedScan).length!==Object.keys(expected).length||
+         Object.keys(expected).some(key=>!Object.hasOwn(reviewedScan,key)||reviewedScan[key]!==expected[key]))
+        throw Object.assign(new Error('Scan changed or was not reviewed; refresh before recording'),{status:409});
       if(evaluation.classification==='NO_PAPER_SETUP')throw new Error('Paper ticket requires a watch or strong research classification');
       if(paperUnits>evaluation.paperRiskPlan.maxPaperUnits)throw new Error('Paper units exceed the frozen paper-risk reference');
       if(state.tickets.some(ticket=>ticket.symbol===normalized&&
         (ticket.openedAsOf===evaluation.asOf||
          ticket.outcome?.status==='OPEN_PAPER_OBSERVATION')))
         throw Object.assign(new Error('A paper observation already exists for this symbol/session, or an earlier one is still open'),{status:409});
-      const reserved=REPLAY_SYMBOLS.includes(normalized);
-      if(reserved&&!SHA.test(evaluation.syntheticReplayBinding??''))
-        throw Object.assign(new Error('Refresh the fictional source before creating a source-bound demo observation'),{status:409});
       const sequence=state.tickets.length+1;
       state.tickets.unshift({
         id:'P9-'+String(sequence).padStart(4,'0'),
         symbol:normalized,
-        ...(reserved?{syntheticBinding:evaluation.syntheticReplayBinding}:{}),
+        ...(reserved?{syntheticBinding:binding}:{paperSourceIdentity:evaluation.paperSourceIdentity}),
         createdAt,
         openedAsOf:evaluation.asOf,
         paperUnits:round(paperUnits,3),
