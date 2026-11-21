@@ -233,3 +233,11 @@ Existing positions and scans remain available for inspection if refresh fails.
 This gate checks operator-supplied calendar alignment and data completeness.
 Provider finality, source authenticity, rights, corporate actions, executable
 fills, and strategy performance still require separate validation.
+
+With the workstation running locally, StarNet can invoke
+`npm run agent:cycle` to refresh the configured watchlist and produce a JSON
+report. A gated market scan reports `MANUAL_REVIEW_REQUIRED` with its session
+and calendar revision. Review `refreshErrors` before trusting a summary.
+Start the workstation with `npm start` or `npm run agent:launch` using the same
+session-policy configuration. Run recurring refreshes against the existing
+loopback server so one process owns the workstation journal.

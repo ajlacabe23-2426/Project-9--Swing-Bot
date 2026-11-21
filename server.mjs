@@ -11,7 +11,7 @@ import {WorkstationStore,REPLAY_SYMBOLS} from './src/workstation-store.mjs';
 import {advanceSyntheticPaperSession} from './src/synthetic-session-advance.mjs';
 import {readFictionalContractStatus} from './src/simulation-evidence.mjs';
 import {buildSyntheticAlertPreview} from './src/synthetic-alert-preview.mjs';
-import {compileSessionPolicy} from './src/completed-market-session.mjs';
+import {loadSessionPolicy} from './src/completed-market-session.mjs';
 import {assertPatchedNodeRuntime} from './src/runtime-security.mjs';
 
 const root=dirname(fileURLToPath(import.meta.url));
@@ -209,7 +209,6 @@ if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
 
   const port=Number(process.env.PORT||4179);
   const store=new PaperStore(process.env.PROJECT9_DATA_FILE||resolve(root,'.data/paper.json'));
-  const policyFile=process.env.PROJECT9_SESSION_POLICY;
-  const sessionPolicy=policyFile?compileSessionPolicy(JSON.parse(await readFile(policyFile,'utf8'))):null;
+  const sessionPolicy=await loadSessionPolicy();
   createApp({port,store,sessionPolicy}).then(server=>server.listen(port,'127.0.0.1',()=>console.log('Project 9 local-only research platform at http://127.0.0.1:'+port))).catch(error=>{console.error(error);process.exitCode=1;});
 }

@@ -1,7 +1,12 @@
+import {readFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import {isStrictISODate,normalizeMarketDataset} from './market-intelligence.mjs';
 
 const exchangeDate=new Intl.DateTimeFormat('sv-SE',{timeZone:'America/New_York',dateStyle:'short'});
+
+export async function loadSessionPolicy(file=process.env.PROJECT9_SESSION_POLICY){
+  return file?compileSessionPolicy(JSON.parse(await readFile(file,'utf8'))):null;
+}
 
 export function compileSessionPolicy({source,symbols,from,through,sessions}={}){
   if(typeof source!=='string'||!source.trim()||!Array.isArray(symbols)||!symbols.length||

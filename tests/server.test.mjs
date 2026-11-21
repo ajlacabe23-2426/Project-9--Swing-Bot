@@ -7,6 +7,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createApp,fetchWorkstationDataset} from '../server.mjs';
 import {PaperStore} from '../src/store.mjs';
+import {runOperationalCycle} from '../scripts/agent-operational-cycle.mjs';
 import {compileSessionPolicy} from '../src/completed-market-session.mjs';
 import {MARKET_DATA_SCHEMA,MARKET_DATA_SCHEMA_V2} from '../src/market-intelligence.mjs';
 
@@ -232,7 +233,11 @@ test('reviewed session calendar gates refresh and manual paper creation over HTT
     assert.match(gap.lastRefreshErrors[0].message,/expected completed sessions/);
     assert.equal(requested.to,last);
     response=complete;
-    const accepted=await (await post('refresh')).json();
+    const cycle=await runOperationalCycle({port,autoPaper:true,now:clock});
+    assert.equal(cycle.actions[0].status,'MANUAL_REVIEW_REQUIRED');
+    assert.equal(cycle.actions[0].asOf,last);
+    assert.equal(cycle.mutations.virtualTicketsCreated,0);
+    const accepted=await (await fetch(base+'/api/workstation')).json();
     assert.equal(accepted.lastScans.TEST.sessionEvidence.asOf,last);
     const review={symbol:'TEST',paperUnits:0.001,reviewedScan:{revision:accepted.lastScans.TEST.reviewRevision}};
     response={...complete,source:'Different market source'};
