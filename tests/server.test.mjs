@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,rm,writeFile} from 'node:fs/promises';
+import {mkdtemp,readFile,rm,writeFile} from 'node:fs/promises';
+import {spawn} from 'node:child_process';
+import {once} from 'node:events';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createApp,fetchWorkstationDataset} from '../server.mjs';
@@ -74,7 +76,8 @@ test('local HTTP API restricts origin, host and inputs and has no broker endpoin
     const refreshed=await refresh.json();assert.equal(refreshed.lastScans.TEST.symbol,'TEST');assert.ok(refreshed.lastScans.TEST.chartBars.length<=60);
     assert.equal(refreshed.lastScans.TEST.safety.realOrders,false);
 
-    const ticket=await post('/api/workstation/tickets',{symbol:'TEST',paperUnits:1});assert.equal(ticket.status,200);
+    const ticket=await post('/api/workstation/tickets',{symbol:'TEST',paperUnits:1,
+      reviewedScan:{revision:refreshed.lastScans.TEST.reviewRevision}});assert.equal(ticket.status,200);
     const ticketState=await ticket.json();assert.equal(ticketState.tickets.length,1);assert.equal(ticketState.tickets[0].symbol,'TEST');
     assert.equal('broker' in ticketState.tickets[0],false);
 
@@ -93,4 +96,105 @@ test('local HTTP API restricts origin, host and inputs and has no broker endpoin
     assert.equal((await fetch(base+'/../.data/state.json')).status,404);
     assert.match(home.headers.get('content-security-policy'),/default-src 'none'/);
   }finally{await new Promise(resolve=>app.close(resolve));await rm(dir,{recursive:true,force:true});}
+});
+
+test('manual ticket review, duplicate race, and source isolation survive a cold restart',async()=>{
+  const dir=await mkdtemp(join(tmpdir(),'p9-ticket-review-'));
+  const port=50000+Math.floor(Math.random()*1000);
+  const paperFile=join(dir,'paper.json'),stateFile=join(dir,'workstation.json');
+  let fixture=marketDataset(),app,child;
+  const base='http://127.0.0.1:'+port;
+  const post=(route,body)=>fetch(base+'/api/workstation/'+route,{
+    method:'POST',headers:{'Content-Type':'application/json',Origin:base},body:JSON.stringify(body)
+  });
+  async function startApp(){
+    app=await createApp({port,store:new PaperStore(paperFile),marketFetcher:async()=>fixture});
+    await new Promise((resolve,reject)=>app.once('error',reject).listen(port,'127.0.0.1',resolve));
+  }
+  async function startChild(options=[]){
+    const launch=`
+      import {createApp} from './server.mjs';
+      import {PaperStore} from './src/store.mjs';
+      const app=await createApp({port:${port},store:new PaperStore(${JSON.stringify(paperFile)})});
+      app.listen(${port},'127.0.0.1',()=>console.log('restart ready'));
+    `;
+    child=spawn(process.execPath,[...options,'--input-type=module','--eval',launch],{
+      stdio:['ignore','pipe','pipe']
+    });
+    let stderr='';
+    child.stderr.on('data',chunk=>{stderr=(stderr+chunk).slice(-1000);});
+    const started=await Promise.race([
+      once(child.stdout,'data',{signal:AbortSignal.timeout(10000)}),
+      once(child,'exit').then(([code])=>{throw new Error('Restart exited: '+code+' '+stderr);})
+    ]);
+    assert.match(String(started[0]),/restart ready/);
+  }
+  async function stopChild(signal){
+    if(child?.exitCode===null&&child.signalCode===null){
+      const exited=once(child,'exit');child.kill(signal);await exited;
+    }
+    child=null;
+  }
+  try{
+    await startApp();
+    assert.equal((await post('watchlist',{symbols:['TEST']})).status,200);
+    const initial=await (await post('refresh',{})).json();
+    const obsolete={symbol:'TEST',paperUnits:0.001,
+      reviewedScan:{revision:initial.lastScans.TEST.reviewRevision}};
+    fixture={...fixture,source:'Alternate permitted test fixture'};
+    const changed=await (await post('refresh',{})).json();
+    const before=await readFile(stateFile,'utf8');
+    assert.equal((await post('tickets',obsolete)).status,409);
+    assert.equal((await post('tickets',{symbol:'TEST',paperUnits:0.001})).status,409);
+    assert.equal(await readFile(stateFile,'utf8'),before);
+    const reviewed={...obsolete,reviewedScan:{revision:changed.lastScans.TEST.reviewRevision}};
+    await new Promise(resolve=>app.close(resolve));app=null;
+    const pauseBeforeRename=`
+      import fs from 'node:fs/promises';
+      import {syncBuiltinESMExports} from 'node:module';
+      const rename=fs.rename;
+      fs.rename=async(from,to)=>{
+        if(to!==${JSON.stringify(stateFile)})return rename(from,to);
+        process.stdout.write('before workstation rename');
+        await new Promise(()=>{});
+      };
+      syncBuiltinESMExports();
+    `;
+    await startChild(['--import','data:text/javascript,'+encodeURIComponent(pauseBeforeRename)]);
+    const paused=once(child.stdout,'data',{signal:AbortSignal.timeout(10000)});
+    const interrupted=post('tickets',reviewed).then(()=>false,()=>true);
+    assert.match(String((await paused)[0]),/before workstation rename/);
+    await stopChild('SIGKILL');
+    assert.equal(await interrupted,true);
+    assert.equal(await readFile(stateFile,'utf8'),before);
+    await startApp();
+    const results=await Promise.all([post('tickets',reviewed),post('tickets',reviewed)]);
+    assert.deepEqual(results.map(r=>r.status).sort(),[200,409]);
+    const opened=(await results.find(r=>r.ok).json()).tickets[0];
+    await new Promise(resolve=>app.close(resolve));app=null;
+    await startChild();
+    const restored=await (await fetch(base+'/api/workstation')).json();
+    assert.deepEqual(restored,JSON.parse(await readFile(stateFile,'utf8')));
+    assert.deepEqual(restored.tickets,[opened]);
+    assert.deepEqual(restored.lastScans,changed.lastScans);
+    const persisted=await readFile(stateFile,'utf8');
+    assert.equal((await post('tickets',reviewed)).status,409);
+    assert.equal(await readFile(stateFile,'utf8'),persisted);
+    await stopChild();
+    await startApp();
+    const later={...fixture,sourceAsOf:'2026-05-11',bars:[...fixture.bars,{
+      date:'2026-05-11',open:opened.entryReference,high:opened.targetReference+1,
+      low:opened.entryReference,close:opened.targetReference,volume:200000
+    }]};
+    fixture={...later,source:'Injected permitted test fixture'};
+    const foreign=await (await post('refresh',{})).json();
+    assert.deepEqual(foreign.tickets,[opened]);
+    fixture=later;
+    const matching=await (await post('refresh',{})).json();
+    assert.equal(matching.tickets[0].outcome.status,'TARGET_REFERENCE_TOUCHED');
+  }finally{
+    if(app?.listening)await new Promise(resolve=>app.close(resolve));
+    await stopChild();
+    await rm(dir,{recursive:true,force:true});
+  }
 });

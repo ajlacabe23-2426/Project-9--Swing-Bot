@@ -10,7 +10,7 @@ function mockServer({
 }={}){
   const actions=[];
   const state={
-    watchlist:['TEST'],lastScans:{TEST:{symbol:'TEST',asOf,source,classification,
+    watchlist:['TEST'],lastScans:{TEST:{symbol:'TEST',asOf,source,classification,reviewRevision:'a'.repeat(64),
       paperRiskPlan:{maxPaperUnits}}},
     tickets:structuredClone(existingTickets),lastRefreshErrors:refreshErrors
   };

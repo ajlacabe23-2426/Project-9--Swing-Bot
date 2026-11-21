@@ -90,6 +90,11 @@ export async function runOperationalCycle({
       const p=scan.paperRiskPlan;
       body.reviewedScan={asOf:scan.asOf,binding:scan.syntheticReplayBinding,
         entry:p.entryReference,stop:p.stopReference,target:p.targetReference};
+    }else{
+      if(!/^[a-f0-9]{64}$/.test(scan.reviewRevision??'')){
+        actions.push({symbol,status:'SCAN_REVISION_REQUIRED'});continue;
+      }
+      body.reviewedScan={revision:scan.reviewRevision};
     }
     state=await callLocal(fetcher,base,'/api/workstation/tickets','POST',body);
     actions.push({symbol,status:'PAPER_TICKET_CREATED',paperUnits,asOf:scan.asOf,
