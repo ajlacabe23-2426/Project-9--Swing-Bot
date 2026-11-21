@@ -235,8 +235,10 @@ export class WorkstationStore{
          Object.keys(reviewedScan).length!==Object.keys(expected).length||
          Object.keys(expected).some(key=>!Object.hasOwn(reviewedScan,key)||reviewedScan[key]!==expected[key]))
         throw Object.assign(new Error('Scan changed or was not reviewed; refresh before recording'),{status:409});
-      if(evaluation.classification==='NO_PAPER_SETUP')throw new Error('Paper ticket requires a watch or strong research classification');
-      if(paperUnits>evaluation.paperRiskPlan.maxPaperUnits)throw new Error('Paper units exceed the frozen paper-risk reference');
+      if(evaluation.classification==='NO_PAPER_SETUP')
+        throw Object.assign(new Error('Paper ticket requires a watch or strong research classification'),{status:409});
+      if(paperUnits>evaluation.paperRiskPlan.maxPaperUnits)
+        throw Object.assign(new Error('Paper units exceed the frozen paper-risk reference'),{status:409});
       if(state.tickets.some(ticket=>ticket.symbol===normalized&&
         (ticket.openedAsOf===evaluation.asOf||
          ticket.outcome?.status==='OPEN_PAPER_OBSERVATION')))
