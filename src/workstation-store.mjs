@@ -210,7 +210,7 @@ export class WorkstationStore{
       return state;
     });
   }
-  async createTicket(symbol,paperUnits,{createdAt,reviewedScan}={}){
+  async createTicket(symbol,paperUnits,{createdAt,reviewedScan,checkScan}={}){
     const normalized=String(symbol||'').trim().toUpperCase();
     if(!SYMBOL.test(normalized))throw new Error('Invalid paper-ticket symbol');
     if(!Number.isFinite(paperUnits)||paperUnits<0.001||
@@ -220,6 +220,9 @@ export class WorkstationStore{
     if(typeof createdAt!=='string'||!createdAt)throw new Error('Paper-ticket timestamp is required');
     return this.mutate(state=>{
       const evaluation=state.lastScans[normalized];
+      if(checkScan&&!REPLAY_SYMBOLS.includes(normalized)&&state.lastRefreshErrors.some(error=>error.symbol===normalized))
+        throw Object.assign(new Error('Latest market refresh failed; refresh before recording'),{status:409});
+      checkScan?.(evaluation,normalized);
       const reserved=REPLAY_SYMBOLS.includes(normalized);
       const p=evaluation?.paperRiskPlan;
       const expected=reserved
