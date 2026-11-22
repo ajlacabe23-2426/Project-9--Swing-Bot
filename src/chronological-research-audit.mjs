@@ -152,7 +152,8 @@ export function auditChronologicalResearch(input,{asOf=null}={}){
       dataRightsAndPointInTimeAvailabilityVerified:false,
       actualBidAskLiquidityOrCorporateActionsVerified:false,
       hypotheticalEntriesAndExitsAreNotFills:true,
-      benchmarkIsNotMatchedOrInvestable:false,
+      benchmarkMatchedToStrategySignals:false,
+      benchmarkExecutablePortfolio:false,
       allReturnsAreIndependentNotionalUnitReferences:true,
       brokerConnected:false,providerCalls:0,realOrdersCreated:0,
       schedulingEnabled:false,productionGate:'NO_GO'
