@@ -27,6 +27,19 @@ jobs:
             echo "No npm dependency lockfile present; repository baseline verifies that package.json has no dependencies."
           fi
       - run: npm run check
+      - name: Run StarNet Phase 3 CLI and verify private evidence output
+        shell: bash
+        run: |
+          npm run starnet:phase3 -- --report-dir "$RUNNER_TEMP/project9-phase3-starnet"
+          node --input-type=module -e '
+            import {readdir,readFile} from "node:fs/promises";
+            import {join} from "node:path";
+            const d=process.env.RUNNER_TEMP+"/project9-phase3-starnet";
+            const names=await readdir(d);
+            if(names.length!==2||names.filter(x=>x.endsWith(".json")).length!==1||names.filter(x=>x.endsWith(".md")).length!==1)throw Error("Expected one JSON and one Markdown packet");
+            const result=JSON.parse(await readFile(join(d,names.find(x=>x.endsWith(".json"))),"utf8"));
+            if(result.softwareGate!=="PASS"||result.productionGate!=="NO_GO"||result.sideEffects.realOrdersCreated!==0||result.sideEffects.scheduledTasksCreated!==0)throw Error("StarNet Phase 3 packet failed closed");
+          '
       - name: Check browser availability for loopback acceptance
         run: command -v google-chrome
       - name: Exercise workstation in headless Chromium
