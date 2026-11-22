@@ -69,6 +69,12 @@ export async function runOperationalCycle({
     }
     const sourceName=typeof scan.source==='object'&&scan.source!==null?String(scan.source.name||''):String(scan.source||'');
     const synthetic=SYNTHETIC_SOURCE.test(sourceName);
+    // Nonfictional data has no authenticated point-in-time rights/eligibility
+    // attestation. Never create a ticket automatically on a source label alone.
+    if(!synthetic){
+      actions.push({symbol,status:'UNVERIFIED_SOURCE_AUTO_PAPER_BLOCKED',asOf:scan.asOf});
+      continue;
+    }
     if(synthetic&&!allowSyntheticDemo){
       actions.push({symbol,status:'SYNTHETIC_REQUIRES_DEMO_OPT_IN'});continue;
     }
