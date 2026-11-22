@@ -17,6 +17,7 @@ import {promisify} from 'node:util';
 import {runPaperLifecycleAcceptance} from './accept-paper-lifecycle.mjs';
 import {buildDemoDataset} from '../src/synthetic-demo-fixture.mjs';
 import {evaluateSwingSetup} from '../src/market-intelligence.mjs';
+import {assertPatchedNodeRuntime} from '../src/runtime-security.mjs';
 
 const command=promisify(execFile);
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
@@ -121,6 +122,9 @@ export async function runStarNetPhase3({
   acceptanceRunner=runPaperLifecycleAcceptance,
   commitReader=currentCommit
 }={}){
+  // A synthetic PASS on an unpatched Node build is not acceptance.
+  // Check before reading the candidate, running fixtures or writing evidence.
+  assertPatchedNodeRuntime();
   if(!(now instanceof Date)||!Number.isFinite(now.getTime()))throw new Error('Invalid verification timestamp');
   if(typeof acceptanceRunner!=='function'||typeof commitReader!=='function')
     throw new Error('Invalid verifier dependency');
