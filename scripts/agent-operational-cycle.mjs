@@ -75,6 +75,13 @@ export async function runOperationalCycle({
       actions.push({symbol,status:'UNVERIFIED_SOURCE_AUTO_PAPER_BLOCKED',asOf:scan.asOf});
       continue;
     }
+    // A source label alone cannot establish that a dataset is one of our
+    // two reserved fictional replay fixtures. Refuse other symbols even
+    // when a caller supplied --demo or a name containing "synthetic".
+    if(!['SIM09','SIM10'].includes(symbol)){
+      actions.push({symbol,status:'FICTIONAL_SCAN_IDENTITY_REQUIRED'});
+      continue;
+    }
     if(synthetic&&!allowSyntheticDemo){
       actions.push({symbol,status:'SYNTHETIC_REQUIRES_DEMO_OPT_IN'});continue;
     }
