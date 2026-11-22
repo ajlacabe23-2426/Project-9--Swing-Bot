@@ -178,17 +178,10 @@ export class WorkstationStore{
           evaluation.paperSourceIdentity=paperSourceIdentity(dataset);
           evaluation.reviewRevision=digest([dataset,evaluation]);
         }
-        if(!reserved&&!suppressAlerts&&previous&&previous.classification!==evaluation.classification){
-          state.alerts.unshift({
-            id:'A'+(state.alerts.length+1)+'-'+dataset.symbol+'-'+evaluation.asOf,
-            symbol:dataset.symbol,
-            from:previous.classification,
-            to:evaluation.classification,
-            scoreFrom:previous.score,
-            scoreTo:evaluation.score,
-            asOf:evaluation.asOf
-          });
-        }
+        // P0 quarantine: unverified research cannot enqueue fresh persisted alerts.
+        // Keep historical records intact; suppression is unconditional until a
+        // separately verified source eligibility and notification gate exists.
+        // The suppressAlerts option remains accepted for backward compatibility.
         state.lastScans[dataset.symbol]=evaluation;
         // Keep the original validated wire contract: normalizeMarketDataset adds an
         // internal provenance.contract field that is not valid on re-import.
