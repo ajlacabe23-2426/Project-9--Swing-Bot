@@ -7,6 +7,18 @@ description: Safely operate Project 9's local, write-capable research and paper-
 
 This skill teaches StarNet agents **how** to run the existing Project 9 engine. It does not add credentials, broker access, market trading powers, or background cloud execution.
 
+## Phase 3 default — evidence-only, no ticket writes
+
+For Project 9 Phase 3, the safe StarNet Workbench command is:
+
+```sh
+npm run starnet:phase3
+```
+
+The command exercises the synthetic paper lifecycle only in an automatically removed temporary directory, verifies strict QA and risk checks, and writes two private files under `.data/starnet/phase3/`. It cannot enable `--paper-auto`, touch the saved workstation or create any orders. Report the actual commit SHA, software result and real-trading NO_GO status from the generated JSON and Markdown; the StarNet app itself must still be run manually by the operator. See `docs/STARNET_PHASE3_VERIFY_2026-11-22.md`.
+
+The older `starnet:mission` commands below describe a **separate legacy workflow** with an optional write-capable paper-cycle path. They are **not approved Phase 3 commands**. Keep routines paused and never change the user's saved paper state during Phase 3 verification.
+
 ## Requirements
 - Trusted local folder containing Project 9's `package.json` and `scripts/starnet-crew-mission.mjs`.
 - Node.js version accepted by the repository.
