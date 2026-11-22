@@ -47,7 +47,7 @@ jobs:
       - name: Verify frozen chronological research and cost stress on engineered demo
         shell: bash
         run: |
-          npm run research:time-split -- --demo > "$RUNNER_TEMP/project9-chronological.json"
+          node scripts/research-time-split.mjs --demo > "$RUNNER_TEMP/project9-chronological.json"
           node --input-type=module -e '
             import {readFile} from "node:fs/promises";
             const report=JSON.parse(await readFile(process.env.RUNNER_TEMP+"/project9-chronological.json","utf8"));
