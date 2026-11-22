@@ -73,6 +73,9 @@ export async function createApp({
   requireSessionEvidence=marketFetcher===defaultMarketFetcher,
   now=()=>new Date()
 }={}){
+  // Enforce the runtime floor for every caller, including tests, imports and
+  // StarNet's programmatic loopback server. Never rely on the CLI entrypoint.
+  assertPatchedNodeRuntime();
   if(!Number.isInteger(port)||port<1024||port>65535)throw new Error('Port must be between 1024 and 65535');
   await store.init();
   const workstation=workstationStore||new WorkstationStore(resolve(dirname(store.file),'workstation.json'));
