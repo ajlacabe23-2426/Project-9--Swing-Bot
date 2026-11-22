@@ -1,5 +1,16 @@
 # StarNet operational integration — Project 9 (paper only)
 
+## Phase 3 safe verification command — preferred
+
+```sh
+npm run starnet:phase3
+```
+
+This uses the existing synthetic lifecycle acceptance in an isolated disposable environment and writes a private evidence packet. It **does not** run the write-capable StarNet paper mission or access your existing watchlist. Consult [the Phase 3 runbook](STARNET_PHASE3_VERIFY_2026-11-22.md). In StarNet Workbench, launch only this command after explicit tool approval and inspect both outputs. Do **not** enable a Routine or the older `--paper-auto` mode.
+
+The sections below describe legacy operation modes for separate later review, not the current Phase 3 procedure.
+
+
 ## StarNet crew mission — full local research handoff
 
 The **StarNet mission bridge** wraps the existing deterministic Project 9 functions into one accepted command and two private deliverables. It coordinates real calculations (not fabricated agent summaries), and can update the local paper journal when explicitly requested.
