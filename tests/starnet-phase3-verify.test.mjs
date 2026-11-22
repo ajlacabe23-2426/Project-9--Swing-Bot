@@ -27,6 +27,9 @@ test('StarNet Phase 3 creates exactly two private, evidence-scoped outputs after
     assert.equal(output.softwareGate,'PASS');
     assert.equal(output.productionGate,'NO_GO');
     assert.equal(output.sourceCommit,SHA);
+    assert.equal(output.nodeRuntime.version,process.versions.node);
+    assert.equal(output.nodeRuntime.executable,process.execPath);
+    assert.equal(output.nodeRuntime.policy,'PASS');
     assert.ok(output.checksPassed>=17);
     assert.equal(output.sideEffects.existingWorkstationTouched,false);
     assert.equal(output.sideEffects.realOrdersCreated,0);
@@ -39,6 +42,8 @@ test('StarNet Phase 3 creates exactly two private, evidence-scoped outputs after
     const json=JSON.parse(await readFile(output.deliverables.json,'utf8'));
     const md=await readFile(output.deliverables.markdown,'utf8');
     assert.equal(json.schema,'project9-starnet-phase3-evidence-v1');
+    assert.deepEqual(json.nodeRuntime,output.nodeRuntime);
+    assert.ok(md.includes('Runtime policy: PASS'));
     assert.equal(json.roles.researcher.status,'PASS');
     assert.equal(json.roles.qaEngineer.status,'PASS');
     assert.equal(json.roles.riskAuditor.status,'PASS');
