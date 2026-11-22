@@ -13,7 +13,7 @@ import {RETURN_CONTRACT,modeledReturns,observationWindow,windowDefinition,meanRe
 export const BREAKOUT_STRATEGY_ID='P9_DAILY_20H_50SMA_V1';
 const round=(n,dp=4)=>Number(n.toFixed(dp));
 
-function classifyAt(bars,index){
+export function classifyDailyBreakoutAt(bars,index){
   if(!Number.isSafeInteger(index)||index<49||index>=bars.length)
     throw new Error('Daily strategy requires 50 completed bars through the signal date');
   const prior20High=Math.max(...bars.slice(index-20,index).map(bar=>bar.high));
@@ -57,12 +57,12 @@ export function analyzeDailyBreakout(input,{
     throw new Error('Review date exceeds declared source-as-of date');
   const latestIndex=bars.findLastIndex(bar=>bar.date<=reviewDate);
   if(latestIndex<49)throw new Error('Need 50 completed bars through review date');
-  const latest=classifyAt(bars,latestIndex);
+  const latest=classifyDailyBreakoutAt(bars,latestIndex);
   const outcomes=[];
   let historicalChecks=0;
   // Do not treat a currently visible setup as an already-closed paper outcome.
   for(let index=49;index+holdingBars<=latestIndex;){
-    const signal=classifyAt(bars,index);
+    const signal=classifyDailyBreakoutAt(bars,index);
     historicalChecks++;
     if(signal.signal!=='HISTORICAL_BREAKOUT'){
       index++;
