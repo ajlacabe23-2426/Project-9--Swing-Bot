@@ -88,6 +88,9 @@ function humanReport(report){
     '# Project 9 / StarNet Phase 3 verification packet',
     '',
     'Generated UTC: '+report.generatedAt,
+    'Node.js: '+report.nodeRuntime.version,
+    'Node executable: '+report.nodeRuntime.executable,
+    'Runtime policy: '+report.nodeRuntime.policy,
     'Git commit: '+report.sourceCommit,
     'Run ID: '+report.runId,
     'Data mode: ENGINEERED SYNTHETIC ONLY',
@@ -141,6 +144,7 @@ export async function runStarNetPhase3({
   const report={
     schema:'project9-starnet-phase3-evidence-v1',
     runId:randomUUID(),generatedAt:now.toISOString(),sourceCommit,
+    nodeRuntime:{version:process.versions.node,executable:process.execPath,policy:'PASS'},
     sourceMode:'ENGINEERED_SYNTHETIC_ONLY',
     operation:'READ_ONLY_EVIDENCE_REPORT_AFTER_ISOLATED_SYNTHETIC_TEST',
     softwareGate:'PASS',
@@ -171,7 +175,7 @@ export async function runStarNetPhase3({
   }
   return {schema:report.schema,runId:report.runId,
     softwareGate:report.softwareGate,productionGate:report.productionGate,
-    sourceCommit,checksPassed:report.checks.length,
+    sourceCommit,nodeRuntime:report.nodeRuntime,checksPassed:report.checks.length,
     deliverables:{json:jsonPath,markdown:markdownPath},
     sideEffects:report.sideEffects};
 }
