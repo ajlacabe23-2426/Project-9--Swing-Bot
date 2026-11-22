@@ -33,7 +33,7 @@ function spawnServer({port,directory,pauseBeforeRename=false}){
   const code=`
     import {syncBuiltinESMExports} from 'node:module';
     if (${JSON.stringify(pauseBeforeRename)}) {
-      const fs=await import('node:fs/promises');
+      const {default:fs}=await import('node:fs/promises');
       const original=fs.rename;
       fs.rename=async(from,to)=>{
         if(to===${JSON.stringify(journal)}){
