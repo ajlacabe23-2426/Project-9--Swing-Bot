@@ -4,14 +4,15 @@ import {runOperationalCycle,validatePort,paperUnitsFor} from '../scripts/agent-o
 
 const NOW=new Date('2026-11-08T22:00:00.000Z');
 function mockServer({
-  asOf='2026-11-06',source='Permitted sample provider',
+  symbol='TEST',asOf='2026-11-06',source='Permitted sample provider',
   classification='PAPER_SETUP_STRONG',maxPaperUnits=0.75,
   existingTickets=[],refreshErrors=[]
 }={}){
   const actions=[];
   const state={
-    watchlist:['TEST'],lastScans:{TEST:{symbol:'TEST',asOf,source,classification,reviewRevision:'a'.repeat(64),
-      paperRiskPlan:{maxPaperUnits}}},
+    watchlist:[symbol],lastScans:{[symbol]:{symbol,asOf,source,classification,
+      reviewRevision:'a'.repeat(64),syntheticReplayBinding:'b'.repeat(64),
+      paperRiskPlan:{maxPaperUnits,entryReference:1,stopReference:0.9,targetReference:1.1}}},
     tickets:structuredClone(existingTickets),lastRefreshErrors:refreshErrors
   };
   const fetcher=async(url,options)=>{
@@ -40,7 +41,7 @@ test('port is strictly loopback with bounded port; paper sizing cannot exceed on
   assert.equal(paperUnitsFor({maxPaperUnits:0.00001}),null);
 });
 test('only explicit fictional demo can create an unattended virtual ticket',async()=>{
-  const m=mockServer({source:'Project 9 ENGINEERED SYNTHETIC DEMO - NOT REAL MARKET DATA'});
+  const m=mockServer({symbol:'SIM09',source:'Project 9 ENGINEERED SYNTHETIC DEMO - NOT REAL MARKET DATA'});
   const report=await runOperationalCycle({now:NOW,fetcher:m.fetcher,autoPaper:true,allowSyntheticDemo:true});
   assert.deepEqual(m.actions.map(x=>x.path),[
     '/api/workstation','/api/workstation/refresh','/api/workstation/tickets']);
@@ -59,11 +60,11 @@ test('default mode updates workstation but does not open a ticket',async()=>{
 });
 test('synthetic data requires explicit demo opt-in even for paper tickets',async()=>{
   const source='Project 9 ENGINEERED SYNTHETIC DEMO - NOT REAL MARKET DATA';
-  const blocked=mockServer({source,asOf:'2025-10-01'});
+  const blocked=mockServer({symbol:'SIM09',source,asOf:'2025-10-01'});
   const result=await runOperationalCycle({now:NOW,fetcher:blocked.fetcher,autoPaper:true});
   assert.equal(result.actions[0].status,'SYNTHETIC_REQUIRES_DEMO_OPT_IN');
   assert.equal(blocked.state.tickets.length,0);
-  const demo=mockServer({source,asOf:'2025-10-01'});
+  const demo=mockServer({symbol:'SIM09',source,asOf:'2025-10-01'});
   const allowed=await runOperationalCycle({now:NOW,fetcher:demo.fetcher,
     autoPaper:true,allowSyntheticDemo:true});
   assert.equal(allowed.actions[0].status,'PAPER_TICKET_CREATED');
@@ -72,11 +73,11 @@ test('synthetic data requires explicit demo opt-in even for paper tickets',async
 test('structured provider source metadata blocks synthetic tickets without demo opt-in',async()=>{
   const structured={name:'Project 9 ENGINEERED SYNTHETIC DEMO - NOT REAL MARKET DATA',
     mode:'HISTORICAL',sourceAsOf:'2026-11-06'};
-  const blocked=mockServer({source:structured,asOf:'2026-11-06'});
+  const blocked=mockServer({symbol:'SIM09',source:structured,asOf:'2026-11-06'});
   const result=await runOperationalCycle({now:NOW,fetcher:blocked.fetcher,autoPaper:true});
   assert.equal(result.actions[0].status,'SYNTHETIC_REQUIRES_DEMO_OPT_IN');
   assert.equal(blocked.state.tickets.length,0);
-  const allowed=mockServer({source:structured,asOf:'2026-11-06'});
+  const allowed=mockServer({symbol:'SIM09',source:structured,asOf:'2026-11-06'});
   const demo=await runOperationalCycle({now:NOW,fetcher:allowed.fetcher,
     autoPaper:true,allowSyntheticDemo:true});
   assert.equal(demo.actions[0].status,'PAPER_TICKET_CREATED');
@@ -95,11 +96,19 @@ test('external sources never auto-create virtual tickets, regardless of freshnes
   }
 });
 test('fictional open or same-bar paper tickets prevent duplicate creation',async()=>{
-  const m=mockServer({source:'Project 9 ENGINEERED SYNTHETIC DEMO - NOT REAL MARKET DATA',existingTickets:[{symbol:'TEST',openedAsOf:'2026-11-01',
+  const m=mockServer({symbol:'SIM09',source:'Project 9 ENGINEERED SYNTHETIC DEMO - NOT REAL MARKET DATA',existingTickets:[{symbol:'SIM09',openedAsOf:'2026-11-01',
     outcome:{status:'OPEN_PAPER_OBSERVATION'}}]});
   const report=await runOperationalCycle({now:NOW,fetcher:m.fetcher,autoPaper:true,allowSyntheticDemo:true});
   assert.equal(report.actions[0].status,'ALREADY_TRACKED');
   assert.equal(m.state.tickets.length,1);
+});
+test('spoofed synthetic source label cannot auto-create an observation for a non-fixture symbol',async()=>{
+  const m=mockServer({symbol:'TEST',source:'Synthetic provider name that is not a reserved fixture'});
+  const result=await runOperationalCycle({now:NOW,fetcher:m.fetcher,autoPaper:true,allowSyntheticDemo:true});
+  assert.equal(result.actions[0].status,'FICTIONAL_SCAN_IDENTITY_REQUIRED');
+  assert.equal(result.mutations.virtualTicketsCreated,0);
+  assert.deepEqual(m.actions.map(x=>x.path),['/api/workstation','/api/workstation/refresh']);
+  assert.equal(m.state.tickets.length,0);
 });
 test('refresh failures are reported and never used for paper creation',async()=>{
   const m=mockServer({refreshErrors:[{symbol:'TEST',message:'upstream unavailable'}]});
