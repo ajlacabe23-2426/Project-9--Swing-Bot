@@ -52,6 +52,24 @@ npm run security:baseline
 
 Verify results on the *exact final branch head*. Running the command tests in-memory synthetic fixtures and an isolated temporary workstation; GitHub CI does not prove actual StarNet Workbench execution on the user's device.
 
+## Runtime compliance — independent acceptance gate
+
+The November 22 StarNet Workbench acceptance on checkout `585a9c2376b152a1b5569fd2a2a17598543dce77` exercised all **17 synthetic checks successfully**, but an independent review found **Node v24.22.2**, below this repository's minimum patched 24.x release **24.22.3**. That run is **synthetic SOFTWARE PASS / RUNTIME POLICY FAIL / UNCONDITIONAL ACCEPTANCE BLOCKED**. Its evidence is historical and must not be relabeled as runtime-compliant.
+
+The new stacked runtime patch checks the Node floor in both `createApp()` (including programmatic callers) and `runStarNetPhase3()` before it starts synthetic tests or writes reports. The supported lines are declared in `package.json` and `src/runtime-security.mjs`: 22.23.5+ (22.x), 24.22.3+ (24.x), or 26.13.1+ (26.x). No programmatic override or silent fallback is provided.
+
+Inspect the **actual** runtime used by StarNet Workbench and Terminal:
+
+```sh
+command -v node
+node --version
+node -p "process.execPath"
+```
+
+Upgrade Node through the operator's existing trusted installation manager, **not** by lowering security floors or changing the checked-out source. The operator must separately confirm that the Workbench PATH resolves a compliant binary. Do not install or modify tools automatically as part of this exercise. After using a compliant Node binary, run `npm run starnet:phase3` once under human approval, then read the **new** evidence files and record the exact new commit.
+
+A passing GitHub run on CI's patched Node verifies the enforcement code; it does **not** verify the Mac's local Node installation.
+
 ## Fail-closed rules
 
 - Unknown options, duplicate options, `--paper-auto`, `--schedule`, and any attempt to turn on journal writes are **rejected** by `starnet:phase3`.
