@@ -40,6 +40,10 @@ jobs:
             const result=JSON.parse(await readFile(join(d,names.find(x=>x.endsWith(".json"))),"utf8"));
             if(result.softwareGate!=="PASS"||result.productionGate!=="NO_GO"||result.sideEffects.realOrdersCreated!==0||result.sideEffects.scheduledTasksCreated!==0)throw Error("StarNet Phase 3 packet failed closed");
           '
+      - name: Verify cold-process SIGKILL and interrupted atomic-save recovery
+        shell: bash
+        run: |
+          npm run accept:cold-recovery
       - name: Check browser availability for loopback acceptance
         run: command -v google-chrome
       - name: Exercise workstation in headless Chromium
