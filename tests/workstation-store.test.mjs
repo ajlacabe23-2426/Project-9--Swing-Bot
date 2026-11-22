@@ -46,7 +46,7 @@ test('workstation persists scans and freezes paper tickets without broker state'
   }finally{await rm(dir,{recursive:true,force:true});}
 });
 
-test('classification changes create explicit alerts',async()=>{
+test('unverified classification changes never enqueue new alerts',async()=>{
   const dir=await mkdtemp(join(tmpdir(),'project9-alerts-'));
   try{
     const store=new WorkstationStore(join(dir,'workstation.json'));await store.init();await store.setWatchlist(['TEST']);
@@ -54,9 +54,31 @@ test('classification changes create explicit alerts',async()=>{
     await store.applyRefresh([{dataset:input,evaluation:first}],{refreshedAt:'2026-10-05T15:00:00.000Z'});
     const second=structuredClone(first);second.classification=first.classification==='PAPER_SETUP_STRONG'?'PAPER_SETUP_WATCH':'PAPER_SETUP_STRONG';second.score=second.classification==='PAPER_SETUP_STRONG'?85:65;
     const state=await store.applyRefresh([{dataset:input,evaluation:second}],{refreshedAt:'2026-10-06T15:00:00.000Z'});
-    assert.equal(state.alerts.length,1);
-    assert.equal(state.alerts[0].from,first.classification);
-    assert.equal(state.alerts[0].to,second.classification);
+    assert.equal(state.alerts.length,0,'no new alert without independent evidence gate');
+    assert.equal(state.lastScans.TEST.classification,second.classification,'ordinary scan still updates');
+    const repeated=await store.applyRefresh([{dataset:input,evaluation:second}],{refreshedAt:'2026-10-07T15:00:00.000Z'});
+    assert.equal(repeated.alerts.length,0,'repeat refresh cannot invent notifications');
+  }finally{await rm(dir,{recursive:true,force:true});}
+});
+
+test('previously recorded classification history survives refresh but is not expanded',async()=>{
+  const dir=await mkdtemp(join(tmpdir(),'project9-legacy-alerts-'));
+  try{
+    const store=new WorkstationStore(join(dir,'workstation.json'));
+    await store.init();await store.setWatchlist(['TEST']);
+    const input=dataset(),first=forceWatchEvaluation(input);
+    await store.applyRefresh([{dataset:input,evaluation:first}],{refreshedAt:'2026-10-05T15:00:00.000Z'});
+    const archived={id:'A1-TEST-ARCHIVED',symbol:'TEST',from:'NO_PAPER_SETUP',
+      to:'PAPER_SETUP_WATCH',scoreFrom:0,scoreTo:60,asOf:first.asOf};
+    await store.mutate(state=>{state.alerts=[archived];return state;});
+    const second=structuredClone(first);
+    second.classification='PAPER_SETUP_STRONG';second.score=85;
+    const updated=await store.applyRefresh([{dataset:input,evaluation:second}],
+      {refreshedAt:'2026-10-06T15:00:00.000Z'});
+    assert.deepEqual(updated.alerts,[archived],'historical records preserved without false new alerts');
+    const restored=new WorkstationStore(join(dir,'workstation.json'));
+    await restored.init();
+    assert.deepEqual(restored.snapshot().alerts,[archived]);
   }finally{await rm(dir,{recursive:true,force:true});}
 });
 
