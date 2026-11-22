@@ -44,6 +44,22 @@ jobs:
         shell: bash
         run: |
           npm run accept:cold-recovery
+      - name: Verify frozen chronological research and cost stress on engineered demo
+        shell: bash
+        run: |
+          npm run research:time-split -- --demo > "$RUNNER_TEMP/project9-chronological.json"
+          node --input-type=module -e '
+            import {readFile} from "node:fs/promises";
+            const report=JSON.parse(await readFile(process.env.RUNNER_TEMP+"/project9-chronological.json","utf8"));
+            const expected=["DEVELOPMENT_REFERENCE","CHRONOLOGICAL_VALIDATION","CHRONOLOGICAL_HOLDOUT"];
+            if(report.schema!=="project9-chronological-cost-stress-audit-v1"||
+               report.study!=="DESCRIPTIVE_RESEARCH_ONLY_NO_TUNING"||
+               report.phases.length!==3||
+               report.phases.some((p,i)=>p.phase!==expected[i]||p.strategy.costSensitivity.length!==4)||
+               report.safety.productionGate!=="NO_GO"||
+               report.safety.realOrdersCreated!==0||
+               report.inputIdentity.sourceKind!=="ENGINEERED_FICTIONAL_FIXTURE")throw Error("Chronological demo audit did not preserve the gates");
+          '
       - name: Check browser availability for loopback acceptance
         run: command -v google-chrome
       - name: Exercise workstation in headless Chromium
