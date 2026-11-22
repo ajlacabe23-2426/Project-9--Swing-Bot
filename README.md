@@ -252,3 +252,7 @@ node --test tests/paper-lifecycle-acceptance.test.mjs
 ```
 
 Read the [Phase 3 ticket lifecycle acceptance matrix](docs/PHASE3_PAPER_TICKET_LIFECYCLE_ACCEPTANCE_2026-11-21.md) before treating a test report as evidence. This is distinct from the AAPL `NO_PAPER_SETUP` scan, which correctly created no ticket.
+
+## StarNet Phase 3 verification (synthetic-only)
+
+Use `npm run starnet:phase3` to run the isolated Phase 3 lifecycle acceptance and generate a private, source-SHA-linked QA packet. This command cannot enable automatic paper tickets, schedules, real market-data calls, or brokerage actions, and never opens your existing workstation state. See [StarNet Phase 3 verification](docs/STARNET_PHASE3_VERIFY_2026-11-22.md). The previous `starnet:mission` write-capable mode is a separate workflow and is not approved for this gate.
