@@ -8,6 +8,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {openFictionalExecutionJournal} from '../src/starnet-fictional-execution-journal.mjs';
+import {auditFictionalRiskJournalReport} from '../src/starnet-fictional-reconciliation-audit.mjs';
 
 const M='MISSING';
 const policy=()=>({
@@ -76,6 +77,12 @@ export async function acceptFictionalRiskAccounting(args){
     journal=await openFictionalExecutionJournal(dir);
     const replay=await journal.report();
     assert.deepEqual(replay,first);
+    const independentAudit=auditFictionalRiskJournalReport(replay);
+    assert.equal(independentAudit.finding,'PASS_FICTIONAL_ARITHMETIC_ONLY');
+    assert.equal(independentAudit.checkedDecisions,4);
+    assert.equal(independentAudit.checkedEvents,5);
+    assert.equal(independentAudit.expectedCashTicks,10000);
+    assert.equal(independentAudit.safety.realOrdersCreated,0);
     await journal.submit(order('SIM-ORDER-OVERSPEND','BUY',3)); // exact denied retry
     await journal.recordEvent(event('SIM-EVENT-ACK','SIM-ORDER-PRIMARY','ACK'));
     assert.deepEqual(await readFile(join(dir,'journal.json')),persistedBytes);
@@ -86,12 +93,18 @@ export async function acceptFictionalRiskAccounting(args){
       checks:Object.freeze({
         cashReservation:true,holdingsReservation:true,overspendDenied:true,
         doubleSellDenied:true,partialFillAccounting:true,
+        independentlyRecomputedFictionalBalances:true,
         cancellationRelease:true,sameProcessReopen:true,
         duplicateRetriesByteIdentical:true,externalCalls:0,
         realOrdersCreated:0,blockchainBroadcasts:0,
         localMacOperatorAcceptance:'NOT_RUN'
       }),
-      journalRevision:first.revision,finalCashTicks:replay.risk.cash.totalTicks,
+      journalRevision:first.revision,
+      reconciliation:Object.freeze({finding:independentAudit.finding,
+        checkedEvents:independentAudit.checkedEvents,
+        outstandingFictionalOrders:independentAudit.outstandingFictionalOrders,
+        authenticExecutionsVerified:false}),
+      finalCashTicks:replay.risk.cash.totalTicks,
       decisionCount:replay.risk.orderCount,
       note:'These are invented exercise units and ticks, not brokerage assets or on-chain holdings.'
     });
