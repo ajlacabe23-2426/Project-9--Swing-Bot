@@ -108,6 +108,30 @@ jobs:
           if node scripts/review-simulated-execution.mjs --live > /dev/null 2>&1; then
             echo "Unexpected live execution flag acceptance"; exit 1
           fi
+      - name: Verify durable fictional execution journal on disposable local fixtures
+        shell: bash
+        run: |
+          node scripts/accept-fictional-execution-journal.mjs --demo > "$RUNNER_TEMP/project9-execution-journal.json"
+          node --input-type=module -e '
+            import {readFile} from "node:fs/promises";
+            const report=JSON.parse(await readFile(process.env.RUNNER_TEMP+"/project9-execution-journal.json","utf8"));
+            if(report.schema!=="project9-fictional-execution-acceptance-v1" ||
+               report.scope!=="ENGINEERED_FICTIONAL_OFFLINE" ||
+               report.softwareGate!=="PASS" ||
+               report.productionGate!=="NO_GO" ||
+               report.recoveredRevision!==8 ||
+               report.checks.retryIdentitiesPreserved!==true ||
+               report.checks.hashChainReplayed!==true ||
+               report.checks.actualOrdersCreated!==0 ||
+               report.checks.blockchainBroadcasts!==0 ||
+               report.checks.externalCalls!==0 ||
+               report.resultingStates[0].status!=="SIMULATED_RECONCILED" ||
+               report.resultingStates[1].status!=="SIMULATED_CANCELLED")
+              throw Error("Durable fictional journal acceptance failed");
+          '
+          if node scripts/accept-fictional-execution-journal.mjs --live > /dev/null 2>&1; then
+            echo "Unexpected acceptance of live execution"; exit 1
+          fi
       - name: Check browser availability for loopback acceptance
         run: command -v google-chrome
       - name: Exercise workstation in headless Chromium
