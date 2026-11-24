@@ -16,6 +16,10 @@ import {tmpdir} from 'node:os';
 import {createSimulatedExecutionPort} from './starnet-simulated-execution-port.mjs';
 import {createFictionalRiskBook} from './starnet-fictional-risk-book.mjs';
 import {deliverFictionalExecutionMessage,validateFictionalExecutionMessage} from './starnet-fictional-message-emulator.mjs';
+import {
+  validateFictionalReview,validateFictionalStop,reviewFictionalQuarantine,
+  fictionalStopSnapshot
+} from './starnet-fictional-operator-controls.mjs';
 
 const JOURNAL_SCHEMA = 'project9-fictional-execution-journal-v1';
 const SCOPE = 'FICTIONAL_OFFLINE';
@@ -57,16 +61,19 @@ function reconstruct(state) {
   const intents = new Set();
   const eventIds = new Set();
   const receipts = new Map();
+  const reviews = new Map();
+  let stop = null;
   state.entries.forEach((entry, index) => {
     if (!exact(entry, ENTRY_KEYS) ||
         entry.sequence !== index + 1 ||
-        !['POLICY', 'INTENT', 'EVENT', 'MESSAGE'].includes(entry.kind) ||
+        !['POLICY', 'INTENT', 'EVENT', 'MESSAGE', 'REVIEW', 'STOP'].includes(entry.kind) ||
         entry.previousHash !== previousHash ||
         typeof entry.hash !== 'string' || !SHA256.test(entry.hash) ||
         entry.hash !== hash([entry.sequence, entry.kind, entry.payload, previousHash])) {
       fail('Fictional execution journal sequence or hash verification failed');
     }
     try {
+      if(stop!==null) fail('No entries permitted after latched fictional stop');
       if (entry.kind === 'POLICY') {
         if (index !== 0 || risk !== null) fail('Risk policy must be first and unique');
         risk = createFictionalRiskBook(entry.payload);
@@ -84,7 +91,7 @@ function reconstruct(state) {
         if (risk) risk.recordEvent(entry.payload);
         port.recordEvent(entry.payload);
         eventIds.add(entry.payload.eventId);
-      } else {
+      } else if(entry.kind==='MESSAGE') {
         const payload=entry.payload;
         if(!exact(payload,['message','disposition','reason','simulatedEventId']))
           fail('Malformed fictional message receipt record');
@@ -96,6 +103,21 @@ function reconstruct(state) {
            receipt.simulatedEventId!==payload.simulatedEventId)
           fail('Fictional delivery outcome mismatch on journal replay');
         receipts.set(message.messageId,{message,receipt});
+      } else if(entry.kind==='REVIEW'){
+        const payload=entry.payload;
+        if(!exact(payload,['review','outcome','simulatedEventId']))
+          fail('Malformed fictional review journal record');
+        const review=validateFictionalReview(payload.review);
+        if(reviews.has(review.reviewId)) fail('Repeated review ID in fictional journal');
+        const result=reviewFictionalQuarantine(review,{
+          receipts,port,risk,eventIds,reviews,stopped:false
+        });
+        if(result.outcome!==payload.outcome||
+           result.simulatedEventId!==payload.simulatedEventId)
+          fail('Fictional review outcome disagrees with replayed evidence');
+        reviews.set(review.reviewId,{review,result});
+      } else if(entry.kind==='STOP'){
+        stop=validateFictionalStop(entry.payload);
       }
     } catch(error) {
       fail('Fictional execution journal replay refused: ' + error.message);
@@ -103,7 +125,7 @@ function reconstruct(state) {
     previousHash = entry.hash;
   });
   if (state.headHash !== previousHash) fail('Fictional execution journal head mismatch');
-  return {port, risk, receipts, eventIds};
+  return {port, risk, receipts, eventIds, reviews, stop};
 }
 
 async function readVerified(path) {
@@ -211,7 +233,8 @@ export async function openFictionalExecutionJournal(directory, options={}) {
   };
   const apply = async (kind, input) => {
     ensureActive();
-    const {port,risk,receipts,eventIds}=reconstruct(state);
+    const {port,risk,receipts,eventIds,reviews,stop}=reconstruct(state);
+    if(stop!==null && kind!=='STOP') fail('Fictional emergency stop latched; restart does not reset it');
     const priorDecisions=risk?.snapshot().orderCount??0;
     const priorOrders=port.list().length;
     const priorEvents=port.list().reduce((sum,order)=>sum+order.eventCount,0);
@@ -241,18 +264,36 @@ export async function openFictionalExecutionJournal(directory, options={}) {
         return Object.freeze({...previous.receipt,redelivery:'EXACT_RETRY_NO_WRITE'});
       }
       result=deliverFictionalExecutionMessage(message,{port,risk,seenEventIds:eventIds});
+    } else if(kind==='REVIEW'){
+      const review=validateFictionalReview(input);
+      const prior=reviews.get(review.reviewId);
+      if(prior){
+        if(JSON.stringify(prior.review)!==JSON.stringify(review))
+          fail('Conflicting fictional review ID retry');
+        return Object.freeze({...prior.result,redelivery:'EXACT_RETRY_NO_WRITE'});
+      }
+      result=reviewFictionalQuarantine(review,{
+        receipts,port,risk,eventIds,reviews,stopped:false
+      });
+    } else if(kind==='STOP'){
+      const request=validateFictionalStop(input);
+      // STOP never mutates an order. It is an irreversible local journal latch.
+      result=fictionalStopSnapshot(request);
     } else fail('Unknown fictional journal operation');
     const newDecisions=risk?.snapshot().orderCount??0;
     const newOrders=port.list().length;
     const newEvents=port.list().reduce((sum,order)=>sum+order.eventCount,0);
-    if(kind!=='POLICY' && kind!=='MESSAGE' && priorDecisions===newDecisions &&
+    if(kind!=='POLICY' && kind!=='MESSAGE' && kind!=='REVIEW' &&
+       kind!=='STOP' && priorDecisions===newDecisions &&
        priorOrders===newOrders && priorEvents===newEvents) return result;
     if (state.entries.length>=MAX_ENTRIES) fail('Fictional journal entry cap exceeded');
     const next=structuredClone(state);
     const payload=kind==='MESSAGE'
       ? {message:input,disposition:result.disposition,reason:result.reason,
          simulatedEventId:result.simulatedEventId}
-      : input;
+      : kind==='REVIEW'
+        ? {review:input,outcome:result.outcome,simulatedEventId:result.simulatedEventId}
+        : input;
     const entry=encodeEntry(next.entries.length+1,kind,payload,next.headHash);
     next.entries.push(entry);
     next.headHash=entry.hash;
@@ -271,19 +312,24 @@ export async function openFictionalExecutionJournal(directory, options={}) {
     submit: intent => perform(() => apply('INTENT', intent)),
     recordEvent: event => perform(() => apply('EVENT', event)),
     receiveFictionalMessage: message => perform(() => apply('MESSAGE', message)),
+    reviewFictionalMessage: review => perform(() => apply('REVIEW',review)),
+    emergencyStopFictionalLab: request => perform(() => apply('STOP',request)),
     get: intentId => perform(() => {
       ensureActive();
       return reconstruct(state).port.get(intentId);
     }),
     report: () => perform(() => {
       ensureActive();
-      const {port,risk,receipts} = reconstruct(state);
+      const {port,risk,receipts,reviews,stop} = reconstruct(state);
       return Object.freeze({
         schema:JOURNAL_SCHEMA, scope:SCOPE,
         revision:state.entries.length, headHash:state.headHash,
         records:port.list(),
         messageCount:receipts.size,
         messages:Object.freeze(Array.from(receipts.values(),x=>x.receipt)),
+        reviewCount:reviews.size,
+        reviews:Object.freeze(Array.from(reviews.values(),x=>x.result)),
+        emergencyStop:fictionalStopSnapshot(stop),
         ...(risk ? {risk:risk.snapshot()} : {}),
         controls:Object.freeze({
           brokerConnected:false, walletConnected:false, chainConnected:false,
