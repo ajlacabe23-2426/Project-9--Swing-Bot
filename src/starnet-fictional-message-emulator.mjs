@@ -16,7 +16,8 @@ export const FICTIONAL_MESSAGE_REASON=Object.freeze({
   WRONG_RAIL:'FICTIONAL_RAIL_IDENTITY_MISMATCH',
   FUTURE:'FUTURE_SEQUENCE_HELD_NOT_AUTO_REPLAYED',
   STALE:'STALE_SEQUENCE_REQUIRES_REVIEW',
-  INVALID:'FICTIONAL_LIFECYCLE_EVENT_REFUSED'
+  INVALID:'FICTIONAL_LIFECYCLE_EVENT_REFUSED',
+  COLLISION:'FICTIONAL_EVENT_IDENTITY_COLLISION'
 });
 const MESSAGE_KEYS=Object.freeze([
   'schema','scope','source','messageId','intentId','declaredRail',
@@ -93,10 +94,11 @@ function frozenReceipt(message, disposition, reason, eventId){
  * a receipt and the resulting synthetic event as one atomic journal entry.
  * Invalid lifecycle sequencing is quarantined, never silently corrected.
  */
-export function deliverFictionalExecutionMessage(message,{port,risk}){
+export function deliverFictionalExecutionMessage(message,{port,risk,seenEventIds}){
   const checked=validateFictionalExecutionMessage(message);
   if(!port||typeof port.get!=='function'||typeof port.recordEvent!=='function'||
-     !risk||typeof risk.getDecision!=='function'||typeof risk.recordEvent!=='function'){
+     !risk||typeof risk.getDecision!=='function'||typeof risk.recordEvent!=='function'||
+     !(seenEventIds instanceof Set)){
     fail('risk-policy-backed synthetic port required');
   }
   const record=port.get(checked.intentId);
@@ -115,6 +117,10 @@ export function deliverFictionalExecutionMessage(message,{port,risk}){
     return frozenReceipt(checked,FICTIONAL_MESSAGE_DISPOSITION.QUARANTINED,reason,null);
   }
   const event=simulatedEventForFictionalMessage(checked);
+  if(seenEventIds.has(event.eventId)){
+    return frozenReceipt(checked,FICTIONAL_MESSAGE_DISPOSITION.QUARANTINED,
+      FICTIONAL_MESSAGE_REASON.COLLISION,null);
+  }
   try {
     // Both calls operate on disposable reconstructed in-memory copies. If
     // either rejects, the caller discards the entire scratch state.
@@ -124,6 +130,7 @@ export function deliverFictionalExecutionMessage(message,{port,risk}){
     return frozenReceipt(checked,FICTIONAL_MESSAGE_DISPOSITION.QUARANTINED,
       FICTIONAL_MESSAGE_REASON.INVALID,null);
   }
+  seenEventIds.add(event.eventId);
   return frozenReceipt(checked,FICTIONAL_MESSAGE_DISPOSITION.APPLIED,
     FICTIONAL_MESSAGE_REASON.APPLIED,event.eventId);
 }
