@@ -92,7 +92,7 @@ test('policy and event validation fail closed; no leverage or unsupported assets
   assert.equal(book.prepare(order('SIM-ORDER-CAP','BUY',10)).reason,'ORDER_NOTIONAL_CAP');
   assert.throws(()=>book.prepare({...order('SIM-ORDER-LIVE'),scope:'LIVE'}),/scope/);
   assert.throws(()=>book.prepare({...order('SIM-ORDER-SECRET'),brokerKey:'a'}),/Exact offline/);
-  assert.throws(()=>book.prepare({...order('SIM-ORDER-BADTOKEN'),railDescriptor:{...descriptor(true),rail:'NATIVE_BLOCKCHAIN_ASSET'}}),/not supported|reference/);
+  assert.throws(()=>book.prepare({...order('SIM-ORDER-BADTOKEN'),railDescriptor:{...descriptor(true),rail:'NATIVE_BLOCKCHAIN_ASSET'}}),/not supported|reference|Exact evidence keys/);
   book.prepare(order('SIM-ORDER-OK','BUY',3));
   assert.throws(()=>book.recordEvent(event('SIM-EVENT-EARLY','SIM-ORDER-OK','FILL',1)),/transition denied/);
   book.recordEvent(event('SIM-EVENT-OK','SIM-ORDER-OK','ACK'));
