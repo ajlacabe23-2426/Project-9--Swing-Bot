@@ -187,6 +187,31 @@ jobs:
           if node scripts/accept-fictional-messages.mjs --live > /dev/null 2>&1; then
             echo "Message emulator unexpectedly accepted live execution"; exit 1
           fi
+      - name: Verify fictional quarantine review, cold recovery and emergency stop
+        shell: bash
+        run: |
+          node scripts/accept-fictional-operator-controls.mjs --demo > "$RUNNER_TEMP/project9-operator-controls.json"
+          node --input-type=module -e '
+            import {readFile} from "node:fs/promises";
+            const p=JSON.parse(await readFile(process.env.RUNNER_TEMP+"/project9-operator-controls.json","utf8"));
+            const c=p.checks;
+            if(p.schema!=="project9-fictional-operator-controls-acceptance-v1"||
+              p.scope!=="ENGINEERED_FICTIONAL_OFFLINE"||
+              p.softwareGate!=="PASS"||p.productionGate!=="NO_GO"||
+              !c.explicitReviewRelease||!c.invalidReleaseRefused||
+              !c.unsafeQuarantineDismissal||!c.irreversibleEmergencyStop||
+              !c.sameProcessCloseReopen||!c.independentFictionalAccounting||
+              !c.noAutomaticCancellation||c.realOrdersCreated!==0||
+              c.chainTransactionsBroadcast!==0||c.externalCalls!==0||
+              c.MacOperatorAcceptance!=="NOT_RUN"||
+              p.reviews!==2||p.stopState!=="STOPPED_LATCHED"||
+              p.fictionalCashTicks!==8000||p.fictionalReservedTicks!==3000||
+              p.sourceAuthenticity!=="ENGINEERED_FIXTURE_ONLY")
+              throw Error("Offline fictional operator control acceptance failed");
+          '
+          if node scripts/accept-fictional-operator-controls.mjs --live >/dev/null 2>&1; then
+            echo "Operator controls accepted unsafe live flag"; exit 1
+          fi
       - name: Check browser availability for loopback acceptance
         run: command -v google-chrome
       - name: Exercise workstation in headless Chromium
