@@ -15,6 +15,7 @@ import {basename, dirname, join, resolve} from 'node:path';
 import {tmpdir} from 'node:os';
 import {createSimulatedExecutionPort} from './starnet-simulated-execution-port.mjs';
 import {createFictionalRiskBook} from './starnet-fictional-risk-book.mjs';
+import {deliverFictionalExecutionMessage,validateFictionalExecutionMessage} from './starnet-fictional-message-emulator.mjs';
 
 const JOURNAL_SCHEMA = 'project9-fictional-execution-journal-v1';
 const SCOPE = 'FICTIONAL_OFFLINE';
@@ -55,10 +56,11 @@ function reconstruct(state) {
   let previousHash = GENESIS;
   const intents = new Set();
   const eventIds = new Set();
+  const receipts = new Map();
   state.entries.forEach((entry, index) => {
     if (!exact(entry, ENTRY_KEYS) ||
         entry.sequence !== index + 1 ||
-        !['POLICY', 'INTENT', 'EVENT'].includes(entry.kind) ||
+        !['POLICY', 'INTENT', 'EVENT', 'MESSAGE'].includes(entry.kind) ||
         entry.previousHash !== previousHash ||
         typeof entry.hash !== 'string' || !SHA256.test(entry.hash) ||
         entry.hash !== hash([entry.sequence, entry.kind, entry.payload, previousHash])) {
@@ -77,11 +79,23 @@ function reconstruct(state) {
           port.submit(entry.payload);
         }
         intents.add(entry.payload.intentId);
-      } else {
+      } else if(entry.kind === 'EVENT') {
         if (eventIds.has(entry.payload?.eventId)) fail('Duplicate journal event');
         if (risk) risk.recordEvent(entry.payload);
         port.recordEvent(entry.payload);
         eventIds.add(entry.payload.eventId);
+      } else {
+        const payload=entry.payload;
+        if(!exact(payload,['message','disposition','reason','simulatedEventId']))
+          fail('Malformed fictional message receipt record');
+        const message=validateFictionalExecutionMessage(payload.message);
+        if(receipts.has(message.messageId)) fail('Repeated fictional delivery identity in journal');
+        const receipt=deliverFictionalExecutionMessage(message,{port,risk,seenEventIds:eventIds});
+        if(receipt.disposition!==payload.disposition||
+           receipt.reason!==payload.reason||
+           receipt.simulatedEventId!==payload.simulatedEventId)
+          fail('Fictional delivery outcome mismatch on journal replay');
+        receipts.set(message.messageId,{message,receipt});
       }
     } catch(error) {
       fail('Fictional execution journal replay refused: ' + error.message);
@@ -89,7 +103,7 @@ function reconstruct(state) {
     previousHash = entry.hash;
   });
   if (state.headHash !== previousHash) fail('Fictional execution journal head mismatch');
-  return {port, risk};
+  return {port, risk, receipts, eventIds};
 }
 
 async function readVerified(path) {
@@ -197,7 +211,7 @@ export async function openFictionalExecutionJournal(directory, options={}) {
   };
   const apply = async (kind, input) => {
     ensureActive();
-    const {port,risk}=reconstruct(state);
+    const {port,risk,receipts,eventIds}=reconstruct(state);
     const priorDecisions=risk?.snapshot().orderCount??0;
     const priorOrders=port.list().length;
     const priorEvents=port.list().reduce((sum,order)=>sum+order.eventCount,0);
@@ -218,15 +232,28 @@ export async function openFictionalExecutionJournal(directory, options={}) {
     } else if (kind==='EVENT') {
       if (risk) risk.recordEvent(input);
       result=port.recordEvent(input);
+    } else if(kind==='MESSAGE') {
+      const message=validateFictionalExecutionMessage(input);
+      const previous=receipts.get(message.messageId);
+      if(previous) {
+        if(Object.keys(message).some(key=>message[key]!==previous.message[key]))
+          fail('Conflicting fictional message ID retry');
+        return Object.freeze({...previous.receipt,redelivery:'EXACT_RETRY_NO_WRITE'});
+      }
+      result=deliverFictionalExecutionMessage(message,{port,risk,seenEventIds:eventIds});
     } else fail('Unknown fictional journal operation');
     const newDecisions=risk?.snapshot().orderCount??0;
     const newOrders=port.list().length;
     const newEvents=port.list().reduce((sum,order)=>sum+order.eventCount,0);
-    if(kind!=='POLICY' && priorDecisions===newDecisions &&
+    if(kind!=='POLICY' && kind!=='MESSAGE' && priorDecisions===newDecisions &&
        priorOrders===newOrders && priorEvents===newEvents) return result;
     if (state.entries.length>=MAX_ENTRIES) fail('Fictional journal entry cap exceeded');
     const next=structuredClone(state);
-    const entry=encodeEntry(next.entries.length+1,kind,input,next.headHash);
+    const payload=kind==='MESSAGE'
+      ? {message:input,disposition:result.disposition,reason:result.reason,
+         simulatedEventId:result.simulatedEventId}
+      : input;
+    const entry=encodeEntry(next.entries.length+1,kind,payload,next.headHash);
     next.entries.push(entry);
     next.headHash=entry.hash;
     try {
@@ -243,17 +270,20 @@ export async function openFictionalExecutionJournal(directory, options={}) {
     initializeRiskPolicy: policy => perform(() => apply('POLICY',policy)),
     submit: intent => perform(() => apply('INTENT', intent)),
     recordEvent: event => perform(() => apply('EVENT', event)),
+    receiveFictionalMessage: message => perform(() => apply('MESSAGE', message)),
     get: intentId => perform(() => {
       ensureActive();
       return reconstruct(state).port.get(intentId);
     }),
     report: () => perform(() => {
       ensureActive();
-      const {port,risk} = reconstruct(state);
+      const {port,risk,receipts} = reconstruct(state);
       return Object.freeze({
         schema:JOURNAL_SCHEMA, scope:SCOPE,
         revision:state.entries.length, headHash:state.headHash,
         records:port.list(),
+        messageCount:receipts.size,
+        messages:Object.freeze(Array.from(receipts.values(),x=>x.receipt)),
         ...(risk ? {risk:risk.snapshot()} : {}),
         controls:Object.freeze({
           brokerConnected:false, walletConnected:false, chainConnected:false,
