@@ -1,0 +1,232 @@
+/**
+ * Explicitly temporary-directory scoped, disconnected fictional order journal.
+ * Records are hash chained and atomically replaced under a single-writer lock.
+ * Never opens broker/wallet networks, user workstation data or real accounts.
+ *
+ * Limits: cooperative single-host writer only; not power-loss, distributed
+ * locking, authentic exchange execution, cryptographic signer, or a cash ledger.
+ */
+import {createHash, randomUUID} from 'node:crypto';
+import {
+  open, readFile, realpath, lstat, rename, rm
+} from 'node:fs/promises';
+import {constants as fsConstants} from 'node:fs';
+import {basename, dirname, join, resolve} from 'node:path';
+import {tmpdir} from 'node:os';
+import {createSimulatedExecutionPort} from './starnet-simulated-execution-port.mjs';
+
+const JOURNAL_SCHEMA = 'project9-fictional-execution-journal-v1';
+const SCOPE = 'FICTIONAL_OFFLINE';
+const GENESIS = '0'.repeat(64);
+const SHA256 = /^[a-f0-9]{64}$/;
+const MAX_FILE_BYTES = 2_000_000;
+const MAX_ENTRIES = 1_100;
+const EXACT_KEYS = Object.freeze(['schema', 'scope', 'entries', 'headHash']);
+const ENTRY_KEYS = Object.freeze(['sequence', 'kind', 'payload', 'previousHash', 'hash']);
+const fail = message => { throw new Error(message); };
+const exact = (value, fields) => value && typeof value === 'object' &&
+  !Array.isArray(value) && Object.getPrototypeOf(value) === Object.prototype &&
+  Reflect.ownKeys(value).length === fields.length &&
+  fields.every(key => Object.hasOwn(value, key));
+const hash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
+
+function encodeEntry(sequence, kind, payload, previousHash) {
+  const safe = JSON.parse(JSON.stringify(payload));
+  return {
+    sequence, kind, payload: safe, previousHash,
+    hash: hash([sequence, kind, safe, previousHash])
+  };
+}
+
+function emptyState() {
+  return {schema:JOURNAL_SCHEMA, scope:SCOPE, entries:[], headHash:GENESIS};
+}
+
+function reconstruct(state) {
+  if (!exact(state, EXACT_KEYS) ||
+      state.schema !== JOURNAL_SCHEMA || state.scope !== SCOPE ||
+      !Array.isArray(state.entries) || state.entries.length > MAX_ENTRIES ||
+      typeof state.headHash !== 'string' || !SHA256.test(state.headHash)) {
+    fail('Invalid fictional execution journal envelope');
+  }
+  const port = createSimulatedExecutionPort();
+  let previousHash = GENESIS;
+  const intents = new Set();
+  const eventIds = new Set();
+  state.entries.forEach((entry, index) => {
+    if (!exact(entry, ENTRY_KEYS) ||
+        entry.sequence !== index + 1 ||
+        !['INTENT', 'EVENT'].includes(entry.kind) ||
+        entry.previousHash !== previousHash ||
+        typeof entry.hash !== 'string' || !SHA256.test(entry.hash) ||
+        entry.hash !== hash([entry.sequence, entry.kind, entry.payload, previousHash])) {
+      fail('Fictional execution journal sequence or hash verification failed');
+    }
+    try {
+      if (entry.kind === 'INTENT') {
+        if (intents.has(entry.payload?.intentId)) fail('Duplicate journal intent');
+        port.submit(entry.payload);
+        intents.add(entry.payload.intentId);
+      } else {
+        if (eventIds.has(entry.payload?.eventId)) fail('Duplicate journal event');
+        port.recordEvent(entry.payload);
+        eventIds.add(entry.payload.eventId);
+      }
+    } catch(error) {
+      fail('Fictional execution journal replay refused: ' + error.message);
+    }
+    previousHash = entry.hash;
+  });
+  if (state.headHash !== previousHash) fail('Fictional execution journal head mismatch');
+  return port;
+}
+
+async function readVerified(path) {
+  let info;
+  try { info = await lstat(path); }
+  catch (error) {
+    if (error.code === 'ENOENT') return emptyState();
+    throw error;
+  }
+  if (!info.isFile() || info.size > MAX_FILE_BYTES) fail('Unsafe journal file type or size');
+  const raw = await readFile(path);
+  if (raw.length > MAX_FILE_BYTES) fail('Fictional execution journal too large');
+  let data;
+  try { data = JSON.parse(raw.toString('utf8')); }
+  catch { fail('Corrupt fictional execution journal JSON'); }
+  reconstruct(data);
+  return data;
+}
+
+async function checkLabDirectory(directory) {
+  if (typeof directory !== 'string' || !directory.startsWith('/')) {
+    fail('Explicit absolute temporary research directory required');
+  }
+  const pathname = resolve(directory);
+  const info = await lstat(pathname);
+  if (!info.isDirectory() || (info.mode & 0o077)) {
+    fail('Private real directory with mode 0700 required');
+  }
+  const [parent, systemTmp] = await Promise.all([
+    realpath(dirname(pathname)), realpath(tmpdir())
+  ]);
+  if (parent !== systemTmp || !/^p9-execution-lab-[A-Za-z0-9_-]+$/.test(basename(pathname))) {
+    fail('Only a direct, disposable p9-execution-lab-* OS temp folder is permitted');
+  }
+  return pathname;
+}
+
+async function commitAtomic(directory, destination, state) {
+  const bytes = Buffer.from(JSON.stringify(state) + '\n');
+  if (bytes.length > MAX_FILE_BYTES) fail('Fictional execution journal size bound exceeded');
+  const tempPath = join(directory, '.journal-' + randomUUID() + '.tmp');
+  let handle;
+  try {
+    handle = await open(tempPath,
+      fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL, 0o600);
+    await handle.writeFile(bytes);
+    await handle.sync();
+    await handle.close();
+    handle = null;
+    await rename(tempPath, destination);
+    // Best-effort filesystem durability barrier on POSIX local filesystems.
+    // A passing sync does NOT establish power-loss or network-FS guarantees.
+    const directoryHandle = await open(directory, 'r');
+    try { await directoryHandle.sync(); }
+    finally { await directoryHandle.close(); }
+  } finally {
+    if (handle) await handle.close();
+    await rm(tempPath, {force:true});
+  }
+}
+
+/**
+ * Open an isolated, single-writer, fictional event journal.
+ * Existing lock is deliberately NOT stolen, even if its PID appears dead.
+ * Only the caller can create/remove a disposable test directory.
+ */
+export async function openFictionalExecutionJournal(directory) {
+  const lab = await checkLabDirectory(directory);
+  const lockPath = join(lab, '.writer.lock');
+  const journalPath = join(lab, 'journal.json');
+  const lock = await open(lockPath, 'wx', 0o600);
+  const lockId = randomUUID();
+  let closed = false;
+  let poisoned = false;
+  let queue = Promise.resolve();
+  let state;
+  try {
+    await lock.writeFile(JSON.stringify({schema:'fictional-lab-lock-v1',
+      pid:process.pid, lockId}) + '\n');
+    await lock.sync();
+    await lock.close();
+    state = await readVerified(journalPath);
+  } catch(error) {
+    await lock.close().catch(() => {});
+    const content = await readFile(lockPath,'utf8').catch(() => '');
+    if (content.includes(lockId)) await rm(lockPath,{force:true});
+    throw error;
+  }
+
+  const perform = task => {
+    const pending = queue.then(task);
+    queue = pending.then(() => undefined, () => undefined);
+    return pending;
+  };
+  const ensureActive = () => {
+    if (closed || poisoned) fail('Fictional journal closed or write outcome uncertain');
+  };
+  const apply = async (kind, input) => {
+    ensureActive();
+    const port = reconstruct(state);
+    const before = port.list().reduce((sum,record) => sum + record.eventCount, 0);
+    const beforeOrders = port.list().length;
+    const result = kind === 'INTENT' ? port.submit(input) : port.recordEvent(input);
+    const after = port.list().reduce((sum,record) => sum + record.eventCount, 0);
+    const afterOrders = port.list().length;
+    if (before === after && beforeOrders === afterOrders) return result; // exact retry
+    if (state.entries.length >= MAX_ENTRIES) fail('Fictional journal entry cap exceeded');
+    const next = structuredClone(state);
+    const entry = encodeEntry(next.entries.length + 1, kind, input, next.headHash);
+    next.entries.push(entry);
+    next.headHash = entry.hash;
+    try {
+      await commitAtomic(lab, journalPath, next);
+      state = next;
+    } catch(error) {
+      poisoned = true; // rename might have completed; force reopen and replay
+      throw error;
+    }
+    return result;
+  };
+
+  return Object.freeze({
+    submit: intent => perform(() => apply('INTENT', intent)),
+    recordEvent: event => perform(() => apply('EVENT', event)),
+    get: intentId => perform(() => {
+      ensureActive();
+      return reconstruct(state).get(intentId);
+    }),
+    report: () => perform(() => {
+      ensureActive();
+      const port = reconstruct(state);
+      return Object.freeze({
+        schema:JOURNAL_SCHEMA, scope:SCOPE,
+        revision:state.entries.length, headHash:state.headHash,
+        records:port.list(),
+        controls:Object.freeze({
+          brokerConnected:false, walletConnected:false, chainConnected:false,
+          actualOrders:0, blockchainBroadcasts:0,
+          operatorAcceptance:'NOT_RUN', productionGate:'NO_GO'
+        })
+      });
+    }),
+    close: () => perform(async () => {
+      if (closed) return;
+      closed = true;
+      const raw = await readFile(lockPath,'utf8').catch(() => '');
+      if (!raw.includes(lockId)) fail('Fictional journal writer lock changed; manual review needed');
+      await rm(lockPath);
+    })
+  });
+}
