@@ -277,6 +277,11 @@ export async function openFictionalExecutionJournal(directory, options={}) {
       });
     } else if(kind==='STOP'){
       const request=validateFictionalStop(input);
+      if(stop!==null){
+        if(JSON.stringify(stop)!==JSON.stringify(request))
+          fail('Fictional stop already latched; no replacement or resume');
+        return fictionalStopSnapshot(stop); // exact retry, no additional write
+      }
       // STOP never mutates an order. It is an irreversible local journal latch.
       result=fictionalStopSnapshot(request);
     } else fail('Unknown fictional journal operation');
