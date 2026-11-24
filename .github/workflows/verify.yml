@@ -60,6 +60,30 @@ jobs:
                report.safety.realOrdersCreated!==0||
                report.inputIdentity.sourceKind!=="ENGINEERED_FICTIONAL_FIXTURE")throw Error("Chronological demo audit did not preserve the gates");
           '
+      - name: Verify StarNet offline rail taxonomy and no-dispatch gates
+        shell: bash
+        run: |
+          node scripts/review-market-rails.mjs --demo > "$RUNNER_TEMP/project9-rails.json"
+          node --input-type=module -e '
+            import {readFile} from "node:fs/promises";
+            const r=JSON.parse(await readFile(process.env.RUNNER_TEMP+"/project9-rails.json","utf8"));
+            if(r.schema!=="project9-starnet-rail-demo-v1"||
+               r.scope!=="ENGINEERED_FICTIONAL_RESEARCH_ONLY"||
+               r.productionGate!=="NO_GO"||
+               r.instruments.length!==2||
+               r.instruments[0].rail!=="LISTED_EQUITY"||
+               r.instruments[1].rail!=="TOKENIZED_SECURITY"||
+               r.instruments.some(x=>x.controls.realOrdersCreated!==0||
+                 x.controls.chainTransactionsBroadcast!==0||
+                 x.controls.productionGate!=="NO_GO"||
+                 x.controls.assetExecutionSupported!==false)||
+               r.comparison.automaticConversionPermitted!==false||
+               r.comparison.liveDispatchAllowed!==false)
+              throw Error("Offline multi-rail gates failed");
+          '
+          if node scripts/review-market-rails.mjs --live > /dev/null 2>&1; then
+            echo "Unexpected live command acceptance"; exit 1
+          fi
       - name: Check browser availability for loopback acceptance
         run: command -v google-chrome
       - name: Exercise workstation in headless Chromium
