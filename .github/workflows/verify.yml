@@ -148,10 +148,14 @@ jobs:
               !c.cashReservation || !c.holdingsReservation ||
               !c.overspendDenied || !c.doubleSellDenied ||
               !c.partialFillAccounting || !c.cancellationRelease ||
+              !c.independentlyRecomputedFictionalBalances ||
               !c.sameProcessReopen || !c.duplicateRetriesByteIdentical ||
               c.localMacOperatorAcceptance!=="NOT_RUN" ||
               c.externalCalls!==0 || c.realOrdersCreated!==0 ||
               c.blockchainBroadcasts!==0 || p.finalCashTicks!==10000 ||
+              p.reconciliation?.finding!=="PASS_FICTIONAL_ARITHMETIC_ONLY" ||
+              p.reconciliation?.checkedEvents!==5 ||
+              p.reconciliation?.authenticExecutionsVerified!==false ||
               p.decisionCount!==4)
               throw Error("Fictional risk accounting acceptance failed");
           '
