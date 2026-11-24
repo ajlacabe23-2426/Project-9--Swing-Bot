@@ -4,6 +4,7 @@ import {
   MARKET_RAIL, EVIDENCE_DECLARATION, reviewMarketRail, compareRailIdentities
 } from '../src/starnet-market-rails.mjs';
 
+import {runRailDemo} from '../scripts/review-market-rails.mjs';
 const E = EVIDENCE_DECLARATION;
 const listedEvidence = () => ({
   listingIdentity: E.DECLARED_UNVERIFIED,
@@ -128,4 +129,16 @@ test('reject invalid evidence claims, missing metadata, arrays and inherited pro
   assert.throws(() => reviewMarketRail(Object.assign(Object.create(null), stock())),
     /Exact, metadata-only/);
   assert.throws(() => reviewMarketRail({ ...stock(), declaredEvidence: [] }), /Exact evidence keys/);
+});
+
+test('offline demo exposes only two fictional research rails; all other CLI modes fail closed', () => {
+  const packet = runRailDemo(['--demo']);
+  assert.equal(packet.productionGate, 'NO_GO');
+  assert.equal(packet.instruments.length, 2);
+  assert.equal(packet.comparison.liveDispatchAllowed, false);
+  assert.equal(packet.instruments[0].controls.brokerConnected, false);
+  assert.equal(packet.instruments[1].controls.chainConnected, false);
+  assert.throws(() => runRailDemo(['--live']), /Usage:/);
+  assert.throws(() => runRailDemo(['--demo', '--paper-auto']), /Usage:/);
+  assert.throws(() => runRailDemo([]), /Usage:/);
 });
