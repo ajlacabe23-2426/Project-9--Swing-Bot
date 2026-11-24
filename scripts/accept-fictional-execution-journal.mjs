@@ -77,7 +77,7 @@ export async function acceptFictionalExecutionJournal(argv) {
       softwareGate:'PASS',
       productionGate:'NO_GO',
       checks:Object.freeze({
-        crossProcessReopen:true,
+        sameProcessCloseReopen:true,
         hashChainReplayed:true,
         retryIdentitiesPreserved:true,
         referenceRailSegregation:true,
