@@ -58,12 +58,30 @@ export async function runOperationalCycle({
     const scan=state.lastScans?.[symbol];
     if(failed.has(symbol)){actions.push({symbol,status:'REFRESH_FAILED'});continue;}
     if(!scan){actions.push({symbol,status:'NO_SCAN'});continue;}
+    if(scan.sessionEvidence){
+      actions.push({symbol,status:'MANUAL_REVIEW_REQUIRED',classification:scan.classification,
+        asOf:scan.sessionEvidence.asOf,calendarRevision:scan.sessionEvidence.revision});
+      continue;
+    }
     if(!autoPaper){actions.push({symbol,status:'SCANNED_ONLY',classification:scan.classification});continue;}
     if(!SETUP_CLASSES.has(scan.classification)){
       actions.push({symbol,status:'NO_ELIGIBLE_PAPER_SETUP',classification:scan.classification});continue;
     }
     const sourceName=typeof scan.source==='object'&&scan.source!==null?String(scan.source.name||''):String(scan.source||'');
     const synthetic=SYNTHETIC_SOURCE.test(sourceName);
+    // Nonfictional data has no authenticated point-in-time rights/eligibility
+    // attestation. Never create a ticket automatically on a source label alone.
+    if(!synthetic){
+      actions.push({symbol,status:'UNVERIFIED_SOURCE_AUTO_PAPER_BLOCKED',asOf:scan.asOf});
+      continue;
+    }
+    // A source label alone cannot establish that a dataset is one of our
+    // two reserved fictional replay fixtures. Refuse other symbols even
+    // when a caller supplied --demo or a name containing "synthetic".
+    if(!['SIM09','SIM10'].includes(symbol)){
+      actions.push({symbol,status:'FICTIONAL_SCAN_IDENTITY_REQUIRED'});
+      continue;
+    }
     if(synthetic&&!allowSyntheticDemo){
       actions.push({symbol,status:'SYNTHETIC_REQUIRES_DEMO_OPT_IN'});continue;
     }
@@ -82,7 +100,21 @@ export async function runOperationalCycle({
     }
     const paperUnits=paperUnitsFor(scan.paperRiskPlan);
     if(paperUnits===null){actions.push({symbol,status:'NO_PAPER_CAPACITY'});continue;}
-    state=await callLocal(fetcher,base,'/api/workstation/tickets','POST',{symbol,paperUnits});
+    const body={symbol,paperUnits};
+    if(['SIM09','SIM10'].includes(symbol)){
+      if(!allowSyntheticDemo||!synthetic||!(/^[a-f0-9]{64}$/).test(scan.syntheticReplayBinding??'')){
+        actions.push({symbol,status:'FICTIONAL_SCAN_IDENTITY_REQUIRED'});continue;
+      }
+      const p=scan.paperRiskPlan;
+      body.reviewedScan={asOf:scan.asOf,binding:scan.syntheticReplayBinding,
+        entry:p.entryReference,stop:p.stopReference,target:p.targetReference};
+    }else{
+      if(!/^[a-f0-9]{64}$/.test(scan.reviewRevision??'')){
+        actions.push({symbol,status:'SCAN_REVISION_REQUIRED'});continue;
+      }
+      body.reviewedScan={revision:scan.reviewRevision};
+    }
+    state=await callLocal(fetcher,base,'/api/workstation/tickets','POST',body);
     actions.push({symbol,status:'PAPER_TICKET_CREATED',paperUnits,asOf:scan.asOf,
       ticketId:state.tickets?.[0]?.id||null});
   }

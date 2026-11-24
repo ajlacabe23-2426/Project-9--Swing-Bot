@@ -27,6 +27,87 @@ jobs:
             echo "No npm dependency lockfile present; repository baseline verifies that package.json has no dependencies."
           fi
       - run: npm run check
+      - name: Run StarNet Phase 3 CLI and verify private evidence output
+        shell: bash
+        run: |
+          npm run starnet:phase3 -- --report-dir "$RUNNER_TEMP/project9-phase3-starnet"
+          node --input-type=module -e '
+            import {readdir,readFile} from "node:fs/promises";
+            import {join} from "node:path";
+            const d=process.env.RUNNER_TEMP+"/project9-phase3-starnet";
+            const names=await readdir(d);
+            if(names.length!==2||names.filter(x=>x.endsWith(".json")).length!==1||names.filter(x=>x.endsWith(".md")).length!==1)throw Error("Expected one JSON and one Markdown packet");
+            const result=JSON.parse(await readFile(join(d,names.find(x=>x.endsWith(".json"))),"utf8"));
+            if(result.softwareGate!=="PASS"||result.productionGate!=="NO_GO"||result.sideEffects.realOrdersCreated!==0||result.sideEffects.scheduledTasksCreated!==0)throw Error("StarNet Phase 3 packet failed closed");
+          '
+      - name: Verify cold-process SIGKILL and interrupted atomic-save recovery
+        shell: bash
+        run: |
+          npm run accept:cold-recovery
+      - name: Verify frozen chronological research and cost stress on engineered demo
+        shell: bash
+        run: |
+          node scripts/research-time-split.mjs --demo > "$RUNNER_TEMP/project9-chronological.json"
+          node --input-type=module -e '
+            import {readFile} from "node:fs/promises";
+            const report=JSON.parse(await readFile(process.env.RUNNER_TEMP+"/project9-chronological.json","utf8"));
+            const expected=["DEVELOPMENT_REFERENCE","CHRONOLOGICAL_VALIDATION","CHRONOLOGICAL_HOLDOUT"];
+            if(report.schema!=="project9-chronological-cost-stress-audit-v1"||
+               report.study!=="DESCRIPTIVE_RESEARCH_ONLY_NO_TUNING"||
+               report.phases.length!==3||
+               report.phases.some((p,i)=>p.phase!==expected[i]||p.strategy.costSensitivity.length!==4)||
+               report.safety.productionGate!=="NO_GO"||
+               report.safety.realOrdersCreated!==0||
+               report.inputIdentity.sourceKind!=="ENGINEERED_FICTIONAL_FIXTURE")throw Error("Chronological demo audit did not preserve the gates");
+          '
+      - name: Verify StarNet offline rail taxonomy and no-dispatch gates
+        shell: bash
+        run: |
+          node scripts/review-market-rails.mjs --demo > "$RUNNER_TEMP/project9-rails.json"
+          node --input-type=module -e '
+            import {readFile} from "node:fs/promises";
+            const r=JSON.parse(await readFile(process.env.RUNNER_TEMP+"/project9-rails.json","utf8"));
+            if(r.schema!=="project9-starnet-rail-demo-v1"||
+               r.scope!=="ENGINEERED_FICTIONAL_RESEARCH_ONLY"||
+               r.productionGate!=="NO_GO"||
+               r.instruments.length!==2||
+               r.instruments[0].rail!=="LISTED_EQUITY"||
+               r.instruments[1].rail!=="TOKENIZED_SECURITY"||
+               r.instruments.some(x=>x.controls.realOrdersCreated!==0||
+                 x.controls.chainTransactionsBroadcast!==0||
+                 x.controls.productionGate!=="NO_GO"||
+                 x.controls.assetExecutionSupported!==false)||
+               r.comparison.automaticConversionPermitted!==false||
+               r.comparison.liveDispatchAllowed!==false)
+              throw Error("Offline multi-rail gates failed");
+          '
+          if node scripts/review-market-rails.mjs --live > /dev/null 2>&1; then
+            echo "Unexpected live command acceptance"; exit 1
+          fi
+      - name: Verify StarNet fictional execution state machine and no live routing
+        shell: bash
+        run: |
+          node scripts/review-simulated-execution.mjs --demo > "$RUNNER_TEMP/project9-fictional-execution.json"
+          node --input-type=module -e '
+            import {readFile} from "node:fs/promises";
+            const packet=JSON.parse(await readFile(process.env.RUNNER_TEMP+"/project9-fictional-execution.json","utf8"));
+            if(packet.schema!=="project9-starnet-fictional-execution-demo-v1" ||
+               packet.scope!=="ENGINEERED_FICTIONAL_OFFLINE" ||
+               packet.productionGate!=="NO_GO" ||
+               packet.stock.rail!=="LISTED_EQUITY" ||
+               packet.token.rail!=="TOKENIZED_SECURITY" ||
+               packet.stock.status!=="SIMULATED_RECONCILED" ||
+               packet.token.status!=="SIMULATED_CANCELLED" ||
+               [packet.stock,packet.token].some(record=>
+                 record.safety.productionGate!=="NO_GO" ||
+                 record.safety.externalCalls!==0 ||
+                 record.safety.realOrdersCreated!==0 ||
+                 record.safety.chainTransactionsBroadcast!==0))
+              throw Error("Fictional order lifecycle did not preserve NO_GO");
+          '
+          if node scripts/review-simulated-execution.mjs --live > /dev/null 2>&1; then
+            echo "Unexpected live execution flag acceptance"; exit 1
+          fi
       - name: Check browser availability for loopback acceptance
         run: command -v google-chrome
       - name: Exercise workstation in headless Chromium

@@ -6,6 +6,7 @@
 import {join,resolve,dirname} from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {createApp,fetchWorkstationDataset} from '../server.mjs';
+import {loadSessionPolicy} from '../src/completed-market-session.mjs';
 import {PaperStore} from '../src/store.mjs';
 import {WorkstationStore} from '../src/workstation-store.mjs';
 import {seedWorkstationDemo} from './seed-workstation-demo.mjs';
@@ -31,7 +32,9 @@ export async function launchLocalOperator({
   const marketFetcher=({symbol,from,to})=>fetchWorkstationDataset({
     symbol,from,to,dataDir,apiKey:demo?null:apiKey
   });
-  const server=await createApp({port,store,workstationStore,marketFetcher});
+  const sessionPolicy=demo?null:await loadSessionPolicy();
+  const server=await createApp({port,store,workstationStore,marketFetcher,
+    requireSessionEvidence:!demo,sessionPolicy});
   try{
     await new Promise((done,fail)=>{
       const onError=error=>{server.off('listening',onListening);fail(error);};

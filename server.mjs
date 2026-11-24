@@ -7,8 +7,11 @@ import {PaperStore} from './src/store.mjs';
 import {modelCommentary} from './src/ai.mjs';
 import {evaluateSwingSetup} from './src/market-intelligence.mjs';
 import {fetchMassiveDailyDataset} from './src/providers/massive.mjs';
-import {WorkstationStore} from './src/workstation-store.mjs';
+import {WorkstationStore,REPLAY_SYMBOLS,syntheticReplayBinding} from './src/workstation-store.mjs';
+import {advanceSyntheticPaperSession} from './src/synthetic-session-advance.mjs';
+import {readFictionalContractStatus} from './src/simulation-evidence.mjs';
 import {buildSyntheticAlertPreview} from './src/synthetic-alert-preview.mjs';
+import {loadSessionPolicy} from './src/completed-market-session.mjs';
 import {assertPatchedNodeRuntime} from './src/runtime-security.mjs';
 
 const root=dirname(fileURLToPath(import.meta.url));
@@ -65,8 +68,14 @@ export async function createApp({
   port=4179,
   store=new PaperStore(resolve(root,'.data/paper.json')),
   workstationStore=null,
-  marketFetcher=defaultMarketFetcher
+  marketFetcher=defaultMarketFetcher,
+  sessionPolicy=null,
+  requireSessionEvidence=marketFetcher===defaultMarketFetcher,
+  now=()=>new Date()
 }={}){
+  // Enforce the runtime floor for every caller, including tests, imports and
+  // StarNet's programmatic loopback server. Never rely on the CLI entrypoint.
+  assertPatchedNodeRuntime();
   if(!Number.isInteger(port)||port<1024||port>65535)throw new Error('Port must be between 1024 and 65535');
   await store.init();
   const workstation=workstationStore||new WorkstationStore(resolve(dirname(store.file),'workstation.json'));
@@ -76,10 +85,14 @@ export async function createApp({
     try{
       if(!allowedHost(req.headers.host,port))return json(res,403,{error:'Host not allowed'});
       const url=new URL(req.url,'http://127.0.0.1:'+port);
+      if(req.method==='GET'&&url.pathname==='/api/simulation-contracts'){
+        if(url.search)return json(res,400,{error:'Contract status accepts no parameters'});
+        return json(res,200,readFictionalContractStatus(store.state,workstation.snapshot()));
+      }
       if(req.method==='GET'&&url.pathname==='/api/state')return json(res,200,report(store.state,generateScenario(store.state.seed)));
       if(req.method==='GET'&&url.pathname==='/api/experiment')return json(res,200,historicalExperiment(store.state.seed));
       if(req.method==='GET'&&url.pathname==='/api/workstation')return json(res,200,workstation.snapshot());
-      // Synthetic examples only: deterministic, read-only; do not touch the workstation store.
+      // Synthetic read-only preview: never creates notifications, paper tickets, market fetches or orders.
       if(req.method==='GET'&&url.pathname==='/api/alerts/preview'){
         if(url.search)return json(res,400,{error:'Preview does not accept parameters'});
         return json(res,200,buildSyntheticAlertPreview());
@@ -90,7 +103,8 @@ export async function createApp({
       }
       const postRoutes=[
         '/api/step','/api/run','/api/reset','/api/ai-report',
-        '/api/workstation/watchlist','/api/workstation/refresh','/api/workstation/tickets'
+        '/api/workstation/watchlist','/api/workstation/refresh','/api/workstation/tickets',
+        '/api/workstation/demo/advance'
       ];
       if(req.method==='POST'&&postRoutes.includes(url.pathname)){
         if(!allowedOrigin(req.headers.origin,port)||
@@ -108,11 +122,26 @@ export async function createApp({
           if(Object.keys(body).length)return json(res,400,{error:'Refresh accepts no parameters'});
           const current=workstation.snapshot();
           if(!current.watchlist.length)return json(res,400,{error:'Add at least one watchlist symbol before refreshing'});
-          const {from,to}=completedMarketWindow(),entries=[],errors=[];
+          const demoWindow=completedMarketWindow(),entries=[],errors=[];
+          let marketWindow;
           for(const symbol of current.watchlist){
             try{
-              const dataset=await marketFetcher({symbol,from,to});
+              const synthetic=REPLAY_SYMBOLS.includes(symbol);
+              const gated=requireSessionEvidence&&!synthetic;
+              if(gated&&!sessionPolicy)throw new Error('Configure a reviewed exchange calendar and data source first');
+              const window=gated?sessionPolicy.window(now(),symbol):demoWindow;
+              if(gated)marketWindow=window;
+              // Reserved symbols always use the local fixture or committed replay.
+              const dataset=synthetic
+                ? current.syntheticReplay?.[symbol]??await fetchWorkstationDataset({
+                    symbol,...window,dataDir:dirname(workstation.file),apiKey:null
+                  })
+                : await marketFetcher({symbol,...window});
+              if(synthetic&&(dataset.symbol!==symbol||!syntheticReplayBinding(dataset)))
+                throw new Error('Invalid local synthetic fixture for '+symbol);
+              const sessionEvidence=gated?sessionPolicy.inspect(dataset,symbol,window,now()):null;
               const evaluation=evaluateSwingSetup(dataset);
+              if(sessionEvidence)evaluation.sessionEvidence=sessionEvidence;
               evaluation.chartBars=dataset.bars.slice(-60).map(bar=>({
                 date:bar.date,open:bar.open,high:bar.high,low:bar.low,close:bar.close,volume:bar.volume
               }));
@@ -121,13 +150,32 @@ export async function createApp({
               errors.push({symbol,message:String(error.message||'Market-data refresh failed')});
             }
           }
-          const next=await workstation.applyRefresh(entries,{refreshedAt:new Date().toISOString(),errors});
-          return json(res,200,{...next,refreshWindow:{from,to}});
+          const next=await workstation.applyRefresh(entries,{refreshedAt:now().toISOString(),errors,suppressAlerts:requireSessionEvidence});
+          return json(res,200,{...next,refreshWindow:marketWindow??demoWindow});
+        }
+        if(url.pathname==='/api/workstation/demo/advance'){
+          if(Object.keys(body).length!==3||!('symbol' in body)||!('scenario' in body)||!('expectedAsOf' in body))
+            return json(res,400,{error:'Demo session step requires symbol, scenario and expectedAsOf'});
+          // Local-only explicit demo route: works on built-in SIM09/SIM10 files,
+          // never invokes the provider, ticket creator, trade execution or alert delivery.
+          return json(res,200,await advanceSyntheticPaperSession({
+            workstation,dataDir:dirname(workstation.file),
+            symbol:body.symbol,scenario:body.scenario,expectedAsOf:body.expectedAsOf
+          }));
         }
         if(url.pathname==='/api/workstation/tickets'){
-          if(Object.keys(body).length!==2||!('symbol' in body)||!('paperUnits' in body))
-            return json(res,400,{error:'symbol and paperUnits required'});
-          return json(res,200,await workstation.createTicket(body.symbol,body.paperUnits,{createdAt:new Date().toISOString()}));
+          const allowed=['symbol','paperUnits','reviewedScan'];
+          if(Object.keys(body).some(key=>!allowed.includes(key))||!Object.hasOwn(body,'symbol')||!Object.hasOwn(body,'paperUnits'))
+            return json(res,400,{error:'Invalid observation parameters'});
+          return json(res,200,await workstation.createTicket(body.symbol,body.paperUnits,
+            {createdAt:now().toISOString(),reviewedScan:body.reviewedScan,
+              checkScan:requireSessionEvidence?(scan,symbol)=>{
+                if(REPLAY_SYMBOLS.includes(symbol))return;
+                try{
+                  if(!sessionPolicy)throw new Error('Configure a reviewed exchange calendar and data source first');
+                  sessionPolicy.checkTicket(scan,now());
+                }catch(error){throw Object.assign(error,{status:409});}
+              }:undefined}));
         }
 
         const keys=Object.keys(body),expected=url.pathname==='/api/reset'?['seed']:url.pathname==='/api/run'?['count']:[];
@@ -166,5 +214,6 @@ if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
 
   const port=Number(process.env.PORT||4179);
   const store=new PaperStore(process.env.PROJECT9_DATA_FILE||resolve(root,'.data/paper.json'));
-  createApp({port,store}).then(server=>server.listen(port,'127.0.0.1',()=>console.log('Project 9 local-only research platform at http://127.0.0.1:'+port))).catch(error=>{console.error(error);process.exitCode=1;});
+  const sessionPolicy=await loadSessionPolicy();
+  createApp({port,store,sessionPolicy}).then(server=>server.listen(port,'127.0.0.1',()=>console.log('Project 9 local-only research platform at http://127.0.0.1:'+port))).catch(error=>{console.error(error);process.exitCode=1;});
 }

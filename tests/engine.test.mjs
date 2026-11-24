@@ -26,6 +26,8 @@ test('every virtual fill occurs after the signal and stays inside initial entry 
   }
   assert.ok(end.quantity>=0&&end.cash>=0);
   const summary=report(end,bars);
+  assert.equal(summary.accountingMode,'FILLED_SIMULATION');
+  assert.equal(historicalExperiment(73).accountingMode,'FILLED_SIMULATION');
   assert.equal(summary.bars.at(-1).date,bars[end.cursor].date);
   assert.ok(!summary.bars.some(bar=>bar.date===bars[end.cursor+1]?.date));
   assert.equal(summary.interpretation.engine,'DETERMINISTIC_EXPLANATION_NOT_GENERATIVE_AI');

@@ -19,6 +19,9 @@ export async function auditLocalMarketFiles(files,reviewDate){
   }
   return auditMarketDatasetBatch(entries,{reviewDate});
 }
+export function auditMissionSnapshot(entries,reviewDate){
+  return auditMarketDatasetBatch(entries,{reviewDate});
+}
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   const args=process.argv.slice(2);
   if(args.length<3||args[0]!=='--as-of'){

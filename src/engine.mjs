@@ -2,6 +2,9 @@
  * Synthetic-only educational research simulator. No market-data provider, broker
  * integration, order-placement API, investment guidance or future-bar access.
  */
+import {ACCOUNTING_MODE} from './simulation-contract.mjs';
+import {generateScenario} from './synthetic-fixtures.mjs';
+export {generateScenario};
 export const VERSION=1;
 export const INITIAL_CASH=10_000;
 export const START_CURSOR=29;
@@ -11,21 +14,6 @@ export const SLIPPAGE=0.0005;
 export const FEE_RATE=0.001;
 export const MIN_FEE=0.50;
 const round=(n,p=6)=>Number(n.toFixed(p));
-function rng(seed){let x=seed>>>0;return ()=>{x=(Math.imul(x,1664525)+1013904223)>>>0;return x/4294967296;};}
-export function generateScenario(seed=73,length=190){
-  if(!Number.isSafeInteger(seed)||seed<1||seed>1_000_000||!Number.isInteger(length)||length<50||length>1000)throw new Error('Invalid scenario parameters');
-  const random=rng(seed),bars=[];let previous=100;const date=new Date('2024-01-01T00:00:00.000Z');
-  while(bars.length<length){
-    date.setUTCDate(date.getUTCDate()+1);
-    if([0,6].includes(date.getUTCDay()))continue;
-    const t=bars.length,regime=t<55?0.003:t<104?-0.0035:t<144?0.0015:-0.0008,cycle=0.006*Math.sin(t/5.3);
-    const open=previous*(1+(random()-0.5)*0.009);
-    const close=Math.max(10,open*(1+regime+cycle+(random()-0.5)*0.024));
-    const high=Math.max(open,close)*(1+0.002+random()*0.009),low=Math.min(open,close)*(1-0.002-random()*0.009);
-    bars.push({date:date.toISOString().slice(0,10),open:round(open),high:round(high),low:round(low),close:round(close),volume:Math.round(90000+random()*110000)});
-    previous=close;
-  }return bars;
-}
 export function sma(bars,end,period){
   if(!Number.isInteger(end)||!Number.isInteger(period)||period<=0||end+1<period||end>=bars.length)return null;
   let sum=0;for(let i=end-period+1;i<=end;i++)sum+=bars[i].close;return round(sum/period);
@@ -104,7 +92,7 @@ export function report(state,bars=generateScenario(state.seed)){
     counterevidence:'The prior completed bar had 5-bar and 20-bar means of '+prior.fast?.toFixed(2)+' and '+prior.slow?.toFixed(2)+'. Averages lag observed prices and do not predict the next session.',
     uncertainty:'Synthetic generated data, no real-market validation. Simulated fills and costs omit many actual market conditions.',
     lastEvent:last?last.message:'No hypothetical order has been queued yet.',evidence};
-  return {mode:'SYNTHETIC_ONLY',environment:'LOCAL_PAPER_ONLY',market:'SIM-01 · generated hypothetical instrument',
+  return {accountingMode:ACCOUNTING_MODE.FILLED_SIMULATION,mode:'SYNTHETIC_ONLY',environment:'LOCAL_PAPER_ONLY',market:'SIM-01 · generated hypothetical instrument',
     seed:state.seed,cursor:state.cursor,totalBars:bars.length,date:now.date,
     bars:visibleBars.slice(-85).map((bar,i)=>({...bar,ma5:sma(visibleBars,visibleBars.length-Math.min(85,visibleBars.length)+i,5),ma20:sma(visibleBars,visibleBars.length-Math.min(85,visibleBars.length)+i,20)})),
     cash:round(state.cash,2),quantity:state.quantity,portfolioValue:value,pnl:round(value-INITIAL_CASH,2),
@@ -116,7 +104,7 @@ export function historicalExperiment(seed=73){
   const bars=generateScenario(seed);
   const one=run(initialState(seed),60,bars),two=run(one.state,60,bars),three=run(two.state,60,bars);
   const final=run(three.state,60,bars).state,summary=report(final,bars);
-  return {seed,strategy:'5/20 crossover, next-open simulation',start:bars[START_CURSOR].date,end:summary.date,
+  return {accountingMode:ACCOUNTING_MODE.FILLED_SIMULATION,seed,strategy:'5/20 crossover, next-open simulation',start:bars[START_CURSOR].date,end:summary.date,
     simulatedReturnPct:summary.returnPct,benchmarkPct:summary.benchmarkPct,peakDrawdownPct:summary.peakDrawdownPct,
     tradeCount:final.trades.length,caveat:'In-sample demonstration using generated, not historical market data. Not predictive or indicative of attainable real returns.'};
 }
