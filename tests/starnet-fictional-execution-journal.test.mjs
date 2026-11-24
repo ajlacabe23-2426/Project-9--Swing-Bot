@@ -148,8 +148,8 @@ test('disallow workstation paths, shared directories, symlink lab and traversal'
     await assert.rejects(openFictionalExecutionJournal(resolve('.data')),/temp|directory|ENOENT|private|real/i);
     await assert.rejects(openFictionalExecutionJournal('/tmp/not-project9-research'),/ENOENT|private|temp/);
     await symlink(dir,link);
-    await assert.rejects(openFictionalExecutionJournal(link),/private real directory/);
-    await assert.rejects(openFictionalExecutionJournal(dir+'/..'),/private real directory|temp folder/);
+    await assert.rejects(openFictionalExecutionJournal(link),/[Pp]rivate real directory/);
+    await assert.rejects(openFictionalExecutionJournal(dir+'/..'),/[Pp]rivate real directory|temp folder/);
   }finally {
     await rm(link,{force:true});
     await rm(dir,{recursive:true,force:true});
