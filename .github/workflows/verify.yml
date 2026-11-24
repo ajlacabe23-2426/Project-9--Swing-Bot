@@ -120,6 +120,8 @@ jobs:
                report.softwareGate!=="PASS" ||
                report.productionGate!=="NO_GO" ||
                report.recoveredRevision!==8 ||
+               report.checks.sameProcessCloseReopen!==true ||
+               Object.hasOwn(report.checks,"crossProcessReopen") ||
                report.checks.retryIdentitiesPreserved!==true ||
                report.checks.hashChainReplayed!==true ||
                report.checks.actualOrdersCreated!==0 ||
