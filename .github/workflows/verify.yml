@@ -84,6 +84,30 @@ jobs:
           if node scripts/review-market-rails.mjs --live > /dev/null 2>&1; then
             echo "Unexpected live command acceptance"; exit 1
           fi
+      - name: Verify StarNet fictional execution state machine and no live routing
+        shell: bash
+        run: |
+          node scripts/review-simulated-execution.mjs --demo > "$RUNNER_TEMP/project9-fictional-execution.json"
+          node --input-type=module -e '
+            import {readFile} from "node:fs/promises";
+            const packet=JSON.parse(await readFile(process.env.RUNNER_TEMP+"/project9-fictional-execution.json","utf8"));
+            if(packet.schema!=="project9-starnet-fictional-execution-demo-v1" ||
+               packet.scope!=="ENGINEERED_FICTIONAL_OFFLINE" ||
+               packet.productionGate!=="NO_GO" ||
+               packet.stock.rail!=="LISTED_EQUITY" ||
+               packet.token.rail!=="TOKENIZED_SECURITY" ||
+               packet.stock.status!=="SIMULATED_RECONCILED" ||
+               packet.token.status!=="SIMULATED_CANCELLED" ||
+               [packet.stock,packet.token].some(record=>
+                 record.safety.productionGate!=="NO_GO" ||
+                 record.safety.externalCalls!==0 ||
+                 record.safety.realOrdersCreated!==0 ||
+                 record.safety.chainTransactionsBroadcast!==0))
+              throw Error("Fictional order lifecycle did not preserve NO_GO");
+          '
+          if node scripts/review-simulated-execution.mjs --live > /dev/null 2>&1; then
+            echo "Unexpected live execution flag acceptance"; exit 1
+          fi
       - name: Check browser availability for loopback acceptance
         run: command -v google-chrome
       - name: Exercise workstation in headless Chromium
