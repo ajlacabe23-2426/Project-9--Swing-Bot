@@ -162,6 +162,31 @@ jobs:
           if node scripts/accept-fictional-risk-accounting.mjs --live > /dev/null 2>&1; then
             echo "Fictional risk CLI wrongly accepted live mode"; exit 1
           fi
+      - name: Verify fictional execution-message emulator and durable quarantine
+        shell: bash
+        run: |
+          node scripts/accept-fictional-messages.mjs --demo > "$RUNNER_TEMP/project9-fictional-messages.json"
+          node --input-type=module -e '
+            import {readFile} from "node:fs/promises";
+            const p=JSON.parse(await readFile(process.env.RUNNER_TEMP+"/project9-fictional-messages.json","utf8"));
+            const c=p.checks;
+            if(p.schema!=="project9-fictional-message-acceptance-v1"||
+              p.scope!=="ENGINEERED_FICTIONAL_OFFLINE"||
+              p.softwareGate!=="PASS"||p.productionGate!=="NO_GO"||
+              !c.futureMessageHeld||!c.staleMessageHeld||
+              !c.impossibleRejectionHeld||!c.duplicateAcknowledgmentNoWrite||
+              !c.sameProcessReopen||!c.messageIdentityPreserved||
+              !c.riskAndPortAtomicReceipt||!c.independentFictionalArithmetic||
+              c.realOrdersCreated!==0||c.chainTransactionsBroadcast!==0||
+              c.externalCalls!==0||c.MacOperatorAcceptance!=="NOT_RUN"||
+              p.recordedMessages!==8||p.appliedMessages!==5||
+              p.quarantinedMessages!==3||p.resultingFictionalCashTicks!==8000||
+              p.reconciliationFinding!=="PASS_FICTIONAL_ARITHMETIC_ONLY")
+              throw Error("Fictional message emulator acceptance failed");
+          '
+          if node scripts/accept-fictional-messages.mjs --live > /dev/null 2>&1; then
+            echo "Message emulator unexpectedly accepted live execution"; exit 1
+          fi
       - name: Check browser availability for loopback acceptance
         run: command -v google-chrome
       - name: Exercise workstation in headless Chromium
