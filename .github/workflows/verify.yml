@@ -134,6 +134,30 @@ jobs:
           if node scripts/accept-fictional-execution-journal.mjs --live > /dev/null 2>&1; then
             echo "Unexpected acceptance of live execution"; exit 1
           fi
+      - name: Verify fictional risk accounting, reservations and no broker activity
+        shell: bash
+        run: |
+          node scripts/accept-fictional-risk-accounting.mjs --demo > "$RUNNER_TEMP/project9-fictional-risk.json"
+          node --input-type=module -e '
+            import {readFile} from "node:fs/promises";
+            const p=JSON.parse(await readFile(process.env.RUNNER_TEMP+"/project9-fictional-risk.json","utf8"));
+            const c=p.checks;
+            if(p.schema!=="project9-fictional-risk-acceptance-v1" ||
+              p.scope!=="ENGINEERED_FICTIONAL_OFFLINE" ||
+              p.softwareGate!=="PASS" || p.productionGate!=="NO_GO" ||
+              !c.cashReservation || !c.holdingsReservation ||
+              !c.overspendDenied || !c.doubleSellDenied ||
+              !c.partialFillAccounting || !c.cancellationRelease ||
+              !c.sameProcessReopen || !c.duplicateRetriesByteIdentical ||
+              c.localMacOperatorAcceptance!=="NOT_RUN" ||
+              c.externalCalls!==0 || c.realOrdersCreated!==0 ||
+              c.blockchainBroadcasts!==0 || p.finalCashTicks!==10000 ||
+              p.decisionCount!==4)
+              throw Error("Fictional risk accounting acceptance failed");
+          '
+          if node scripts/accept-fictional-risk-accounting.mjs --live > /dev/null 2>&1; then
+            echo "Fictional risk CLI wrongly accepted live mode"; exit 1
+          fi
       - name: Check browser availability for loopback acceptance
         run: command -v google-chrome
       - name: Exercise workstation in headless Chromium
