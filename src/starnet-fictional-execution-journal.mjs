@@ -14,6 +14,7 @@ import {constants as fsConstants} from 'node:fs';
 import {basename, dirname, join, resolve} from 'node:path';
 import {tmpdir} from 'node:os';
 import {createSimulatedExecutionPort} from './starnet-simulated-execution-port.mjs';
+import {createFictionalRiskBook} from './starnet-fictional-risk-book.mjs';
 
 const JOURNAL_SCHEMA = 'project9-fictional-execution-journal-v1';
 const SCOPE = 'FICTIONAL_OFFLINE';
@@ -50,25 +51,35 @@ function reconstruct(state) {
     fail('Invalid fictional execution journal envelope');
   }
   const port = createSimulatedExecutionPort();
+  let risk = null;
   let previousHash = GENESIS;
   const intents = new Set();
   const eventIds = new Set();
   state.entries.forEach((entry, index) => {
     if (!exact(entry, ENTRY_KEYS) ||
         entry.sequence !== index + 1 ||
-        !['INTENT', 'EVENT'].includes(entry.kind) ||
+        !['POLICY', 'INTENT', 'EVENT'].includes(entry.kind) ||
         entry.previousHash !== previousHash ||
         typeof entry.hash !== 'string' || !SHA256.test(entry.hash) ||
         entry.hash !== hash([entry.sequence, entry.kind, entry.payload, previousHash])) {
       fail('Fictional execution journal sequence or hash verification failed');
     }
     try {
-      if (entry.kind === 'INTENT') {
+      if (entry.kind === 'POLICY') {
+        if (index !== 0 || risk !== null) fail('Risk policy must be first and unique');
+        risk = createFictionalRiskBook(entry.payload);
+      } else if (entry.kind === 'INTENT') {
         if (intents.has(entry.payload?.intentId)) fail('Duplicate journal intent');
-        port.submit(entry.payload);
+        if (risk) {
+          const decision = risk.prepare(entry.payload);
+          if (decision.decision === 'APPROVED') port.submit(entry.payload);
+        } else {
+          port.submit(entry.payload);
+        }
         intents.add(entry.payload.intentId);
       } else {
         if (eventIds.has(entry.payload?.eventId)) fail('Duplicate journal event');
+        if (risk) risk.recordEvent(entry.payload);
         port.recordEvent(entry.payload);
         eventIds.add(entry.payload.eventId);
       }
@@ -78,7 +89,7 @@ function reconstruct(state) {
     previousHash = entry.hash;
   });
   if (state.headHash !== previousHash) fail('Fictional execution journal head mismatch');
-  return port;
+  return {port, risk};
 }
 
 async function readVerified(path) {
@@ -116,7 +127,7 @@ async function checkLabDirectory(directory) {
   return pathname;
 }
 
-async function commitAtomic(directory, destination, state) {
+async function commitAtomic(directory, destination, state, injectFault=null) {
   const bytes = Buffer.from(JSON.stringify(state) + '\n');
   if (bytes.length > MAX_FILE_BYTES) fail('Fictional execution journal size bound exceeded');
   const tempPath = join(directory, '.journal-' + randomUUID() + '.tmp');
@@ -126,9 +137,11 @@ async function commitAtomic(directory, destination, state) {
       fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL, 0o600);
     await handle.writeFile(bytes);
     await handle.sync();
+    if (injectFault) await injectFault('BEFORE_RENAME');
     await handle.close();
     handle = null;
     await rename(tempPath, destination);
+    if (injectFault) await injectFault('AFTER_RENAME');
     // Best-effort filesystem durability barrier on POSIX local filesystems.
     // A passing sync does NOT establish power-loss or network-FS guarantees.
     const directoryHandle = await open(directory, 'r');
@@ -145,7 +158,13 @@ async function commitAtomic(directory, destination, state) {
  * Existing lock is deliberately NOT stolen, even if its PID appears dead.
  * Only the caller can create/remove a disposable test directory.
  */
-export async function openFictionalExecutionJournal(directory) {
+export async function openFictionalExecutionJournal(directory, options={}) {
+  if (options===null || typeof options!=='object' || Array.isArray(options) ||
+      Object.keys(options).some(k=>k!=='testFaultInjector') ||
+      (options.testFaultInjector!==undefined && typeof options.testFaultInjector!=='function')) {
+    fail('Unsupported fictional journal options');
+  }
+  const testFaultInjector=options.testFaultInjector??null;
   const lab = await checkLabDirectory(directory);
   const lockPath = join(lab, '.writer.lock');
   const journalPath = join(lab, 'journal.json');
@@ -178,42 +197,64 @@ export async function openFictionalExecutionJournal(directory) {
   };
   const apply = async (kind, input) => {
     ensureActive();
-    const port = reconstruct(state);
-    const before = port.list().reduce((sum,record) => sum + record.eventCount, 0);
-    const beforeOrders = port.list().length;
-    const result = kind === 'INTENT' ? port.submit(input) : port.recordEvent(input);
-    const after = port.list().reduce((sum,record) => sum + record.eventCount, 0);
-    const afterOrders = port.list().length;
-    if (before === after && beforeOrders === afterOrders) return result; // exact retry
-    if (state.entries.length >= MAX_ENTRIES) fail('Fictional journal entry cap exceeded');
-    const next = structuredClone(state);
-    const entry = encodeEntry(next.entries.length + 1, kind, input, next.headHash);
+    const {port,risk}=reconstruct(state);
+    const priorDecisions=risk?.snapshot().orderCount??0;
+    const priorOrders=port.list().length;
+    const priorEvents=port.list().reduce((sum,order)=>sum+order.eventCount,0);
+    let result;
+    if (kind==='POLICY') {
+      if (risk) {
+        if (JSON.stringify(state.entries[0].payload)!==JSON.stringify(input))
+          fail('Cannot replace persisted fictional policy');
+        return risk.snapshot();
+      }
+      if (state.entries.length!==0) fail('Cannot enable risk after unguarded journal entries');
+      result=createFictionalRiskBook(input).snapshot();
+    } else if (kind==='INTENT') {
+      if (risk) {
+        result=risk.prepare(input);
+        if (result.decision==='APPROVED') port.submit(input);
+      } else result=port.submit(input);
+    } else if (kind==='EVENT') {
+      if (risk) risk.recordEvent(input);
+      result=port.recordEvent(input);
+    } else fail('Unknown fictional journal operation');
+    const newDecisions=risk?.snapshot().orderCount??0;
+    const newOrders=port.list().length;
+    const newEvents=port.list().reduce((sum,order)=>sum+order.eventCount,0);
+    if(kind!=='POLICY' && priorDecisions===newDecisions &&
+       priorOrders===newOrders && priorEvents===newEvents) return result;
+    if (state.entries.length>=MAX_ENTRIES) fail('Fictional journal entry cap exceeded');
+    const next=structuredClone(state);
+    const entry=encodeEntry(next.entries.length+1,kind,input,next.headHash);
     next.entries.push(entry);
-    next.headHash = entry.hash;
+    next.headHash=entry.hash;
     try {
-      await commitAtomic(lab, journalPath, next);
-      state = next;
+      await commitAtomic(lab,journalPath,next,testFaultInjector);
+      state=next;
     } catch(error) {
-      poisoned = true; // rename might have completed; force reopen and replay
+      poisoned=true; // commit may have passed rename; always re-open for truth
       throw error;
     }
     return result;
   };
 
   return Object.freeze({
+    initializeRiskPolicy: policy => perform(() => apply('POLICY',policy)),
     submit: intent => perform(() => apply('INTENT', intent)),
     recordEvent: event => perform(() => apply('EVENT', event)),
     get: intentId => perform(() => {
       ensureActive();
-      return reconstruct(state).get(intentId);
+      return reconstruct(state).port.get(intentId);
     }),
     report: () => perform(() => {
       ensureActive();
-      const port = reconstruct(state);
+      const {port,risk} = reconstruct(state);
       return Object.freeze({
         schema:JOURNAL_SCHEMA, scope:SCOPE,
         revision:state.entries.length, headHash:state.headHash,
         records:port.list(),
+        ...(risk ? {risk:risk.snapshot()} : {}),
         controls:Object.freeze({
           brokerConnected:false, walletConnected:false, chainConnected:false,
           actualOrders:0, blockchainBroadcasts:0,
