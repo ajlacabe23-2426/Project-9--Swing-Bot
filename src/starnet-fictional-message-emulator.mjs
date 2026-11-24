@@ -121,14 +121,22 @@ export function deliverFictionalExecutionMessage(message,{port,risk,seenEventIds
     return frozenReceipt(checked,FICTIONAL_MESSAGE_DISPOSITION.QUARANTINED,
       FICTIONAL_MESSAGE_REASON.COLLISION,null);
   }
+  // First test the state-machine transition. Invalid sequence or lifecycle
+  // messages are retained as quarantined receipts, never applied.
   try {
-    // Both calls operate on disposable reconstructed in-memory copies. If
-    // either rejects, the caller discards the entire scratch state.
-    risk.recordEvent(event);
     port.recordEvent(event);
   }catch{
     return frozenReceipt(checked,FICTIONAL_MESSAGE_DISPOSITION.QUARANTINED,
       FICTIONAL_MESSAGE_REASON.INVALID,null);
+  }
+  // The risk ledger may independently refuse a numerical or policy
+  // invariant. In that case abort the *entire* journal operation. Never
+  // persist a quarantined receipt after a partial scratch-state mutation.
+  // Both books are reconstructed anew on each subsequent journal operation.
+  try {
+    risk.recordEvent(event);
+  }catch(error){
+    fail('fictional risk ledger refused delivery: '+error.message);
   }
   seenEventIds.add(event.eventId);
   return frozenReceipt(checked,FICTIONAL_MESSAGE_DISPOSITION.APPLIED,
