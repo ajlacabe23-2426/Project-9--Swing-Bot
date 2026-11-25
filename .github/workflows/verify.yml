@@ -440,6 +440,50 @@ jobs:
           if node scripts/starnet-reproduce-research.mjs --live >/dev/null 2>&1; then
             echo "Reproduction CLI accepted unsafe live flag"; exit 1
           fi
+      - name: Verify research claims, evidence gaps and non-promoting local reviews
+        shell: bash
+        run: |
+          node scripts/starnet-review-claims.mjs --demo > "$RUNNER_TEMP/project9-claims.json"
+          node scripts/starnet-review-claims.mjs --demo --markdown > "$RUNNER_TEMP/project9-claims.md"
+          node scripts/starnet-review-claims.mjs --demo \
+            --note SIM-CLAIM-BAR-COUNT ACKNOWLEDGE_LOCAL_CALCULATION LOCAL_CALCULATION_RECHECKED \
+            --ledger-only > "$RUNNER_TEMP/project9-claim-notes.json"
+          node scripts/starnet-review-claims.mjs --demo \
+            --reviews "$RUNNER_TEMP/project9-claim-notes.json" > "$RUNNER_TEMP/project9-reviewed-claims.json"
+          node --input-type=module -e '
+            import {readFile} from "node:fs/promises";
+            const root=process.env.RUNNER_TEMP;
+            const r=JSON.parse(await readFile(root+"/project9-claims.json","utf8"));
+            const reviewed=JSON.parse(await readFile(root+"/project9-reviewed-claims.json","utf8"));
+            const md=await readFile(root+"/project9-claims.md","utf8");
+            const c=r.registry?.claims;
+            if(r.schema!=="project9-offline-claim-review-packet-v1"||
+              r.productionGate!=="NO_GO"||
+              r.registry?.schema!=="project9-offline-research-claim-registry-v1"||
+              r.registry?.supportedLocalCalculationClaims!==3||
+              r.registry?.missingOrLimitedEvidenceClaims!==6||
+              c?.length!==9||
+              c?.find(x=>x.kind==="HOLDOUT_SAMPLE_ADVISORY")?.status!=="INSUFFICIENT_DESCRIPTIVE_OBSERVATIONS"||
+              c?.find(x=>x.kind==="HOLDOUT_SAMPLE_ADVISORY")?.observed?.observations!==1||
+              c?.find(x=>x.kind==="SOURCE_AUTHENTICITY")?.status!=="NOT_VERIFIED"||
+              c?.find(x=>x.kind==="PREDICTIVE_EFFICACY")?.status!=="NOT_ESTABLISHED"||
+              c?.find(x=>x.kind==="INDEPENDENT_EXTERNAL_REVIEW")?.status!=="NOT_PERFORMED"||
+              r.registry?.independentExternalReview!=="NOT_PERFORMED"||
+              r.reviewLedger?.entries?.length!==0||
+              reviewed.reviewLedger?.entries?.length!==1||
+              reviewed.reviewLedger?.independentlyAuthenticatedReviewer!==false||
+              reviewed.report?.independentlyAuthenticatedExternalReview!==false||
+              reviewed.report?.claims?.find(x=>x.kind==="HISTORICAL_BAR_COUNT")?.localReviewNotes!==1||
+              reviewed.report?.claims?.find(x=>x.kind==="PREDICTIVE_EFFICACY")?.status!=="NOT_ESTABLISHED"||
+              reviewed.report?.productionGate!=="NO_GO"||
+              !md.includes("Phase 15 Claim Verification")||
+              !md.includes("independent")||
+              !md.includes("NO_GO"))
+              throw Error("Claim registry or local review report falsely promoted research evidence");
+          '
+          if node scripts/starnet-review-claims.mjs --live >/dev/null 2>&1; then
+            echo "Claim CLI unexpectedly accepted live mode"; exit 1
+          fi
       - name: Check browser availability for loopback acceptance
         run: command -v google-chrome
       - name: Exercise workstation in headless Chromium

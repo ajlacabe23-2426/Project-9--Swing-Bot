@@ -27,7 +27,7 @@ const SOURCE_FILES=[
   '../scripts/starnet-reproduce-research.mjs'
 ];
 
-async function methodologySha256(){
+export async function methodologySha256(){
   const hash=createHash('sha256');
   for(const relative of SOURCE_FILES){
     const file=new URL(relative,import.meta.url);
@@ -53,9 +53,7 @@ function parseArgs(args){
   return {recordPath,opts};
 }
 
-export async function runStarNetResearchReproduction(args){
-  assertPatchedNodeRuntime();
-  const {recordPath,opts}=parseArgs(args);
+async function collectOriginalResearchInputs(opts){
   let marketBytes,witnessMarketBytes=null,manifestBytes=null,asOf,sourceKind;
   if(opts.mode==='DEMO'){
     const fixture=engineered();
@@ -71,10 +69,24 @@ export async function runStarNetResearchReproduction(args){
     asOf=opts.asOf;
     sourceKind='USER_SUPPLIED_UNVERIFIED_JSON';
   }
-  const inputs={
+  return {
     marketBytes,witnessMarketBytes,manifestBytes,asOf,sourceKind,
     methodologySha256:await methodologySha256()
   };
+}
+
+/** Return original local inputs; refuses saved-record mode and live flags. */
+export async function loadStarNetOfflineResearchInputs(args){
+  assertPatchedNodeRuntime();
+  const {recordPath,opts}=parseArgs(args);
+  if(recordPath!==null)throw new TypeError('Original evidence inputs only, not record replay');
+  return collectOriginalResearchInputs(opts);
+}
+export async function runStarNetResearchReproduction(args){
+  assertPatchedNodeRuntime();
+  const {recordPath,opts}=parseArgs(args);
+  const inputs=await collectOriginalResearchInputs(opts);
+  const {asOf,sourceKind}=inputs;
   if(recordPath===null)return buildStarNetResearchReproducibility(inputs);
   const text=await readLocalHistory(recordPath);
   let record;
