@@ -44,8 +44,10 @@ appears as a summary in the existing Markdown report.
   and cannot be interpreted as proof of significance, confidence, strategy
   quality or adequate sample independence when met.
 - The engineered 190-bar demonstration yields 70/35/36 completed bars
-  across the partitions, 17 total hypothetical strategy windows and 26
-  periodic control windows. At least one period is below the floor.
+  across the partitions. Strategy and periodic-control observation counts
+  are recomputed from the **specific input bars and frozen study**, not
+  presumed constant across historical fixtures. At least one period
+  falls below the descriptive strategy-window reference floor.
 - The holdout is **descriptive only**. The periodic baseline is not
   matched to scanner signals and is not an executable benchmark.
   Its comparison cannot establish superiority, risk-adjusted alpha or
