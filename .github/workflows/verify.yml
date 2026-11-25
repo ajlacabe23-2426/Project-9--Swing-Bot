@@ -355,6 +355,47 @@ jobs:
           if node scripts/starnet-three-level-evidence.mjs --live > /dev/null 2>&1; then
             echo "Custody audit unexpectedly accepted live execution"; exit 1
           fi
+      - name: Verify offline research-quality sample limits and descriptive holdout boundaries
+        shell: bash
+        run: |
+          node scripts/starnet-three-level-evidence.mjs --demo > "$RUNNER_TEMP/project9-research-quality.json"
+          node scripts/starnet-three-level-evidence.mjs --demo --markdown > "$RUNNER_TEMP/project9-research-quality.md"
+          node --input-type=module -e '
+            import {readFile} from "node:fs/promises";
+            const r=JSON.parse(await readFile(process.env.RUNNER_TEMP+"/project9-research-quality.json","utf8"));
+            const md=await readFile(process.env.RUNNER_TEMP+"/project9-research-quality.md","utf8");
+            const q=r.levels?.research?.researchQuality;
+            if(r.overall?.productionGate!=="NO_GO"||
+              r.levels?.engineering?.status!=="PASS_FICTIONAL_ARITHMETIC_ONLY"||
+              r.levels?.research?.status!=="PARTIAL_DESCRIPTIVE_CHECKS_ONLY"||
+              r.levels?.operations?.status!=="NOT_VERIFIED"||
+              q?.schema!=="project9-offline-research-quality-v1"||
+              q?.status!=="DESCRIPTIVE_ONLY_INDEPENDENT_EVIDENCE_MISSING"||
+              q?.partitions?.length!==3||
+              q?.partitions?.[0]?.completedBars!==70||
+              q?.partitions?.[1]?.completedBars!==35||
+              q?.partitions?.[2]?.completedBars!==36||
+              q?.partitions?.reduce((a,p)=>a+p.strategyWindows,0)!==r.levels?.research?.chronology?.strategyObservations||
+              q?.partitions?.reduce((a,p)=>a+p.periodicControlWindows,0)!==r.levels?.research?.chronology?.periodicControlObservations||
+              q?.partitions?.[2]?.sampleReferenceFloor!==20||
+              q?.partitions?.[2]?.sampleReferenceFloorMet!==false||
+              q?.frozenMethod?.holdoutIsOnlyADescriptivePartition!==true||
+              q?.frozenMethod?.independentOutOfSampleEfficacyEstablished!==false||
+              q?.costReview?.eachPhaseCostOrderingRechecked!==true||
+              q?.verification?.chronologyAndWindowDateIndicesRecomputed!==true||
+              q?.verification?.sourceIndependenceAuthenticated!==false||
+              q?.verification?.strategyEfficacyEstablished!==false||
+              q?.verification?.independentStatisticalConfidenceCalculated!==false||
+              q?.verification?.realOrdersCreated!==0||
+              q?.verification?.externalCalls!==0||
+              q?.verification?.productionGate!=="NO_GO"||
+              !q.reviewReasons.includes("INSUFFICIENT_HYPOTHETICAL_STRATEGY_WINDOWS_IN_ONE_OR_MORE_PARTITIONS")||
+              !md.includes("Research-quality evidence: DESCRIPTIVE_ONLY_INDEPENDENT_EVIDENCE_MISSING"))
+              throw Error("Research-quality report erroneously upgraded the descriptive fixture");
+          '
+          if node scripts/starnet-three-level-evidence.mjs --live >/dev/null 2>&1; then
+            echo "Research quality accepted live execution"; exit 1
+          fi
       - name: Check browser availability for loopback acceptance
         run: command -v google-chrome
       - name: Exercise workstation in headless Chromium
