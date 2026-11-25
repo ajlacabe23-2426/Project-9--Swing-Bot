@@ -318,6 +318,43 @@ jobs:
           if node scripts/starnet-three-level-evidence.mjs --live >/dev/null 2>&1; then
             echo "Read-only provenance report accepted live execution flag"; exit 1
           fi
+      - name: Verify fictional custody-reference consistency and no PIT authenticity promotion
+        shell: bash
+        run: |
+          node scripts/starnet-three-level-evidence.mjs --demo > "$RUNNER_TEMP/project9-custody.json"
+          node scripts/starnet-three-level-evidence.mjs --demo --markdown > "$RUNNER_TEMP/project9-custody.md"
+          node --input-type=module -e '
+            import {readFile} from "node:fs/promises";
+            const r=JSON.parse(await readFile(process.env.RUNNER_TEMP+"/project9-custody.json","utf8"));
+            const md=await readFile(process.env.RUNNER_TEMP+"/project9-custody.md","utf8");
+            const c=r.levels?.research?.custodyEvidence;
+            if(r.overall?.productionGate!=="NO_GO"||
+               r.levels?.engineering?.status!=="PASS_FICTIONAL_ARITHMETIC_ONLY"||
+               r.levels?.research?.status!=="PARTIAL_DESCRIPTIVE_CHECKS_ONLY"||
+               r.levels?.operations?.status!=="NOT_VERIFIED"||
+               c?.schema!=="project9-offline-custody-evidence-audit-v1"||
+               c?.status!=="REVIEW_REQUIRED"||
+               c?.dataset?.observedBars!==190||
+               c?.references?.archiveSnapshotCount!==1||
+               c?.references?.corporateActionStatus!=="NOT_ASSESSED"||
+               c?.references?.rightsStatus!=="NOT_VERIFIED"||
+               c?.verification?.exactLocalByteHashesMatch!==true||
+               c?.verification?.declaredCaptureDateChronologicallyConsistent!==true||
+               c?.verification?.independentSourceAuthenticityVerified!==false||
+               c?.verification?.pointInTimeAvailabilityIndependentlyVerified!==false||
+               c?.verification?.corporateActionTruthVerified!==false||
+               c?.verification?.termsOfUseIndependentlyReviewed!==false||
+               c?.verification?.signedArchiveEvidenceVerified!==false||
+               c?.verification?.realOrdersCreated!==0||
+               c?.verification?.blockchainTransactionsBroadcast!==0||
+               c?.verification?.externalCalls!==0||
+               c?.verification?.productionGate!=="NO_GO"||
+               !md.includes("Custody-reference evidence: REVIEW_REQUIRED"))
+              throw Error("Custody evidence gate did not retain structural-only provenance");
+          '
+          if node scripts/starnet-three-level-evidence.mjs --live > /dev/null 2>&1; then
+            echo "Custody audit unexpectedly accepted live execution"; exit 1
+          fi
       - name: Check browser availability for loopback acceptance
         run: command -v google-chrome
       - name: Exercise workstation in headless Chromium
