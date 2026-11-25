@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {generateScenario} from '../src/synthetic-fixtures.mjs';
+import {auditChronologicalResearch} from '../src/chronological-research-audit.mjs';
 import {auditStarNetOfflineResearchQuality} from '../src/starnet-offline-research-quality.mjs';
 import {runEvidenceCli} from '../scripts/starnet-three-level-evidence.mjs';
 
@@ -42,7 +43,8 @@ const audit=(dataset=data(),opts={})=>auditStarNetOfflineResearchQuality({
 });
 
 test('fixed three-part chronology is recomputed from raw bars; sparse holdout cannot claim skill',()=>{
-  const report=audit();
+  const dataset=data(),report=audit(dataset);
+  const independentlyRecomputed=auditChronologicalResearch(dataset,{asOf:dataset.sourceAsOf});
   assert.equal(report.schema,'project9-offline-research-quality-v1');
   assert.equal(report.status,'DESCRIPTIVE_ONLY_INDEPENDENT_EVIDENCE_MISSING');
   assert.equal(report.partitions.length,3);
@@ -51,8 +53,10 @@ test('fixed three-part chronology is recomputed from raw bars; sparse holdout ca
   ]);
   assert.deepEqual(report.partitions.map(x=>x.completedBars),[70,35,36]);
   assert.equal(report.partitions.reduce((sum,x)=>sum+x.completedBars,0),141);
-  assert.equal(report.partitions.reduce((sum,x)=>sum+x.strategyWindows,0),17);
-  assert.equal(report.partitions.reduce((sum,x)=>sum+x.periodicControlWindows,0),26);
+  assert.deepEqual(report.partitions.map(x=>x.strategyWindows),
+    independentlyRecomputed.phases.map(x=>x.strategy.closedHypotheticalObservations));
+  assert.deepEqual(report.partitions.map(x=>x.periodicControlWindows),
+    independentlyRecomputed.phases.map(x=>x.control.closedHypotheticalObservations));
   assert.equal(report.partitions[2].sampleReferenceFloor,20);
   assert.equal(report.partitions[2].sampleReferenceFloorMet,false);
   assert.ok(report.partitions.every(x=>x.windowsFullyInsidePhase&&x.selectionBasedOnLockedRule));
