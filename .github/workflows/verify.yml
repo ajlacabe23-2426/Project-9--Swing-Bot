@@ -243,6 +243,46 @@ jobs:
           if node scripts/accept-fictional-endurance.mjs --live > /dev/null 2>&1; then
             echo "Endurance CLI accepted unsafe live flag"; exit 1
           fi
+      - name: Verify independent three-level research evidence and NO_GO boundaries
+        shell: bash
+        run: |
+          node scripts/starnet-three-level-evidence.mjs --demo > "$RUNNER_TEMP/project9-three-level-evidence.json"
+          node scripts/starnet-three-level-evidence.mjs --demo --markdown > "$RUNNER_TEMP/project9-three-level-evidence.md"
+          node --input-type=module -e '
+            import {readFile} from "node:fs/promises";
+            const r=JSON.parse(await readFile(process.env.RUNNER_TEMP+"/project9-three-level-evidence.json","utf8"));
+            const md=await readFile(process.env.RUNNER_TEMP+"/project9-three-level-evidence.md","utf8");
+            const e=r.levels?.engineering,p=r.levels?.research,o=r.levels?.operations;
+            if(r.schema!=="project9-starnet-three-level-evidence-readiness-v1"||
+              r.study!=="OFFLINE_RESEARCH_VALIDATION_ONLY"||
+              r.overall?.productionGate!=="NO_GO"||
+              r.overall?.levelsAreIndependent!==true||
+              r.overall?.realOrdersCreated!==0||
+              r.overall?.blockchainTransactionsBroadcast!==0||
+              r.overall?.liveTradingEnabled!==false||
+              r.overall?.autoPromotionAllowed!==false||
+              e?.status!=="PASS_FICTIONAL_ARITHMETIC_ONLY"||
+              e?.verification!=="RECOMPUTED_FROM_LOCAL_SYNTHETIC_JOURNAL"||
+              e?.reviewedEvents!==3||e?.reconstructedCashTicks!==8000||
+              e?.providerExecutionsAuthenticated!==false||
+              p?.status!=="PARTIAL_DESCRIPTIVE_CHECKS_ONLY"||
+              p?.sourceKind!=="ENGINEERED_OFFLINE_FIXTURE"||
+              p?.historicalBars!==190||
+              p?.chronology?.contiguousNoShuffle!==true||
+              p?.chronology?.windowsContainedWithinOwnPartition!==true||
+              p?.chronology?.hypotheticalCostsWorsenMean!==true||
+              p?.historicalAuthenticityIndependentlyVerified!==false||
+              p?.testedOutOfSampleEfficacy!==false||
+              p?.pointInTimeUniverseIndependentlyVerified!==false||
+              p?.userOrVendorLabelsCannotRaiseThisStatus!==true||
+              o?.status!=="NOT_VERIFIED"||o?.localMacAcceptance!=="NOT_RUN"||
+              !md.includes("Three-Level Evidence Readiness")||
+              !md.includes("NO_GO")||!md.includes("authenticity"))
+              throw Error("Independent evidence readiness report failed closed");
+          '
+          if node scripts/starnet-three-level-evidence.mjs --live > /dev/null 2>&1; then
+            echo "Evidence report accepted live mode"; exit 1
+          fi
       - name: Check browser availability for loopback acceptance
         run: command -v google-chrome
       - name: Exercise workstation in headless Chromium
