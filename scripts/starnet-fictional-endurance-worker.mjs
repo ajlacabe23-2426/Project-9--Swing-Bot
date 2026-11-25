@@ -123,7 +123,7 @@ export async function performFictionalEnduranceStage(stage,directory) {
     assert.equal(report.reviewCount,1);
     assert.equal(report.emergencyStop.state,'RUNNING');
     process.stdout.write('READY\n');
-    await new Promise(()=>{}); // deliberately stay alive until owner SIGKILL
+    setInterval(()=>{},1000); // real process remains alive until owner SIGKILL
     return;
   }
   try{
