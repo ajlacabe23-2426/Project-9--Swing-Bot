@@ -212,6 +212,37 @@ jobs:
           if node scripts/accept-fictional-operator-controls.mjs --live >/dev/null 2>&1; then
             echo "Operator controls accepted unsafe live flag"; exit 1
           fi
+      - name: Verify multi-process fictional scenario endurance and SIGKILL recovery
+        shell: bash
+        run: |
+          node scripts/accept-fictional-endurance.mjs --demo > "$RUNNER_TEMP/project9-endurance.json"
+          node --input-type=module -e '
+            import {readFile} from "node:fs/promises";
+            const r=JSON.parse(await readFile(process.env.RUNNER_TEMP+"/project9-endurance.json","utf8"));
+            const c=r.checks;
+            if(r.schema!=="project9-fictional-endurance-acceptance-v1" ||
+              r.scope!=="ENGINEERED_FICTIONAL_OFFLINE" ||
+              r.softwareGate!=="PASS" || r.productionGate!=="NO_GO" ||
+              !c.multiProcessScenarioReplays || !c.initialReadByteStable ||
+              !c.simultaneousCashAndHoldingsReservations ||
+              !c.quarantineAndExplicitRelease || !c.deterministicPartialFillsAndCancellations ||
+              !c.SIGKILLIdleProcessCrash || !c.staleWriterLockNotAutoStolen ||
+              !c.ownerReviewedDisposableLock || !c.unchangedStateAfterCrash ||
+              !c.independentLedgerRecalculatedInEveryChild ||
+              !c.immutableStopAcrossRestarts || !c.finalRepeatedReadsIdentical ||
+              c.observedRealProviderExecutions!==false || c.macOperatorAcceptance!=="NOT_RUN" ||
+              c.realOrdersCreated!==0 || c.blockchainBroadcasts!==0 ||
+              c.externalCalls!==0 || r.recordedDecisions!==25 ||
+              r.fictionalEvents!==48 || r.messageReceipts!==48 ||
+              r.reviewDecisions!==1 || r.finalRevision!==76 ||
+              r.simulatedCashTicks!==118000 || r.simulatedEquityUnits!==18 ||
+              r.simulatedTokenUnits!==0 || r.stopState!=="STOPPED_LATCHED" ||
+              r.childTermination!=="SIGKILL")
+              throw Error("Fictional endurance evidence gate refused");
+          '
+          if node scripts/accept-fictional-endurance.mjs --live > /dev/null 2>&1; then
+            echo "Endurance CLI accepted unsafe live flag"; exit 1
+          fi
       - name: Check browser availability for loopback acceptance
         run: command -v google-chrome
       - name: Exercise workstation in headless Chromium
