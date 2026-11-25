@@ -484,6 +484,50 @@ jobs:
           if node scripts/starnet-review-claims.mjs --live >/dev/null 2>&1; then
             echo "Claim CLI unexpectedly accepted live mode"; exit 1
           fi
+      - name: Verify Phase 16 methodology warnings, strictly prior contexts and no prediction claim
+        shell: bash
+        run: |
+          node scripts/starnet-learn-methodology.mjs --demo > "$RUNNER_TEMP/project9-methodology-learn.json"
+          node scripts/starnet-learn-methodology.mjs --demo --markdown > "$RUNNER_TEMP/project9-methodology-learn.md"
+          node --input-type=module -e '
+            import {readFile} from "node:fs/promises";
+            const root=process.env.RUNNER_TEMP;
+            const p=JSON.parse(await readFile(root+"/project9-methodology-learn.json","utf8"));
+            const md=await readFile(root+"/project9-methodology-learn.md","utf8");
+            const holdout=p.phases?.[2];
+            if(p.schema!=="project9-offline-methodology-learning-v1"||
+              p.status!=="DESCRIPTIVE_EDUCATION_ONLY"||
+              p.sourceKind!=="ENGINEERED_OFFLINE_FIXTURE"||
+              p.sampleReferenceFloor!==20||
+              p.study?.holdoutWindows!==1||
+              p.study?.statisticalSignificanceEstablished!==false||
+              p.study?.independentPredictionEstablished!==false||
+              p.study?.marketConditionRobustnessEstablished!==false||
+              p.phases?.length!==3||
+              holdout?.strategyWindows!==1||
+              holdout?.descriptiveFloorMet!==false||
+              p.phases.some(x=>x.contextRows.length!==x.strategyWindows||
+                x.contextRows.some(y=>!(y.latestContextDate<y.signalDate)))||
+              p.phases.some(x=>x.statisticalIndependenceVerified!==false||
+                x.contextGroupEffectEstablished!==false||
+                x.scannerVersusControlIsNotMatchedExperiment!==true)||
+              !p.learningFlags.some(x=>x.code==="THIN_HOLDOUT_SAMPLE")||
+              !p.learningFlags.some(x=>x.code==="COSTS_AND_LIQUIDITY_ARE_HYPOTHETICAL")||
+              !p.learningFlags.some(x=>x.code==="SOURCE_AUTHENTICITY_NOT_VERIFIED")||
+              p.safety?.everyContextUsesPriorBarsOnly!==true||
+              p.safety?.noSignalRefittingOrOptimization!==true||
+              p.safety?.realOrdersCreated!==0||
+              p.safety?.externalCalls!==0||
+              p.safety?.blockchainBroadcasts!==0||
+              p.safety?.productionGate!=="NO_GO"||
+              !md.includes("What to Watch For")||
+              !md.includes("THIN_HOLDOUT_SAMPLE")||
+              !md.includes("NO_GO"))
+              throw Error("Phase 16 educational methodology gates failed closed");
+          '
+          if node scripts/starnet-learn-methodology.mjs --live > /dev/null 2>&1; then
+            echo "Methodology CLI accepted unsafe live mode"; exit 1
+          fi
       - name: Check browser availability for loopback acceptance
         run: command -v google-chrome
       - name: Exercise workstation in headless Chromium
