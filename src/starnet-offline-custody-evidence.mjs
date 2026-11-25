@@ -118,6 +118,9 @@ export function auditStarNetOfflineCustody({
   const capturedAt=manifest.capture.claimedCapturedAt;
   if(day(capturedAt)<dataset.sourceAsOf||day(capturedAt)>asOf)
     reject('claimed capture timestamp outside source and review boundary');
+  if(dataset.provenance.retrievedAt&&
+     Date.parse(dataset.provenance.retrievedAt)>Date.parse(capturedAt))
+    reject('dataset declared retrieval timestamp after claimed capture');
 
   if(!Array.isArray(manifest.references)||manifest.references.length<1||
      manifest.references.length>100)
