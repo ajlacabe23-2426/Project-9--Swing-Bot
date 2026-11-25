@@ -20,7 +20,7 @@ import {buildStarNetEvidenceReadiness,renderStarNetEvidenceMarkdown} from '../sr
 import {assertPatchedNodeRuntime} from '../src/runtime-security.mjs';
 
 const M='MISSING',MAX_BYTES=2_500_000;
-const usage='Usage: npm run research:evidence -- --demo [--markdown] OR --as-of YYYY-MM-DD history.json [--compare witness.json] [--markdown] (offline only)';
+const usage='Usage: npm run research:evidence -- --demo [--markdown] OR --as-of YYYY-MM-DD history.json [--compare witness.json] [--manifest custody.json] [--markdown] (offline only)';
 const policy=()=>({
   schema:'project9-fictional-risk-policy-v1',scope:'FICTIONAL_OFFLINE',
   startingCashTicks:10_000,maxOrderNotionalTicks:9_000,
@@ -50,15 +50,25 @@ export function parseEvidenceArgs(args){
   const base=args[0]==='--as-of'&&isStrictISODate(args[1])&&
     typeof args[2]==='string'&&args[2].length>0&&!args[2].startsWith('--');
   if(!base)throw new Error(usage);
-  if(args.length===3||args.length===4&&args[3]==='--markdown')
-    return {mode:'LOCAL_FILE',asOf:args[1],path:args[2],
-      markdown:args.length===4};
-  if((args.length===5||args.length===6)&&args[3]==='--compare'&&
-     typeof args[4]==='string'&&args[4].length>0&&!args[4].startsWith('--')&&
-     (args.length===5||args[5]==='--markdown'))
-    return {mode:'LOCAL_FILE',asOf:args[1],path:args[2],
-      witnessPath:args[4],markdown:args.length===6};
-  throw new Error(usage);
+  const out={mode:'LOCAL_FILE',asOf:args[1],path:args[2],markdown:false};
+  const encountered=new Set();
+  for(let i=3;i<args.length;i++){
+    const flag=args[i];
+    if(flag==='--markdown'&&i===args.length-1&&!encountered.has(flag)){
+      encountered.add(flag);out.markdown=true;continue;
+    }
+    if((flag==='--compare'||flag==='--manifest')&&!encountered.has(flag)){
+      const value=args[++i];
+      if(typeof value!=='string'||!value.length||value.startsWith('--'))
+        throw new Error(usage);
+      encountered.add(flag);
+      if(flag==='--compare')out.witnessPath=value;
+      else out.manifestPath=value;
+      continue;
+    }
+    throw new Error(usage);
+  }
+  return out;
 }
 function engineered(){
   const bars=generateScenario(73,190);
@@ -84,8 +94,31 @@ function engineered(){
   p.close=Number((p.close*1.018).toFixed(6));
   p.high=Number((Math.max(p.high,p.close)*1.001).toFixed(6));
   witness.bars.splice(120,1);
-  return {asOf,bytes:Buffer.from(JSON.stringify(dataset)),
-    witnessBytes:Buffer.from(JSON.stringify(witness))};
+  const bytes=Buffer.from(JSON.stringify(dataset));
+  const sampleRefBytes=Buffer.from('ENGINEERED LOCAL REFERENCE PLACEHOLDER - NO REAL SOURCE');
+  const manifest={
+    schema:'project9-offline-history-custody-manifest-v1',
+    scope:'UNTRUSTED_LOCAL_RESEARCH_ARTIFACTS',
+    dataset:{
+      sha256:createHash('sha256').update(bytes).digest('hex'),
+      symbol:dataset.symbol,currency:dataset.currency,
+      sourceAsOf:dataset.sourceAsOf,declaredSource:dataset.source
+    },
+    capture:{
+      method:'ENGINEERED_FIXTURE',
+      claimedCapturedAt:asOf+'T12:00:00.000Z',
+      snapshotReferenceId:'SIM-ARCHIVE-001'
+    },
+    references:[{
+      referenceId:'SIM-ARCHIVE-001',kind:'ARCHIVE_SNAPSHOT',
+      sha256:createHash('sha256').update(sampleRefBytes).digest('hex'),
+      claimedPublishedAt:asOf+'T09:00:00.000Z'
+    }],
+    corporateActions:{status:'NOT_ASSESSED',records:[]},
+    rights:{status:'NOT_VERIFIED',referenceId:null}
+  };
+  return {asOf,bytes,witnessBytes:Buffer.from(JSON.stringify(witness)),
+    manifestBytes:Buffer.from(JSON.stringify(manifest))};
 }
 async function readLocalHistory(path){
   const input=resolve(path);
@@ -120,25 +153,29 @@ async function fictionalLedger(){
 export async function runEvidenceCli(args){
   assertPatchedNodeRuntime();
   const opts=parseEvidenceArgs(args);
-  let asOf,bytes,sourceKind,witnessMarketBytes=null;
+  let asOf,bytes,sourceKind,witnessMarketBytes=null,manifestBytes=null;
   if(opts.mode==='DEMO'){
     const fixture=engineered();
     asOf=fixture.asOf;bytes=fixture.bytes;
     witnessMarketBytes=fixture.witnessBytes;
+    manifestBytes=fixture.manifestBytes;
     sourceKind='ENGINEERED_OFFLINE_FIXTURE';
   }else{
     bytes=await readLocalHistory(opts.path);
     if(opts.witnessPath)witnessMarketBytes=await readLocalHistory(opts.witnessPath);
+    if(opts.manifestPath)manifestBytes=await readLocalHistory(opts.manifestPath);
     asOf=opts.asOf;
     sourceKind='USER_SUPPLIED_UNVERIFIED_JSON';
   }
   const report=buildStarNetEvidenceReadiness({
     journalReport:await fictionalLedger(),
-    marketBytes:bytes,asOf,sourceKind,witnessMarketBytes
+    marketBytes:bytes,asOf,sourceKind,witnessMarketBytes,manifestBytes
   });
   assert.equal(report.overall.productionGate,'NO_GO');
   assert.equal(report.levels.engineering.providerExecutionsAuthenticated,false);
   assert.equal(report.levels.research.historicalAuthenticityIndependentlyVerified,false);
+  assert.equal(report.levels.research.custodyEvidence.verification.independentSourceAuthenticityVerified,false);
+  assert.equal(report.levels.research.custodyEvidence.verification.pointInTimeAvailabilityIndependentlyVerified,false);
   assert.equal(report.levels.research.crossSourceComparison.verification?.sourceIndependenceAuthenticated??false,false);
   return opts.markdown?renderStarNetEvidenceMarkdown(report):report;
 }
