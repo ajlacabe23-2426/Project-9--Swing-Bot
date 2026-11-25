@@ -15,6 +15,7 @@ import {auditMarketDatasetBatch} from './market-readiness-audit.mjs';
 import {normalizeMarketDataset,isStrictISODate} from './market-intelligence.mjs';
 import {compareLocalHistoricalSources} from './starnet-historical-source-comparison.mjs';
 import {auditStarNetOfflineCustody} from './starnet-offline-custody-evidence.mjs';
+import {auditStarNetOfflineResearchQuality} from './starnet-offline-research-quality.mjs';
 
 const fail=message=>{throw new TypeError('StarNet evidence gate refused: '+message);};
 const sha=/^[a-f0-9]{64}$/;
@@ -179,6 +180,13 @@ export function buildStarNetEvidenceReadiness({
     row.realOrdersAllowed===false&&
     row.fileSha256===hash,
     'unsafe or contradictory data-readiness claim');
+  const researchQuality=auditStarNetOfflineResearchQuality({
+    dataset,asOf,sourceKind,comparison,custody
+  });
+  assert(researchQuality.verification.productionGate==='NO_GO'&&
+    researchQuality.verification.strategyEfficacyEstablished===false&&
+    researchQuality.verification.sourceIndependenceAuthenticated===false,
+    'research quality must not imply predictive or source authenticity');
   const evidence={
     engineering:{
       level:1,status:'PASS_FICTIONAL_ARITHMETIC_ONLY',
@@ -208,6 +216,7 @@ export function buildStarNetEvidenceReadiness({
       dataReadinessStatus:row.researchReadiness,
       crossSourceComparison:comparison,
       custodyEvidence:custody,
+      researchQuality,
       crossSourceAgreementDoesNotAuthenticateMarkets:true,
       chronology:chronologyChecks,
       costScenarios:RESEARCH_STRESS_CASES.map(x=>x.id),
@@ -276,6 +285,7 @@ export function renderStarNetEvidenceMarkdown(report){
     '- Research review reasons: '+(r.readinessReviewReasons.length?r.readinessReviewReasons.join(', '):'No structural review flags; authenticity still unverified')+'.',
     '- Cross-source local evidence: '+r.crossSourceComparison.status+' (not independent authentication).',
     '- Custody-reference evidence: '+r.custodyEvidence.status+' (local declarations; no independent point-in-time proof).',
+    '- Research-quality evidence: '+r.researchQuality.status+'; holdout hypothetical windows: '+r.researchQuality.partitions[2].strategyWindows+'; per-partition descriptive reference floor: '+r.researchQuality.partitions[2].sampleReferenceFloor+'.',
     '',
     '## Claims not supported by this report',
     '',
