@@ -171,6 +171,36 @@ test('action and rights references require exact types, local chronology and no 
   assert.throws(()=>audit(data,a),/refused/);
 });
 
+test('duplicate corporate-action event IDs fail closed and post-capture references require review',()=>{
+  const data=invented(),m=pack(data);
+  const first=data.bars[70].date,second=data.bars[75].date;
+  m.references.push(ref('OFFLINE-ACTION-004','CORPORATE_ACTION_NOTICE',first,'NOTICE ONE'));
+  m.references.push(ref('OFFLINE-ACTION-005','CORPORATE_ACTION_NOTICE',second,'NOTICE TWO'));
+  m.corporateActions={status:'REFERENCES_DECLARED',records:[
+    {eventId:'FAKE-DUPLICATE',eventDate:first,kind:'SPLIT',
+      referenceId:'OFFLINE-ACTION-004',claimedAvailableAt:first+'T10:00:00.000Z'},
+    {eventId:'FAKE-DUPLICATE',eventDate:second,kind:'DIVIDEND',
+      referenceId:'OFFLINE-ACTION-005',claimedAvailableAt:second+'T10:00:00.000Z'}
+  ]};
+  assert.throws(()=>audit(data,m),/duplicate corporate action/);
+  m.corporateActions.records[1].eventId='FAKE-SECOND';
+  const r=audit(data,m);
+  assert.equal(r.references.corporateActionRecords,2);
+  assert.equal(r.verification.pointInTimeAvailabilityIndependentlyVerified,false);
+
+  const after=structuredClone(m);
+  const end=new Date(data.sourceAsOf+'T12:00:00.000Z');
+  end.setUTCHours(end.getUTCHours()+2);
+  // The review date is deliberately later than capture, so the source
+  // reference can be declared as published afterward but is not PIT proof.
+  after.references[1].claimedPublishedAt=end.toISOString();
+  const later=new Date(data.sourceAsOf+'T00:00:00.000Z');
+  later.setUTCDate(later.getUTCDate()+1);
+  const result=audit(data,after,later.toISOString().slice(0,10));
+  assert.ok(result.reviewReasons.includes('SOURCE_REFERENCE_PUBLISHED_AFTER_DECLARED_CAPTURE'));
+  assert.equal(result.verification.productionGate,'NO_GO');
+});
+
 test('Phase 12 demonstrator extends the existing read-only three-level packet',async()=>{
   const report=await runEvidenceCli(['--demo']);
   const e=report.levels.research.custodyEvidence;
