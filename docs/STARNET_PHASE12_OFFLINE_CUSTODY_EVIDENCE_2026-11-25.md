@@ -35,8 +35,8 @@ available to a trader at the specified time.
 - Corporate action records may be \`NOT_ASSESSED\`,
   \`NO_EVENTS_DECLARED\` or \`REFERENCES_DECLARED\`. References must have
   exact record fields and valid event types (SPLIT, DIVIDEND, MERGER,
-  SPINOFF), dates inside the dataset range and CORP_ACTION reference kind.
-  A declared notice made available after an event is explicitly flagged.
+  SPINOFF), dates inside the dataset range and CORPORATE_ACTION_NOTICE reference kind.
+  A declared notice made available after an event is explicitly flagged. Source references declared as published after the snapshot's capture are also flagged.
   A notice dated after the review cutoff or capture is refused.
 - Extra credential, account, wallet, provider secret or live-execution
   fields fail schema validation; no side effects occur.
