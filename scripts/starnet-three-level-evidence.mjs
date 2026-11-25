@@ -20,7 +20,7 @@ import {buildStarNetEvidenceReadiness,renderStarNetEvidenceMarkdown} from '../sr
 import {assertPatchedNodeRuntime} from '../src/runtime-security.mjs';
 
 const M='MISSING',MAX_BYTES=2_500_000;
-const usage='Usage: npm run research:evidence -- --demo [--markdown] OR --as-of YYYY-MM-DD permitted-local-history.json [--markdown]';
+const usage='Usage: npm run research:evidence -- --demo [--markdown] OR --as-of YYYY-MM-DD history.json [--compare witness.json] [--markdown] (offline only)';
 const policy=()=>({
   schema:'project9-fictional-risk-policy-v1',scope:'FICTIONAL_OFFLINE',
   startingCashTicks:10_000,maxOrderNotionalTicks:9_000,
@@ -47,20 +47,23 @@ export function parseEvidenceArgs(args){
   if(args.length===1&&args[0]==='--demo')return {mode:'DEMO',markdown:false};
   if(args.length===2&&args[0]==='--demo'&&args[1]==='--markdown')
     return {mode:'DEMO',markdown:true};
-  const valid=(args.length===3||args.length===4)&&
-    args[0]==='--as-of'&&isStrictISODate(args[1])&&
-    typeof args[2]==='string'&&args[2].length>0&&!args[2].startsWith('--')&&
-    (args.length===3||args[3]==='--markdown');
-  if(!valid)throw new Error(usage);
-  return {mode:'LOCAL_FILE',asOf:args[1],path:args[2],
-    markdown:args.length===4};
+  const base=args[0]==='--as-of'&&isStrictISODate(args[1])&&
+    typeof args[2]==='string'&&args[2].length>0&&!args[2].startsWith('--');
+  if(!base)throw new Error(usage);
+  if(args.length===3||args.length===4&&args[3]==='--markdown')
+    return {mode:'LOCAL_FILE',asOf:args[1],path:args[2],
+      markdown:args.length===4};
+  if((args.length===5||args.length===6)&&args[3]==='--compare'&&
+     typeof args[4]==='string'&&args[4].length>0&&!args[4].startsWith('--')&&
+     (args.length===5||args[5]==='--markdown'))
+    return {mode:'LOCAL_FILE',asOf:args[1],path:args[2],
+      witnessPath:args[4],markdown:args.length===6};
+  throw new Error(usage);
 }
 function engineered(){
   const bars=generateScenario(73,190);
   const asOf=bars.at(-1).date;
-  return {
-    asOf,
-    bytes:Buffer.from(JSON.stringify({
+  const dataset={
       schema:'project9-market-data-v2',
       symbol:'SIM09',currency:'USD',
       source:'PROJECT9 ENGINEERED SYNTHETIC HISTORY - NOT ACTUAL PRICES',
@@ -72,8 +75,27 @@ function engineered(){
         survivorship:'NOT_ASSESSED',
         licensing:'NOT_VERIFIED'
       },bars
-    }))
   };
+  const witness=structuredClone(dataset);
+  witness.source='SECOND ENGINEERED LOCAL COPY - NOT A VERIFIED VENDOR';
+  // Deliberately manufacture a well-formed mismatch and one absent day.
+  // This teaches review logic but cannot prove external source independence.
+  const p=witness.bars[88];
+  p.close=Number((p.close*1.018).toFixed(6));
+  p.high=Number((Math.max(p.high,p.close)*1.001).toFixed(6));
+  witness.bars.splice(120,1);
+  return {asOf,bytes:Buffer.from(JSON.stringify(dataset)),
+    witnessBytes:Buffer.from(JSON.stringify(witness))};
+}
+async function readLocalHistory(path){
+  const input=resolve(path);
+  const info=await stat(input);
+  if(!info.isFile()||info.size<=0||info.size>MAX_BYTES)
+    throw new TypeError('Permitted local JSON must be a nonempty regular file no larger than 2.5 MB');
+  const bytes=await readFile(input);
+  if(!bytes.length||bytes.length>MAX_BYTES)
+    throw new Error('Local history exceeded size bound');
+  return bytes;
 }
 async function fictionalLedger(){
   const dir=await mkdtemp(join(tmpdir(),'p9-execution-lab-'));
@@ -98,28 +120,26 @@ async function fictionalLedger(){
 export async function runEvidenceCli(args){
   assertPatchedNodeRuntime();
   const opts=parseEvidenceArgs(args);
-  let asOf,bytes,sourceKind;
+  let asOf,bytes,sourceKind,witnessMarketBytes=null;
   if(opts.mode==='DEMO'){
     const fixture=engineered();
     asOf=fixture.asOf;bytes=fixture.bytes;
+    witnessMarketBytes=fixture.witnessBytes;
     sourceKind='ENGINEERED_OFFLINE_FIXTURE';
   }else{
-    const path=resolve(opts.path);
-    const info=await stat(path);
-    if(!info.isFile()||info.size<=0||info.size>MAX_BYTES)
-      throw new TypeError('Permitted local JSON must be a nonempty regular file no larger than 2.5 MB');
-    bytes=await readFile(path);
-    if(!bytes.length||bytes.length>MAX_BYTES)throw new Error('Local history exceeded size bound');
+    bytes=await readLocalHistory(opts.path);
+    if(opts.witnessPath)witnessMarketBytes=await readLocalHistory(opts.witnessPath);
     asOf=opts.asOf;
     sourceKind='USER_SUPPLIED_UNVERIFIED_JSON';
   }
   const report=buildStarNetEvidenceReadiness({
     journalReport:await fictionalLedger(),
-    marketBytes:bytes,asOf,sourceKind
+    marketBytes:bytes,asOf,sourceKind,witnessMarketBytes
   });
   assert.equal(report.overall.productionGate,'NO_GO');
   assert.equal(report.levels.engineering.providerExecutionsAuthenticated,false);
   assert.equal(report.levels.research.historicalAuthenticityIndependentlyVerified,false);
+  assert.equal(report.levels.research.crossSourceComparison.verification?.sourceIndependenceAuthenticated??false,false);
   return opts.markdown?renderStarNetEvidenceMarkdown(report):report;
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href){

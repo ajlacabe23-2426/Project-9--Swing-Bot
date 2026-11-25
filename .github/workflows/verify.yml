@@ -283,6 +283,41 @@ jobs:
           if node scripts/starnet-three-level-evidence.mjs --live > /dev/null 2>&1; then
             echo "Evidence report accepted live mode"; exit 1
           fi
+      - name: Verify cross-source historical disagreement and no authenticity escalation
+        shell: bash
+        run: |
+          node scripts/starnet-three-level-evidence.mjs --demo > "$RUNNER_TEMP/project9-cross-source.json"
+          node scripts/starnet-three-level-evidence.mjs --demo --markdown > "$RUNNER_TEMP/project9-cross-source.md"
+          node --input-type=module -e '
+            import {readFile} from "node:fs/promises";
+            const r=JSON.parse(await readFile(process.env.RUNNER_TEMP+"/project9-cross-source.json","utf8"));
+            const md=await readFile(process.env.RUNNER_TEMP+"/project9-cross-source.md","utf8");
+            const c=r.levels?.research?.crossSourceComparison;
+            if(r.overall?.productionGate!=="NO_GO"||
+              r.levels?.engineering?.status!=="PASS_FICTIONAL_ARITHMETIC_ONLY"||
+              r.levels?.research?.status!=="PARTIAL_DESCRIPTIVE_CHECKS_ONLY"||
+              r.levels?.operations?.status!=="NOT_VERIFIED"||
+              c?.schema!=="project9-offline-cross-source-provenance-audit-v1"||
+              c?.status!=="DISCREPANCIES_REQUIRE_MANUAL_REVIEW"||
+              c?.scope!=="TWO_UNTRUSTED_LOCAL_HISTORICAL_FILES"||
+              c?.overlap?.commonDates!==189||
+              c?.overlap?.onlyPrimaryDates!==1||
+              c?.overlap?.priceDiscrepancyDates!==1||
+              c?.overlap?.volumeDiscrepancyDates!==0||
+              c?.verification?.sourceIndependenceAuthenticated!==false||
+              c?.verification?.historicalAuthenticityIndependentlyVerified!==false||
+              c?.verification?.pointInTimeAvailabilityIndependentlyVerified!==false||
+              c?.verification?.dataLicensingIndependentlyVerified!==false||
+              c?.verification?.realOrdersCreated!==0||
+              c?.verification?.blockchainTransactionsBroadcast!==0||
+              c?.verification?.externalCalls!==0||
+              c?.verification?.productionGate!=="NO_GO"||
+              !md.includes("DISCREPANCIES_REQUIRE_MANUAL_REVIEW"))
+              throw Error("Cross-source audit missing discrepancy or research-only evidence gates");
+          '
+          if node scripts/starnet-three-level-evidence.mjs --live >/dev/null 2>&1; then
+            echo "Read-only provenance report accepted live execution flag"; exit 1
+          fi
       - name: Check browser availability for loopback acceptance
         run: command -v google-chrome
       - name: Exercise workstation in headless Chromium
