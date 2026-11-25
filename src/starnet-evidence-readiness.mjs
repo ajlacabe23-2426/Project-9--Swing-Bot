@@ -14,6 +14,7 @@ import {auditChronologicalResearch,RESEARCH_STRESS_CASES} from './chronological-
 import {auditMarketDatasetBatch} from './market-readiness-audit.mjs';
 import {normalizeMarketDataset,isStrictISODate} from './market-intelligence.mjs';
 import {compareLocalHistoricalSources} from './starnet-historical-source-comparison.mjs';
+import {auditStarNetOfflineCustody} from './starnet-offline-custody-evidence.mjs';
 
 const fail=message=>{throw new TypeError('StarNet evidence gate refused: '+message);};
 const sha=/^[a-f0-9]{64}$/;
@@ -128,10 +129,10 @@ function normalizeBytes(bytes){
 
 /**
  * @param {{journalReport: object, marketBytes: Buffer, asOf: string,
- *          sourceKind: string, witnessMarketBytes?: Buffer|null}} options
+ *          sourceKind: string, witnessMarketBytes?: Buffer|null, manifestBytes?: Buffer|null}} options
  */
 export function buildStarNetEvidenceReadiness({
-  journalReport,marketBytes,asOf,sourceKind,witnessMarketBytes=null
+  journalReport,marketBytes,asOf,sourceKind,witnessMarketBytes=null,manifestBytes=null
 }={}){
   assert(sourceKinds.has(sourceKind),'explicit declared fixture or unverified local source type required');
   assert(isStrictISODate(asOf),'explicit valid review date required');
@@ -157,6 +158,17 @@ export function buildStarNetEvidenceReadiness({
   });
   const chronologyChecks=checkChronology(chronology,normalized.sourceAsOf);
   const row=readiness.datasets[0];
+  const custody=manifestBytes===null
+    ? Object.freeze({status:'NOT_PROVIDED',
+      verification:Object.freeze({
+        independentSourceAuthenticityVerified:false,
+        pointInTimeAvailabilityIndependentlyVerified:false,
+        corporateActionTruthVerified:false,termsOfUseIndependentlyReviewed:false,
+        productionGate:'NO_GO'})
+      })
+    : auditStarNetOfflineCustody({
+      marketBytes,manifestBytes,asOf,sourceKind
+    });
   const comparison=witnessMarketBytes===null
     ? Object.freeze({status:'NOT_ASSESSED',historicalAuthenticityIndependentlyVerified:false,
        sourceIndependenceAuthenticated:false,productionGate:'NO_GO'})
@@ -195,6 +207,7 @@ export function buildStarNetEvidenceReadiness({
       dataQualityStatus:row.quality.status,
       dataReadinessStatus:row.researchReadiness,
       crossSourceComparison:comparison,
+      custodyEvidence:custody,
       crossSourceAgreementDoesNotAuthenticateMarkets:true,
       chronology:chronologyChecks,
       costScenarios:RESEARCH_STRESS_CASES.map(x=>x.id),
@@ -262,6 +275,7 @@ export function renderStarNetEvidenceMarkdown(report){
     '- Hypothetical strategy windows: '+r.chronology.strategyObservations+'; periodic control windows: '+r.chronology.periodicControlObservations+'.',
     '- Research review reasons: '+(r.readinessReviewReasons.length?r.readinessReviewReasons.join(', '):'No structural review flags; authenticity still unverified')+'.',
     '- Cross-source local evidence: '+r.crossSourceComparison.status+' (not independent authentication).',
+    '- Custody-reference evidence: '+r.custodyEvidence.status+' (local declarations; no independent point-in-time proof).',
     '',
     '## Claims not supported by this report',
     '',
