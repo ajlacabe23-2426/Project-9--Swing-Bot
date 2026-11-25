@@ -375,8 +375,8 @@ jobs:
               q?.partitions?.[0]?.completedBars!==70||
               q?.partitions?.[1]?.completedBars!==35||
               q?.partitions?.[2]?.completedBars!==36||
-              q?.partitions?.reduce((a,p)=>a+p.strategyWindows,0)!==17||
-              q?.partitions?.reduce((a,p)=>a+p.periodicControlWindows,0)!==26||
+              q?.partitions?.reduce((a,p)=>a+p.strategyWindows,0)!==r.levels?.research?.chronology?.strategyObservations||
+              q?.partitions?.reduce((a,p)=>a+p.periodicControlWindows,0)!==r.levels?.research?.chronology?.periodicControlObservations||
               q?.partitions?.[2]?.sampleReferenceFloor!==20||
               q?.partitions?.[2]?.sampleReferenceFloorMet!==false||
               q?.frozenMethod?.holdoutIsOnlyADescriptivePartition!==true||
