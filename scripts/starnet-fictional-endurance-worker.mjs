@@ -73,7 +73,7 @@ async function init(j){
   const rejected=[
     [intent('D01','BUY',6),'INSUFFICIENT_AVAILABLE_CASH'],
     [intent('D02','BUY',10),'ORDER_NOTIONAL_CAP'],
-    [intent('D03','SELL',10),'INSUFFICIENT_AVAILABLE_HOLDINGS'],
+    [intent('D03','SELL',7),'INSUFFICIENT_AVAILABLE_HOLDINGS'],
     [intent('D04','SELL',1,true),'INSUFFICIENT_AVAILABLE_HOLDINGS']
   ];
   for(const [item,reason] of rejected){
