@@ -70,7 +70,7 @@ export function parseEvidenceArgs(args){
   }
   return out;
 }
-function engineered(){
+export function engineered(){
   const bars=generateScenario(73,190);
   const asOf=bars.at(-1).date;
   const dataset={
@@ -120,7 +120,7 @@ function engineered(){
   return {asOf,bytes,witnessBytes:Buffer.from(JSON.stringify(witness)),
     manifestBytes:Buffer.from(JSON.stringify(manifest))};
 }
-async function readLocalHistory(path){
+export async function readLocalHistory(path){
   const input=resolve(path);
   const info=await stat(input);
   if(!info.isFile()||info.size<=0||info.size>MAX_BYTES)

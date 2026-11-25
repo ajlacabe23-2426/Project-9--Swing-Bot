@@ -396,6 +396,50 @@ jobs:
           if node scripts/starnet-three-level-evidence.mjs --live >/dev/null 2>&1; then
             echo "Research quality accepted live execution"; exit 1
           fi
+      - name: Verify independent-process offline research reproduction and original byte identity
+        shell: bash
+        run: |
+          node scripts/starnet-reproduce-research.mjs --demo > "$RUNNER_TEMP/project9-reproduction-one.json"
+          node scripts/starnet-reproduce-research.mjs --demo > "$RUNNER_TEMP/project9-reproduction-two.json"
+          cmp -s "$RUNNER_TEMP/project9-reproduction-one.json" "$RUNNER_TEMP/project9-reproduction-two.json"
+          node scripts/starnet-reproduce-research.mjs --verify-record "$RUNNER_TEMP/project9-reproduction-one.json" --demo > "$RUNNER_TEMP/project9-reproduction-verified.json"
+          node --input-type=module -e '
+            import {readFile} from "node:fs/promises";
+            const p=JSON.parse(await readFile(process.env.RUNNER_TEMP+"/project9-reproduction-one.json","utf8"));
+            const v=JSON.parse(await readFile(process.env.RUNNER_TEMP+"/project9-reproduction-verified.json","utf8"));
+            if(p.schema!=="project9-offline-research-reproducibility-v1"||
+              p.scope!=="UNTRUSTED_LOCAL_RESEARCH_ONLY"||
+              p.sourceKind!=="ENGINEERED_OFFLINE_FIXTURE"||
+              p.inputs?.originalInputsEmbedded!==false||
+              p.inputs?.originalInputFilesMustBeRetained!==true||
+              !/^[a-f0-9]{64}$/.test(p.inputs.historicalDataSha256)||
+              !/^[a-f0-9]{64}$/.test(p.inputs.witnessSha256)||
+              !/^[a-f0-9]{64}$/.test(p.inputs.custodyManifestSha256)||
+              !/^[a-f0-9]{64}$/.test(p.methodology?.localSourceCodeSha256)||
+              p.methodology?.externalCodeSignatureVerified!==false||
+              p.resultIdentity?.descriptive?.historicalBars!==190||
+              p.resultIdentity?.descriptive?.chronologicalPhases?.length!==3||
+              p.resultIdentity?.descriptive?.crossSourceStatus!=="DISCREPANCIES_REQUIRE_MANUAL_REVIEW"||
+              p.resultIdentity?.descriptive?.custodyStatus!=="REVIEW_REQUIRED"||
+              p.resultIdentity?.descriptive?.predictiveOutOfSampleEfficacyEstablished!==false||
+              p.evidenceGaps?.independentHistoricalSourceAuthenticity!=="NOT_VERIFIED"||
+              p.evidenceGaps?.independentThirdPartyReproduction!=="NOT_PERFORMED"||
+              p.release?.externalCalls!==0||
+              p.release?.realOrdersCreated!==0||
+              p.release?.liveTradingEnabled!==false||
+              p.release?.productionGate!=="NO_GO"||
+              v.finding!=="EXACT_LOCAL_REPRODUCTION"||
+              v.bundleSha256!==p.bundleSha256||
+              v.resultSha256!==p.resultIdentity.resultSha256||
+              v.methodologyBytesRechecked!==true||
+              v.originalInputFilesRechecked!==true||
+              v.independentMarketAuthenticityVerified!==false||
+              v.productionGate!=="NO_GO")
+              throw Error("Offline research reproduction evidence mismatch");
+          '
+          if node scripts/starnet-reproduce-research.mjs --live >/dev/null 2>&1; then
+            echo "Reproduction CLI accepted unsafe live flag"; exit 1
+          fi
       - name: Check browser availability for loopback acceptance
         run: command -v google-chrome
       - name: Exercise workstation in headless Chromium
