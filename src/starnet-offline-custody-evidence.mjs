@@ -63,6 +63,7 @@ function validateActions(actions,refs,first,last,cutoff,capturedAt){
   if(actions.status!=='REFERENCES_DECLARED'&&actions.records.length!==0)
     reject('corporate action records contradict their section status');
   let previous='',laterThanEffective=0;
+  const eventIds=new Set();
   for(const record of actions.records){
     if(!exact(record,['eventId','eventDate','kind','referenceId','claimedAvailableAt'])||
       !nonempty(record.eventId)||!isStrictISODate(record.eventDate)||
@@ -70,6 +71,8 @@ function validateActions(actions,refs,first,last,cutoff,capturedAt){
       epoch(record.claimedAvailableAt)===null)
       reject('invalid corporate action event, date, or reference');
     if(record.eventDate<previous)reject('corporate action events not chronological');
+    if(eventIds.has(record.eventId))reject('duplicate corporate action event ID');
+    eventIds.add(record.eventId);
     previous=record.eventDate;
     const ref=requireRef(refs,record.referenceId,'CORPORATE_ACTION_NOTICE');
     if(!early(ref.claimedPublishedAt,cutoff+'T23:59:59.999Z')||
@@ -153,6 +156,8 @@ export function auditStarNetOfflineCustody({
   if(manifest.corporateActions.status==='NO_EVENTS_DECLARED')
     warnings.push('NO_CORPORATE_ACTIONS_IS_SELF_DECLARED');
   if(laterThanEffective)warnings.push('ACTION_NOTICES_POSTDATE_EFFECTIVE_DATE');
+  if([...refs.values()].some(x=>!early(x.claimedPublishedAt,capturedAt)))
+    warnings.push('SOURCE_REFERENCE_PUBLISHED_AFTER_DECLARED_CAPTURE');
   if(dataset.priceAdjustment==='VENDOR_ADJUSTED'&&
      manifest.corporateActions.status!=='REFERENCES_DECLARED')
     warnings.push('ADJUSTED_PRICES_WITHOUT_ACTION_REFERENCES');
