@@ -7,6 +7,7 @@ import {PaperStore} from './src/store.mjs';
 import {modelCommentary} from './src/ai.mjs';
 import {evaluateSwingSetup} from './src/market-intelligence.mjs';
 import {fetchMassiveDailyDataset} from './src/providers/massive.mjs';
+import {fetchKrakenPublicOHLC} from './src/providers/kraken-public-ohlc.mjs';
 import {WorkstationStore,REPLAY_SYMBOLS,syntheticReplayBinding} from './src/workstation-store.mjs';
 import {advanceSyntheticPaperSession} from './src/synthetic-session-advance.mjs';
 import {readFictionalContractStatus} from './src/simulation-evidence.mjs';
@@ -19,6 +20,7 @@ const staticFiles=new Map([
   ['/','index.html'],['/index.html','index.html'],['/styles.css','styles.css'],['/app.js','app.js'],
   ['/research.html','research.html'],['/research.js','research.js'],['/research-core.mjs','research-core.mjs'],
   ['/workstation.html','workstation.html'],['/workstation.js','workstation.js'],
+  ['/crypto.html','crypto.html'],['/crypto.js','crypto.js'],['/crypto.css','crypto.css'],
   ['/alert-preview.html','alert-preview.html'],['/alert-preview.js','alert-preview.js'],['/alert-preview.css','alert-preview.css'],
   ['/decision-map.js','decision-map.js'],['/decision-map-core.mjs','decision-map-core.mjs']
 ]);
@@ -69,6 +71,7 @@ export async function createApp({
   store=new PaperStore(resolve(root,'.data/paper.json')),
   workstationStore=null,
   marketFetcher=defaultMarketFetcher,
+  cryptoFetcher=fetchKrakenPublicOHLC,
   sessionPolicy=null,
   requireSessionEvidence=marketFetcher===defaultMarketFetcher,
   now=()=>new Date()
@@ -81,6 +84,7 @@ export async function createApp({
   const workstation=workstationStore||new WorkstationStore(resolve(dirname(store.file),'workstation.json'));
   await workstation.init();
   let lastModelRequestAt=0;
+  let lastCryptoInspectionAt=Number.NEGATIVE_INFINITY;
   const server=http.createServer(async(req,res)=>{
     try{
       if(!allowedHost(req.headers.host,port))return json(res,403,{error:'Host not allowed'});
@@ -92,6 +96,34 @@ export async function createApp({
       if(req.method==='GET'&&url.pathname==='/api/state')return json(res,200,report(store.state,generateScenario(store.state.seed)));
       if(req.method==='GET'&&url.pathname==='/api/experiment')return json(res,200,historicalExperiment(store.state.seed));
       if(req.method==='GET'&&url.pathname==='/api/workstation')return json(res,200,workstation.snapshot());
+      // Explicitly initiated, bounded public crypto candle observation.
+      // Never share state or execution paths with the equity/paper scanner.
+      if(req.method==='GET'&&url.pathname==='/api/crypto/public-ohlc'){
+        if((req.headers.origin&&!allowedOrigin(req.headers.origin,port))||
+           (req.headers['sec-fetch-site']&&!['same-origin','none'].includes(req.headers['sec-fetch-site'])))
+          return json(res,403,{error:'Local same-origin research view required'});
+        const params=[...url.searchParams.keys()];
+        const pair=url.searchParams.get('pair');
+        const interval=url.searchParams.get('interval');
+        if(params.length!==2||params.some(k=>!['pair','interval'].includes(k))||
+           !['BTC/USD','ETH/USD'].includes(pair)||
+           !['1','5','15','30','60','240','1440'].includes(interval))
+          return json(res,400,{error:'Select a supported crypto pair and candle interval'});
+        const requestedAt=now().getTime();
+        if(requestedAt-lastCryptoInspectionAt<15000)
+          return json(res,429,{error:'Public crypto research inspections are limited to one every 15 seconds'});
+        lastCryptoInspectionAt=requestedAt;
+        try{
+          const inspected=await cryptoFetcher({pair,intervalMinutes:Number(interval),now});
+          if(!inspected||!Array.isArray(inspected.completedCandles))
+            throw new Error('Invalid source inspection');
+          const {completedCandles,...summary}=inspected;
+          return json(res,200,{...summary,chartCandles:completedCandles.slice(-48),
+            chartIsCompletedHistoricalCandlesOnly:true});
+        }catch{
+          return json(res,502,{error:'Public crypto source unavailable or invalid; no market prices accepted'});
+        }
+      }
       // Synthetic read-only preview: never creates notifications, paper tickets, market fetches or orders.
       if(req.method==='GET'&&url.pathname==='/api/alerts/preview'){
         if(url.search)return json(res,400,{error:'Preview does not accept parameters'});
