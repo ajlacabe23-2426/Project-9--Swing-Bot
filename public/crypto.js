@@ -82,3 +82,39 @@ async function inspectPublicCandles(event){
   }finally{button.disabled=false;}
 }
 $('crypto-form').addEventListener('submit',inspectPublicCandles);
+
+
+async function inspectPublicQuote(){
+  const button=$('crypto-quote-inspect');
+  if(button.disabled)return;
+  button.disabled=true;
+  set('crypto-quote-status','Requesting one public venue observation…');
+  try{
+    const query=new URLSearchParams({pair:$('crypto-pair').value});
+    const response=await fetch('/api/crypto/public-ticker?'+query,{
+      method:'GET',headers:{Accept:'application/json'},cache:'no-store'
+    });
+    const report=await response.json();
+    if(!response.ok)throw new Error(report?.error||'Public quote unavailable');
+    if(report.status!=='RECENT_BY_REPORTED_TIMESTAMPS_ONLY'||
+       report.feedCoverage!=='SINGLE_EXCHANGE_ONLY')
+      throw new Error('Source validation incomplete');
+    set('crypto-quote-bid',money(report.bid));
+    set('crypto-quote-ask',money(report.ask));
+    set('crypto-quote-last',money(report.last));
+    set('crypto-quote-status','Kraken '+report.pair+' — exchange-local public view, NOT confirmed executable');
+    set('crypto-quote-evidence','Exchange timestamp: '+report.exchangeTimestamp+
+      ' · receipt: '+report.receivedAt+' · reported age: '+
+      report.quoteAgeMs+' ms. No independent authentication, trading, or orders.');
+  }catch(error){
+    for(const id of ['crypto-quote-bid','crypto-quote-ask','crypto-quote-last'])set(id,'—');
+    set('crypto-quote-status','No current public quote accepted: '+error.message);
+    set('crypto-quote-evidence','The source is unavailable, stale, or rate-limited. No previous price is silently reused. No orders possible.');
+  }finally{button.disabled=false;}
+}
+$('crypto-quote-inspect').addEventListener('click',inspectPublicQuote);
+$('crypto-pair').addEventListener('change',()=>{
+  for(const id of ['crypto-quote-bid','crypto-quote-ask','crypto-quote-last'])set(id,'—');
+  set('crypto-quote-status','Pair changed. Inspect to obtain a new source observation.');
+  set('crypto-quote-evidence','Previously viewed quotes are cleared when selecting another market.');
+});
