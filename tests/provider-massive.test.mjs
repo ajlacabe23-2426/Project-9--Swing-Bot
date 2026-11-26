@@ -23,19 +23,23 @@ test('builds an adjusted ascending daily Massive aggregate URL',()=>{
   assert.match(url.pathname,/\/v2\/aggs\/ticker\/AAPL\/range\/1\/day\/2026-01-01\/2026-05-31/);
   assert.equal(url.searchParams.get('adjusted'),'true');
   assert.equal(url.searchParams.get('sort'),'asc');
-  assert.equal(url.searchParams.get('apiKey'),'test-key-123');
+  assert.equal(url.searchParams.get('apiKey'),null);
+  assert.doesNotMatch(String(url),/test-key-123/);
 });
 
 test('maps Massive daily aggregates into the Project 9 market-data contract',async()=>{
-  let requested=null;
-  const fetchImpl=async url=>{
-    requested=String(url);
+  let requested=null,requestOptions=null;
+  const fetchImpl=async (url,options)=>{
+    requested=String(url);requestOptions=options;
     return {ok:true,status:200,json:async()=>({status:'OK',ticker:'AAPL',results:results()})};
   };
   const value=await fetchMassiveDailyDataset({
     symbol:'AAPL',from:'2026-01-01',to:'2026-06-30',apiKey:'test-key-123',fetchImpl
   });
   assert.match(requested,/api\.massive\.com/);
+  assert.doesNotMatch(requested,/test-key-123/);
+  assert.equal(requestOptions.headers.Authorization,'Bearer test-key-123');
+  assert.equal(requestOptions.redirect,'error');
   assert.equal(value.schema,MARKET_DATA_SCHEMA_V2);
   assert.equal(value.symbol,'AAPL');
   assert.equal(value.mode,'HISTORICAL');
@@ -157,4 +161,38 @@ test('accepts delayed daily data across the Eastern daylight saving change',asyn
   assert.equal(normalizeMarketDataset(dataset).bars[34].volume,100034.25);
   assert.equal(analyzeDailyBreakout(dataset).symbol,'AAPL');
   assert.ok(dataset.bars.some(bar=>bar.date==='2026-03-09'));
+});
+
+
+test('provider refuses a truncated/paginated response and inconsistent returned count',async()=>{
+  const request={symbol:'AAPL',from:'2026-01-01',to:'2026-06-30',apiKey:'test-key-123'};
+  const valid=results();
+  for(const extras of [{next_url:'https://api.massive.com/some-more-results'},
+                       {resultsCount:valid.length+1},{resultsCount:'90'}]){
+    await assert.rejects(()=>fetchMassiveDailyDataset({
+      ...request,fetchImpl:async()=>({ok:true,status:200,
+        json:async()=>({status:'OK',ticker:'AAPL',results:valid,...extras})})
+    }),/paginated|count is inconsistent/);
+  }
+});
+
+test('credential never enters request URL and missing key is rejected before network calls',async()=>{
+  let calls=0,receivedUrl;
+  const secret='SENSITIVE-KEY-DO-NOT-LOG';
+  await fetchMassiveDailyDataset({
+    symbol:'AAPL',from:'2026-01-01',to:'2026-06-30',apiKey:secret,
+    fetchImpl:async(url,opts)=>{
+      calls++;receivedUrl=String(url);
+      assert.equal(opts.headers.Authorization,'Bearer '+secret);
+      assert.doesNotMatch(receivedUrl,/SENSITIVE-KEY-DO-NOT-LOG/);
+      assert.equal(opts.redirect,'error');
+      return {ok:true,status:200,json:async()=>({status:'OK',ticker:'AAPL',results:results()})};
+    }
+  });
+  assert.equal(calls,1);
+  await assert.rejects(()=>fetchMassiveDailyDataset({
+    symbol:'AAPL',from:'2026-01-01',to:'2026-06-30',apiKey:'',
+    fetchImpl:async()=>{calls++;throw Error('unexpected');}
+  }),/API key is required/);
+  assert.equal(calls,1);
 });
