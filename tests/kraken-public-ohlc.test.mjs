@@ -10,7 +10,7 @@ const start=1795700000 - (1795700000%step);
 const retrievedAt=new Date((start+64*step+15)*1000).toISOString();
 const row=(t,overrides={})=>{
   const base=[t,'100.00','102.00','99.00','101.00','100.50','4.50000000',25];
-  Object.entries(overrides).forEach(([k,v])=>base[Number(k)]=v;
+  Object.entries(overrides).forEach(([k,v])=>{base[Number(k)]=v;});
   return base;
 };
 function payload(count=64){
