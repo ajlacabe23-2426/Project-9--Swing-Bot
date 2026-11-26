@@ -36,7 +36,7 @@ test('crypto lab is a separately initiated, throttled, private read-only quality
     const page=await fetch(base+'/crypto.html');
     assert.equal(page.status,200);
     const html=await page.text();
-    assert.match(html,/Crypto research/);
+    assert.match(html,/Crypto market desk/);
     assert.match(html,/NO LOGIN/);
     for(const file of ['/crypto.js','/crypto.css']){
       const resp=await fetch(base+file);
