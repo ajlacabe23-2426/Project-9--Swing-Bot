@@ -5,6 +5,7 @@
  */
 const PAIRS=Object.freeze({'BTC/USD':'XBTUSD','ETH/USD':'ETHUSD'});
 const INTERVALS=new Set([1,5,15,30,60,240,1440]);
+const RETURN_KEYS=Object.freeze({'BTC/USD':new Set(['XXBTZUSD','XBTUSD']),'ETH/USD':new Set(['XETHZUSD','ETHUSD'])});
 const NUMERIC=/^(?:0|[1-9]\d*)(?:\.\d+)?$/;
 const canonicalUtc=x=>typeof x==='string'&&
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(x)&&
@@ -31,7 +32,7 @@ export function inspectKrakenPublicOHLC(payload,{pair='BTC/USD',intervalMinutes=
   if(!obj(payload)||!Array.isArray(payload.error)||payload.error.length!==0||!obj(payload.result))
     throw new TypeError('Invalid or rejected Kraken public OHLC response');
   const keys=Object.keys(payload.result).filter(key=>key!=='last');
-  if(keys.length!==1||!Number.isSafeInteger(payload.result.last)||payload.result.last<0)
+  if(keys.length!==1||!RETURN_KEYS[pair].has(keys[0])||!Number.isSafeInteger(payload.result.last)||payload.result.last<0)
     throw new TypeError('Kraken OHLC response must have one venue pair and cursor');
   const rows=payload.result[keys[0]];
   if(!Array.isArray(rows)||rows.length<2||rows.length>720)
