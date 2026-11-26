@@ -73,7 +73,7 @@ test('future, reversed, malformed and unbounded observations are rejected',()=>{
   assert.throws(()=>auditSourceObservation({...base(),
     receivedAt:'2026-11-25T14:30:05.000Z'
   },{reviewAt}),/Future or contradictory/);
-  assert.throws(()=>auditSourceObservation(base(),{reviewAt:'2026-11-25'}),/canonical/);
+  assert.throws(()=>auditSourceObservation(base(),{reviewAt:'2026-11-25'}),/[Cc]anonical/);
   assert.throws(()=>auditSourceObservation({...base(),feedScope:'FULL_MARKET'}, {reviewAt}),/coverage/);
   assert.throws(()=>auditSourceObservation({...base(),provider:'a'}, {reviewAt}),/provider/);
   assert.throws(()=>auditSourceObservation({...base(),extraSecret:'DO_NOT_ACCEPT'}, {reviewAt}),/fields/);
