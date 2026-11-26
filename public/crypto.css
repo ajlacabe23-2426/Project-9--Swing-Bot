@@ -13,3 +13,12 @@
 .crypto-history svg{display:block;width:100%;min-height:230px;max-height:320px;border:1px solid #294048;border-radius:12px;background:#0b1c21;margin:12px 0}
 @media(max-width:950px){.crypto-layout{grid-template-columns:1fr}}
 @media(max-width:480px){.crypto-metrics{grid-template-columns:1fr}}
+
+
+.crypto-live-source{margin:20px 0}
+.crypto-quote-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin:12px 0}
+.crypto-quote-grid>div{border:1px solid #2b434a;border-radius:12px;padding:16px;min-width:0;background:#0d2126}
+.crypto-quote-grid strong{display:block;font-variant-numeric:tabular-nums;font-size:clamp(18px,3vw,28px);margin-top:9px;overflow-wrap:anywhere}
+.crypto-quote-actions{display:flex;gap:18px;align-items:center;flex-wrap:wrap;margin-top:12px}
+.crypto-quote-actions .status-line{margin:0;flex:1;min-width:220px}
+@media(max-width:640px){.crypto-quote-grid{grid-template-columns:1fr}.crypto-quote-actions{align-items:stretch;flex-direction:column}}

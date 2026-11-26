@@ -1,7 +1,7 @@
-# Project 9 — Research-first MVP
+# StarNet — Crypto-first public market research
 
 
-**Current development focus (2026-11-26): crypto-first, read-only market-data research.** The existing stock/synthetic paper workstation remains preserved and independent; it is NOT a crypto bot or an active order router. A separate /crypto.html lab provides explicit, locally initiated inspection of public Kraken BTC/USD or ETH/USD spot candles (24/7 UTC, at most 720 OHLC rows per request), with unfinished candles excluded and interval gaps flagged. It makes no network calls until selected, shows exchange-limited source warnings, does not persist source data or require API keys, and cannot place any order. See docs/CRYPTO_FIRST_RESEARCH_2026-11-26.md.
+**Current development focus (2026-11-26): crypto-first, read-only market-data research.** The existing stock/synthetic paper workstation remains preserved and independent; it is NOT a crypto bot or an active order router. A crypto-first workspace at / (also /crypto.html) provides explicit, locally initiated inspection of public Kraken BTC/USD or ETH/USD top-of-book snapshots and completed spot candles (24/7 UTC, at most 720 OHLC rows per request), with unfinished candles excluded and interval gaps flagged. It makes no network calls until selected, shows exchange-limited source warnings, does not persist source data or require API keys, and cannot place any order. See docs/CRYPTO_FIRST_RESEARCH_2026-11-26.md.
 
 For a one-shot research summary, on a security-patched Node runtime:
 
@@ -10,7 +10,7 @@ For a one-shot research summary, on a security-patched Node runtime:
 No exchange account, paid feed, live quote authentication or trading system is configured by this command.
 
 
-**Status: local-only educational synthetic-market research prototype.** No real-market price feed, brokerage integration, real-money trading, investment recommendation, customer subscription, or automatic generative AI request. All 190 daily synthetic candles belong to one fictitious instrument, SIM-01. Do not present generated scenario returns as verified trading results or as evidence of future performance.
+**Legacy simulation (now at /simulation.html):** All 190 original daily synthetic candles belong to SIM-01, a fictional instrument. No brokerage integration, real-money trading, personal account access, customer subscriptions or automatic model requests exist in this project. Public crypto observations are venue-specific and source-timestamped but are not independently authenticated, endorsed as executable or automatically fetched. Do not present synthetic or historical results as verified market performance.
 
 ## Run locally
 
@@ -21,7 +21,7 @@ npm run check
 npm start
 ```
 
-Open **http://127.0.0.1:4179** on the same computer. The HTTP server binds to loopback only and checks Host and Origin for state mutations. Do not deploy publicly or behind a reverse proxy: the project is NOT authenticated or multi-tenant. Paper state is stored under `.data/paper.json`, which is Git-ignored. Set `PORT=4180 npm start` for a different local port, or `PROJECT9_DATA_FILE=/absolute/path/to/paper.json npm start` for another local state file. Only run one instance against a state file. On restart, the paper ledger is checked against a fresh replay of its fixed synthetic scenario; an inconsistent or corrupt local file prevents startup instead of being silently overwritten. For recovery, preserve a copy of the failed file, restore a previously saved valid copy, and restart. Do not hand-edit virtual cash or simulated fills. This check detects inconsistent local state, not real-world trading or data authenticity.
+Open **http://127.0.0.1:4179** on the same computer to view the crypto-first source desk. The old synthetic laboratory is available at **http://127.0.0.1:4179/simulation.html** and the stock workstation remains at **/workstation.html**. No public market request occurs until a user explicitly requests an observation. The HTTP server binds to loopback only and checks Host and Origin for state mutations. Do not deploy publicly or behind a reverse proxy: the project is NOT authenticated or multi-tenant. Paper state is stored under `.data/paper.json`, which is Git-ignored. Set `PORT=4180 npm start` for a different local port, or `PROJECT9_DATA_FILE=/absolute/path/to/paper.json npm start` for another local state file. Only run one instance against a state file. On restart, the paper ledger is checked against a fresh replay of its fixed synthetic scenario; an inconsistent or corrupt local file prevents startup instead of being silently overwritten. For recovery, preserve a copy of the failed file, restore a previously saved valid copy, and restart. Do not hand-edit virtual cash or simulated fills. This check detects inconsistent local state, not real-world trading or data authenticity.
 
 ## Research features
 

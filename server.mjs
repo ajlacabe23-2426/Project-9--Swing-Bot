@@ -8,6 +8,7 @@ import {modelCommentary} from './src/ai.mjs';
 import {evaluateSwingSetup} from './src/market-intelligence.mjs';
 import {fetchMassiveDailyDataset} from './src/providers/massive.mjs';
 import {fetchKrakenPublicOHLC} from './src/providers/kraken-public-ohlc.mjs';
+import {readKrakenPublicSnapshot} from './src/providers/kraken-public-snapshot.mjs';
 import {WorkstationStore,REPLAY_SYMBOLS,syntheticReplayBinding} from './src/workstation-store.mjs';
 import {advanceSyntheticPaperSession} from './src/synthetic-session-advance.mjs';
 import {readFictionalContractStatus} from './src/simulation-evidence.mjs';
@@ -17,7 +18,8 @@ import {assertPatchedNodeRuntime} from './src/runtime-security.mjs';
 
 const root=dirname(fileURLToPath(import.meta.url));
 const staticFiles=new Map([
-  ['/','index.html'],['/index.html','index.html'],['/styles.css','styles.css'],['/app.js','app.js'],
+  ['/','crypto.html'],['/index.html','crypto.html'],['/simulation.html','index.html'],
+  ['/styles.css','styles.css'],['/app.js','app.js'],
   ['/research.html','research.html'],['/research.js','research.js'],['/research-core.mjs','research-core.mjs'],
   ['/workstation.html','workstation.html'],['/workstation.js','workstation.js'],
   ['/crypto.html','crypto.html'],['/crypto.js','crypto.js'],['/crypto.css','crypto.css'],
@@ -72,6 +74,7 @@ export async function createApp({
   workstationStore=null,
   marketFetcher=defaultMarketFetcher,
   cryptoFetcher=fetchKrakenPublicOHLC,
+  cryptoTickerReader=readKrakenPublicSnapshot,
   sessionPolicy=null,
   requireSessionEvidence=marketFetcher===defaultMarketFetcher,
   now=()=>new Date()
@@ -85,6 +88,7 @@ export async function createApp({
   await workstation.init();
   let lastModelRequestAt=0;
   let lastCryptoInspectionAt=Number.NEGATIVE_INFINITY;
+  let lastCryptoSnapshotAt=Number.NEGATIVE_INFINITY;
   const server=http.createServer(async(req,res)=>{
     try{
       if(!allowedHost(req.headers.host,port))return json(res,403,{error:'Host not allowed'});
@@ -96,6 +100,40 @@ export async function createApp({
       if(req.method==='GET'&&url.pathname==='/api/state')return json(res,200,report(store.state,generateScenario(store.state.seed)));
       if(req.method==='GET'&&url.pathname==='/api/experiment')return json(res,200,historicalExperiment(store.state.seed));
       if(req.method==='GET'&&url.pathname==='/api/workstation')return json(res,200,workstation.snapshot());
+      // Explicitly requested public Kraken spot BBO snapshot. Never places orders.
+      if(req.method==='GET'&&url.pathname==='/api/crypto/public-ticker'){
+        if((req.headers.origin&&!allowedOrigin(req.headers.origin,port))||
+           (req.headers['sec-fetch-site']&&!['same-origin','none'].includes(req.headers['sec-fetch-site'])))
+          return json(res,403,{error:'Local same-origin research view required'});
+        const keys=[...url.searchParams.keys()];
+        const pair=url.searchParams.get('pair');
+        if(keys.length!==1||keys[0]!=='pair'||!['BTC/USD','ETH/USD'].includes(pair))
+          return json(res,400,{error:'Select BTC/USD or ETH/USD for public source observation'});
+        const requestedAt=now().getTime();
+        if(!Number.isFinite(requestedAt))return json(res,503,{error:'Local research clock unavailable'});
+        if(requestedAt-lastCryptoSnapshotAt<10000)
+          return json(res,429,{error:'Public source observation limited to one every 10 seconds'});
+        lastCryptoSnapshotAt=requestedAt;
+        try{
+          const q=await cryptoTickerReader({pair,now});
+          if(q?.symbol!==pair||q?.status!=='RECENT_RECEIPT_UNVERIFIED'||
+             !Number.isFinite(q?.bid)||!Number.isFinite(q?.ask)||q.bid<=0||q.ask<q.bid||
+             !Number.isFinite(q?.quoteAgeMs)||q.quoteAgeMs<0||q.quoteAgeMs>60000)
+            throw new Error('Public ticker data did not satisfy receipt requirements');
+          return json(res,200,{
+            schema:'starnet-public-crypto-display-v1',
+            pair,venue:'KRAKEN_SPOT',feedCoverage:'SINGLE_EXCHANGE_ONLY',
+            bid:q.bid,ask:q.ask,last:Number.isFinite(q.last)?q.last:null,
+            exchangeTimestamp:q.exchangeTimestamp,
+            receivedAt:q.receivedAt,quoteAgeMs:q.quoteAgeMs,
+            status:'RECENT_BY_REPORTED_TIMESTAMPS_ONLY',
+            independentlyAuthenticated:false,executablePriceVerified:false,
+            brokerageConnected:false,ordersCreated:0,productionGate:'NO_GO'
+          });
+        }catch{
+          return json(res,502,{error:'Public ticker unavailable or stale; no current quote accepted'});
+        }
+      }
       // Explicitly initiated, bounded public crypto candle observation.
       // Never share state or execution paths with the equity/paper scanner.
       if(req.method==='GET'&&url.pathname==='/api/crypto/public-ohlc'){
