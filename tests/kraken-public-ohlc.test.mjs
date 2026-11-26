@@ -68,6 +68,7 @@ test('short history and stale last interval are review-required, not invented as
 test('rejected exchange messages, mixed result keys and out-of-order OHLC fail closed',()=>{
   assert.throws(()=>inspect({error:['EGeneral:Invalid arguments'],result:payload().result}),/Invalid or rejected/);
   assert.throws(()=>inspect({error:[],result:{...payload().result,XETHZUSD:[]}}),/one venue pair/);
+  assert.throws(()=>inspect({error:[],result:{XETHZUSD:payload().result.XXBTZUSD,last:start}}),/one venue pair/);
   assert.throws(()=>inspect({error:[],result:{XXBTZUSD:[row(start)],last:start}}),/row count/);
   const p=payload();p.result.XXBTZUSD[8][0]=p.result.XXBTZUSD[7][0];
   assert.throws(()=>inspect(p),/unique and ascending/);
