@@ -1,0 +1,15 @@
+.crypto-layout{display:grid;grid-template-columns:minmax(270px,0.9fr) minmax(320px,1.3fr);gap:18px;margin:20px 0}
+.crypto-form{display:grid;gap:10px}
+.crypto-form label{font-size:12px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted,#99a9b5);font-weight:700}
+.crypto-form select{min-height:46px;padding:10px;border:1px solid #3b5158;border-radius:10px;background:#142429;color:#eef7f5;font:inherit;width:100%}
+.crypto-form button{margin-top:8px}
+.crypto-form select:focus-visible,.crypto-form button:focus-visible{outline:3px solid #83e1d1;outline-offset:2px}
+.crypto-small{color:#a8babc;font-size:13px;line-height:1.6;margin:14px 0 0}
+.crypto-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:12px 0}
+.crypto-metrics div{min-width:0;border:1px solid #2b434a;border-radius:10px;padding:12px}
+.crypto-metrics dt{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#9fb1b8}
+.crypto-metrics dd{font-weight:650;font-size:15px;margin:6px 0 0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.crypto-reasons{color:#bbd5d2;font-size:13px;line-height:1.5;border-top:1px solid #2b434a;padding-top:12px;white-space:pre-wrap}
+.crypto-history svg{display:block;width:100%;min-height:230px;max-height:320px;border:1px solid #294048;border-radius:12px;background:#0b1c21;margin:12px 0}
+@media(max-width:950px){.crypto-layout{grid-template-columns:1fr}}
+@media(max-width:480px){.crypto-metrics{grid-template-columns:1fr}}
