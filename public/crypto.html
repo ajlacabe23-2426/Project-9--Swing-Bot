@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>StarNet · Crypto Market Research</title>
+<meta name="description" content="Local read-only inspection of public venue-specific crypto candles. No accounts or orders.">
+<link rel="stylesheet" href="/styles.css">
+<link rel="stylesheet" href="/crypto.css">
+<script src="/crypto.js" defer></script>
+</head>
+<body>
+<div class="frame">
+<aside class="rail">
+  <a class="brand" href="/" aria-label="Project nine home"><span class="symbol">09<span>.</span></span><span>STAR<br><b>NET</b></span></a>
+  <div class="rail-sep"></div>
+  <div class="rail-label">CRYPTO RESEARCH</div>
+  <a class="nav selected" href="/crypto.html">◈ &nbsp; Crypto source laboratory</a>
+  <a class="nav" href="/workstation.html">⌁ &nbsp; Stock research (legacy)</a>
+  <a class="nav" href="/research.html">⌗ &nbsp; Historical CSV study</a>
+  <a class="nav" href="/">◫ &nbsp; Synthetic laboratory</a>
+  <div class="rail-bottom"><div class="shield">◉ &nbsp; PUBLIC DATA ONLY</div>
+    <p>Public source observations are not verified executable prices. No API keys, account linkage or real orders.</p>
+    <div class="rail-version">CRYPTO RESEARCH · V0.1</div>
+  </div>
+</aside>
+<main class="main"><header class="topbar"><div>STARNET <span>/ CRYPTO / SOURCE INSPECTION</span></div>
+<div class="top-right">PUBLIC VENUE DATA <span class="top-sep">|</span> NO EXECUTION</div></header>
+<section class="content">
+  <div class="eyebrow">CRYPTO FIRST <span class="dot"></span> 24 / 7 UTC MARKET SESSIONS</div>
+  <div class="title-row">
+    <div><h1>Crypto research<span class="period">.</span></h1>
+      <p>Inspect completed public spot-market candles with explicit source boundaries and gap checks.</p></div>
+    <div class="status-chip">◉ &nbsp; READ-ONLY RESEARCH</div>
+  </div>
+  <div class="notice"><b>SOURCE LIMITATIONS</b>
+    <span>These are exchange-specific historical candles, not live executable quotes. The public source provides a short recent window, can contain missing intervals, and is not independently authenticated. No brokerage or trading functionality is connected.</span></div>
+  <div class="crypto-layout">
+    <article class="panel crypto-controls">
+      <div class="panel-head"><div><div class="panel-kicker">01 / DATA SOURCE</div><h2>Inspect Kraken public spot candles</h2></div><span class="tag">NO LOGIN</span></div>
+      <form id="crypto-form" class="crypto-form">
+        <label for="crypto-pair">Trading pair</label>
+        <select id="crypto-pair" name="pair"><option value="BTC/USD">BTC / USD</option><option value="ETH/USD">ETH / USD</option></select>
+        <label for="crypto-interval">Candle interval (UTC)</label>
+        <select id="crypto-interval" name="interval">
+          <option value="1">1 minute</option><option value="5">5 minutes</option>
+          <option value="15">15 minutes</option><option value="30">30 minutes</option>
+          <option value="60" selected>1 hour</option><option value="240">4 hours</option>
+          <option value="1440">1 day</option>
+        </select>
+        <button class="button main-button" id="crypto-inspect" type="submit">Inspect public candles ↗</button>
+      </form>
+      <div class="status-line" id="crypto-status" role="status" aria-live="polite">No source requested. This page does not fetch market data automatically.</div>
+      <p class="crypto-small">The provider returns at most 720 recent OHLC intervals. StarNet excludes the unfinished last interval, does not fill gaps, and does not save this source data.</p>
+    </article>
+    <article class="panel crypto-evidence">
+      <div class="panel-head"><div><div class="panel-kicker">02 / SOURCE QUALITY</div><h2>Observed evidence</h2></div><span class="tag outline">UNVERIFIED</span></div>
+      <dl class="crypto-metrics">
+        <div><dt>Source venue</dt><dd id="crypto-venue">—</dd></div>
+        <div><dt>Closed candles</dt><dd id="crypto-count">—</dd></div>
+        <div><dt>Excluded unfinished</dt><dd id="crypto-excluded">—</dd></div>
+        <div><dt>Missing intervals</dt><dd id="crypto-gaps">—</dd></div>
+        <div><dt>Last completed close</dt><dd id="crypto-close">—</dd></div>
+        <div><dt>Retrieval time (UTC)</dt><dd id="crypto-retrieved">—</dd></div>
+        <div><dt>Quality status</dt><dd id="crypto-quality">NO DATA</dd></div>
+      </dl>
+      <div class="crypto-reasons" id="crypto-reasons" aria-live="polite">No evidence inspected yet.</div>
+    </article>
+  </div>
+  <article class="panel crypto-history">
+    <div class="panel-head"><div><div class="panel-kicker">03 / RECENT CLOSED OBSERVATIONS</div><h2>Historical close preview</h2></div>
+      <span class="tag outline">LAST 48 COMPLETED CANDLES</span></div>
+    <svg id="crypto-price-chart" role="img" aria-label="No crypto history loaded" viewBox="0 0 760 250" preserveAspectRatio="none"></svg>
+    <p class="crypto-small" id="crypto-chart-caption">The chart displays only historically completed spot candles from one exchange. No future prices or trading signals.</p>
+  </article>
+</section></main></div>
+</body></html>
