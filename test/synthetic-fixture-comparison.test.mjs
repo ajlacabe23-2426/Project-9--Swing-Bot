@@ -50,3 +50,26 @@ test('fresh processes produce identical serialized evidence',()=>{
   assert.equal(first.stdout,second.stdout);
   assert.deepEqual(JSON.parse(first.stdout),compareSyntheticFixtures(a,b));
 });
+
+test('shared missing intervals cannot be mistaken for fixture agreement',()=>{
+  const left=encode('fixture-a',[row(0),row(10800)]);
+  const right=encode('fixture-b',[row(0),row(10800)]);
+  const result=compareSyntheticFixtures(left,right);
+  assert.equal(result.matched,2);
+  assert.deepEqual(result.differences,[]);
+  assert.deepEqual(result.sharedGaps,[{after:0,before:10800,missing:2}]);
+  assert.equal(result.status,'REVIEW_REQUIRED');
+});
+test('extreme shared timeline gaps are summarized without allocating missing records',()=>{
+  const last=3600*100000000;
+  const result=compareSyntheticFixtures(encode('fixture-a',[row(0),row(last)]),encode('fixture-b',[row(0),row(last)]));
+  assert.deepEqual(result.sharedGaps,[{after:0,before:last,missing:99999999}]);
+  assert.equal(result.status,'REVIEW_REQUIRED');
+});
+test('invalid UTF-8 and unexpected schema or record fields are rejected',()=>{
+  const invalidUtf8=Buffer.concat([b.subarray(0,b.length-1),Buffer.from([0xff]),b.subarray(b.length-1)]);
+  assert.throws(()=>compareSyntheticFixtures(a,invalidUtf8),/encoded data|UTF-8/i);
+  const extra=JSON.parse(b.toString());extra.unexpected=true;
+  assert.throws(()=>compareSyntheticFixtures(a,Buffer.from(JSON.stringify(extra))),/Invalid synthetic fixture/);
+  assert.throws(()=>compareSyntheticFixtures(a,encode('fixture-b',[{...row(0),unexpected:true}])),/Invalid or unordered/);
+});
