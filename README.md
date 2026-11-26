@@ -1,5 +1,15 @@
 # Project 9 — Research-first MVP
 
+
+**Current development focus (2026-11-26): crypto-first, read-only market-data research.** The existing stock/synthetic paper workstation remains preserved and independent; it is NOT a crypto bot or an active order router. A separate /crypto.html lab provides explicit, locally initiated inspection of public Kraken BTC/USD or ETH/USD spot candles (24/7 UTC, at most 720 OHLC rows per request), with unfinished candles excluded and interval gaps flagged. It makes no network calls until selected, shows exchange-limited source warnings, does not persist source data or require API keys, and cannot place any order. See docs/CRYPTO_FIRST_RESEARCH_2026-11-26.md.
+
+For a one-shot research summary, on a security-patched Node runtime:
+
+    npm run crypto:inspect -- BTC/USD 60
+
+No exchange account, paid feed, live quote authentication or trading system is configured by this command.
+
+
 **Status: local-only educational synthetic-market research prototype.** No real-market price feed, brokerage integration, real-money trading, investment recommendation, customer subscription, or automatic generative AI request. All 190 daily synthetic candles belong to one fictitious instrument, SIM-01. Do not present generated scenario returns as verified trading results or as evidence of future performance.
 
 ## Run locally
