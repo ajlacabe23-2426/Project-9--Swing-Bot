@@ -20,7 +20,7 @@ test('missing, duplicate and reversed fictional observations remain explicit',()
   const duplicate=replayClockFixture(makeClockFixture('duplicate'));
   assert.equal(duplicate.duplicates,1);assert.equal(duplicate.received,73);
   const reversed=replayClockFixture(makeClockFixture('reversed'));
-  assert.equal(reversed.reversed,1);assert.equal(reversed.missing,1);
+  assert.equal(reversed.reversed,1);assert.equal(reversed.missing,0);assert.equal(reversed.provisionalGaps,1);
   for(const r of [gap,duplicate,reversed])assert.equal(r.quality,'REVIEW_REQUIRED');
 });
 
