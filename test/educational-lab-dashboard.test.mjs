@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,writeFileSync,rmSync} from 'node:fs';
+import {realpathSync,mkdtempSync,writeFileSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {saveFictionalExperiment} from '../src/educational-lab-registry.mjs';
 import {renderFictionalLabDashboard} from '../src/educational-lab-dashboard.mjs';
 function withDir(fn){
- const root=mkdtempSync(join(tmpdir(),'fictional-dashboard-'));
+ const root=mkdtempSync(join(realpathSync(tmpdir()),'fictional-dashboard-'));
  try{return fn(root);}finally{rmSync(root,{recursive:true,force:true});}
 }
 test('empty fictional dashboard exposes its limitations and has no external content',()=>withDir(root=>{
