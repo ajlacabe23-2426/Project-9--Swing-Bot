@@ -535,3 +535,8 @@ jobs:
           RUN_BROWSER_ACCEPTANCE: '1'
           CHROME_BIN: /usr/bin/google-chrome
         run: node --test tests/browser-workstation.test.mjs
+      - name: Exercise standalone fictional laboratory dashboard in Chromium
+        env:
+          RUN_BROWSER_ACCEPTANCE: '1'
+          CHROME_BIN: /usr/bin/google-chrome
+        run: node --test test/educational-lab-browser.test.mjs
