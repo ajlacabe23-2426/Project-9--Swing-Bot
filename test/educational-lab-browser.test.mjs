@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,rmSync} from 'node:fs';
+import {realpathSync,mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createServer} from 'node:http';
@@ -10,7 +10,7 @@ import {renderFictionalLabDashboard} from '../src/educational-lab-dashboard.mjs'
 
 test('standalone educational dashboard supports keyboard inspection and mobile comparison without network assets',
  {skip:process.env.RUN_BROWSER_ACCEPTANCE!=='1',timeout:45000},async t=>{
-  const root=mkdtempSync(join(tmpdir(),'fictional-browser-'));
+  const root=mkdtempSync(join(realpathSync(tmpdir()),'fictional-browser-'));
   let chrome,ws,server;
   try{
     const input={schema:'educational-lab-v1',fictional:true,experimentId:'a'.repeat(64),instrument:'FICTIONAL_LENGTH_MM',plannedCount:3,observations:[{index:1,status:'OBSERVED',value:0}]};
