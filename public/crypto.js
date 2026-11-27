@@ -19,11 +19,15 @@ function clearCandles(){
 function clearQuote(){
   for(const id of ['crypto-quote-bid','crypto-quote-ask','crypto-quote-last'])set(id,'—');
 }
-function renderClosedCandles(points){
+function renderClosedCandles(points,intervalMinutes){
   chart.replaceChildren();
-  const valid=Array.isArray(points)?points.filter(x=>
-    typeof x.close==='number'&&Number.isFinite(x.close)&&x.close>0):[];
-  if(valid.length<2){
+  const step=Number(intervalMinutes)*60_000;
+  const valid=Array.isArray(points)&&points.length<=48?points:[];
+  const times=valid.map(x=>Date.parse(x?.startUtc));
+  if(valid.length<2||!Number.isSafeInteger(step)||step<=0||
+     valid.some((x,i)=>!x||!Number.isFinite(x.close)||x.close<=0||
+       !Number.isFinite(times[i])||times[i]%step!==0||
+       (i>0&&(times[i]<=times[i-1]||(times[i]-times[i-1])%step!==0)))){
     chart.setAttribute('aria-label','Insufficient completed candles to display');
     return;
   }
@@ -43,19 +47,38 @@ function renderClosedCandles(points){
     grid.setAttribute('stroke-width','1');
     chart.append(grid);
   }
-  const line=document.createElementNS(ns,'polyline');
-  line.setAttribute('fill','none');
-  line.setAttribute('stroke','#6de4d4');
-  line.setAttribute('stroke-width','3');
-  line.setAttribute('stroke-linejoin','round');
-  line.setAttribute('stroke-linecap','round');
-  line.setAttribute('points',closes.map((v,i)=>
-    (margin+(i/(closes.length-1))*w).toFixed(1)+','+
-    (margin+(1-(v-min)/(max-min))*h).toFixed(1)).join(' '));
-  chart.append(line);
+  // Use elapsed UTC time rather than row index; never interpolate a missing interval.
+  const segments=[[]];
+  const span=times.at(-1)-times[0];
+  for(let i=0;i<closes.length;i++){
+    if(i>0&&times[i]-times[i-1]!==step)segments.push([]);
+    segments.at(-1).push([
+      (margin+(times[i]-times[0])/span*w).toFixed(1),
+      (margin+(1-(closes[i]-min)/(max-min))*h).toFixed(1)
+    ]);
+  }
+  for(const segment of segments){
+    if(segment.length===1){
+      const point=document.createElementNS(ns,'circle');
+      point.setAttribute('cx',segment[0][0]);
+      point.setAttribute('cy',segment[0][1]);
+      point.setAttribute('r','3');
+      point.setAttribute('fill','#6de4d4');
+      chart.append(point);
+      continue;
+    }
+    const line=document.createElementNS(ns,'polyline');
+    line.setAttribute('fill','none');
+    line.setAttribute('stroke','#6de4d4');
+    line.setAttribute('stroke-width','3');
+    line.setAttribute('stroke-linejoin','round');
+    line.setAttribute('stroke-linecap','round');
+    line.setAttribute('points',segment.map(x=>x.join(',')).join(' '));
+    chart.append(line);
+  }
   chart.setAttribute('aria-label',valid.length+
     ' completed historical crypto spot closing prices from '+valid[0].startUtc+
-    ' to '+valid.at(-1).startUtc+' UTC');
+    ' to '+valid.at(-1).startUtc+' UTC; '+(segments.length-1)+' visible interval gaps, not interpolated');
 }
 async function inspectPublicCandles(event){
   event.preventDefault();
@@ -89,7 +112,7 @@ async function inspectPublicCandles(event){
       ' completed, venue-specific historical candles. No trading actions performed.');
     set('crypto-chart-caption','Kraken '+report.pair+' · '+report.intervalMinutes+
       '-minute completed candles · UTC · raw venue prices. This is historical context, NOT a current executable quote.');
-    renderClosedCandles(report.chartCandles);
+    renderClosedCandles(report.chartCandles,report.intervalMinutes);
   }catch(error){
     if(generation!==candleGeneration)return;
     clearCandles();
