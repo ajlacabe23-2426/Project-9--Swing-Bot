@@ -85,3 +85,32 @@ test('mismatched quote response never populates selected pair',async()=>{
   assert.equal(h.get('crypto-quote-bid').textContent,'—');
   assert.match(h.get('crypto-quote-status').textContent,/mismatch/);
 });
+
+test('missing fictional intervals are displayed as disconnected observations',async()=>{
+  const h=harness(),p=h.submit();
+  const report=candles();
+  report.chartCandles=[
+    {close:100,startUtc:'2026-11-26T13:00:00.000Z'},
+    {close:101,startUtc:'2026-11-26T14:00:00.000Z'},
+    {close:103,startUtc:'2026-11-26T18:00:00.000Z'},
+    {close:102,startUtc:'2026-11-26T19:00:00.000Z'}
+  ];
+  report.completedCount=4;report.missingIntervals=3;
+  h.reply(report);await p;
+  const chart=h.get('crypto-price-chart');
+  const lines=chart.children.filter(x=>Object.hasOwn(x.attributes,'points'));
+  assert.equal(lines.length,2);
+  assert.match(chart.attributes['aria-label'],/1 visible interval gaps, not interpolated/);
+  const firstEnd=Number(lines[0].attributes.points.split(' ')[1].split(',')[0]);
+  const secondStart=Number(lines[1].attributes.points.split(' ')[0].split(',')[0]);
+  assert.ok(secondStart-firstEnd>400,'elapsed time gap must not be compressed');
+});
+
+test('duplicate or invalid chart times are rejected rather than silently plotted',async()=>{
+  for(const startUtc of ['2026-11-26T18:00:00.000Z','invalid']){
+    const h=harness(),p=h.submit(),report=candles();
+    report.chartCandles[1].startUtc=startUtc;
+    h.reply(report);await p;
+    assert.equal(h.get('crypto-price-chart').children.length,0);
+  }
+});
