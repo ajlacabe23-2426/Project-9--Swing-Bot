@@ -1,11 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,writeFileSync,mkdirSync,rmSync} from 'node:fs';
+import {realpathSync,mkdtempSync,writeFileSync,mkdirSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {saveFictionalExperiment} from '../src/educational-lab-registry.mjs';
 import {reportFictionalExperiments} from '../src/educational-lab-report.mjs';
-const withDir=fn=>{const dir=mkdtempSync(join(tmpdir(),'fictional-report-'));try{return fn(dir);}finally{rmSync(dir,{recursive:true,force:true});}};
+const withDir=fn=>{const dir=mkdtempSync(join(realpathSync(tmpdir()),'fictional-report-'));try{return fn(dir);}finally{rmSync(dir,{recursive:true,force:true});}};
 const sample=(id,observations)=>({schema:'educational-lab-v1',fictional:true,experimentId:id,instrument:'FICTIONAL_LENGTH_MM',plannedCount:2,observations});
 test('empty registry does not claim scientific validity',()=>withDir(dir=>{
  const r=reportFictionalExperiments(dir);
