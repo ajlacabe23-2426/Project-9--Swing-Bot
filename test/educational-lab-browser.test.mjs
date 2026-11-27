@@ -13,7 +13,7 @@ test('standalone educational dashboard supports keyboard inspection and mobile c
   const root=mkdtempSync(join(tmpdir(),'fictional-browser-'));
   let chrome,ws,server;
   try{
-    const input={schema:'educational-lab-v1',fictional:true,experimentId:'browser-fiction',instrument:'FICTIONAL_LENGTH_MM',plannedCount:3,observations:[{index:1,status:'OBSERVED',value:0}]};
+    const input={schema:'educational-lab-v1',fictional:true,experimentId:'a'.repeat(64),instrument:'FICTIONAL_LENGTH_MM',plannedCount:3,observations:[{index:1,status:'OBSERVED',value:0}]};
     const a=saveFictionalExperiment(join(root,'records'),input);input.observations.push({index:2,status:'FAILED',value:null});
     const b=saveFictionalExperiment(join(root,'records'),input);
     const html=renderFictionalLabDashboard(join(root,'records'),[a.fingerprint,b.fingerprint]);
