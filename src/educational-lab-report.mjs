@@ -1,4 +1,5 @@
 import {opendirSync} from 'node:fs';
+import {basename,resolve} from 'node:path';
 import {loadFictionalExperiment,assertFictionalRoot} from './educational-lab-registry.mjs';
 
 // Read-only reporting for the trusted local fictional laboratory directory.
@@ -13,6 +14,9 @@ export function reportFictionalExperiments(root){
     }
   }finally{dir.closeSync();}
   const records=[],unreadable=[],unrecognized=[],pending=[],diagnostics=[];
+  // A copy staging directory is never a completed inventory, even when all files are readable.
+  const rootName=basename(resolve(root));
+  if(/^\.pending-copy-/i.test(rootName))pending.push(rootName);
   let totalObservations=0;
   for(const name of entries.sort()){
     if(/^\.pending-[a-zA-Z0-9]+$/.test(name)){pending.push(name);continue;}
