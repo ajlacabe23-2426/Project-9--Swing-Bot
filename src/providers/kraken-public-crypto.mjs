@@ -9,8 +9,17 @@ export const KRAKEN_PUBLIC_PAIRS=Object.freeze(['BTC/USD','ETH/USD']);
 const isObject=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 const price=x=>typeof x==='number'&&Number.isFinite(x)&&x>0;
 const nonnegative=x=>typeof x==='number'&&Number.isFinite(x)&&x>=0;
-const utc=x=>typeof x==='string'&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/.test(x)
-  &&Number.isFinite(Date.parse(x));
+// Date.parse normalizes some impossible calendar dates and 24:00:00.
+// Compare the UTC calendar fields after normalizing fractional precision only.
+const utc=x=>{
+  if(typeof x!=='string')return false;
+  const match=/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{1,9}))?Z$/.exec(x);
+  if(!match)return false;
+  const milliseconds=(match[2]??'').padEnd(3,'0').slice(0,3);
+  const normalized=match[1]+'.'+milliseconds+'Z';
+  const parsed=Date.parse(normalized);
+  return Number.isFinite(parsed)&&new Date(parsed).toISOString()===normalized;
+};
 
 /** Only public ticker data, no private channels, credentials or orders. */
 export function krakenPublicTickerSubscription(){
