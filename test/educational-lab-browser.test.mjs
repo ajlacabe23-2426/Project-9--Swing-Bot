@@ -32,12 +32,15 @@ test('standalone educational dashboard supports keyboard inspection and mobile c
     await command('Runtime.enable');await command('Network.enable');await command('Page.enable');await command('Page.navigate',{url});
     for(let n=0;n<100;n++){if(await evaluate("document.querySelectorAll('details').length===2"))break;await new Promise(r=>setTimeout(r,50));}
     assert.equal(await evaluate("document.querySelectorAll('details').length"),2);
+    await command('Page.bringToFront');
     for(const width of [1440,390,320]){
       await command('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:width<500});
       await evaluate("document.querySelectorAll('details').forEach(x=>x.open=false);document.querySelector('summary').focus()");
-      await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});
+      assert.equal(await evaluate("document.activeElement.tagName"),'SUMMARY','keyboard focus at '+width);
+      // Enter activation requires the character event, as emitted by a real keypress.
+      await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13,text:'\r',unmodifiedText:'\r'});
       await command('Input.dispatchKeyEvent',{type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});
-      assert.equal(await evaluate("document.querySelector('details').open"),true);
+      assert.equal(await evaluate("document.querySelector('details').open"),true,'Enter expansion at '+width);
       assert.equal(await evaluate('document.documentElement.scrollWidth<=window.innerWidth'),true,'overflow at '+width);
       assert.equal(await evaluate("document.querySelector('meter').getAttribute('aria-label').startsWith('Observed measurements')"),true);
       assert.equal(await evaluate("document.body.textContent.includes('1 observation differences')"),true);
