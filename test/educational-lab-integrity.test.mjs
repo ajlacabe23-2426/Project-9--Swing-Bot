@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,rmSync,readFileSync,writeFileSync,readdirSync,symlinkSync,mkdirSync} from 'node:fs';
+import {realpathSync,mkdtempSync,rmSync,readFileSync,writeFileSync,readdirSync,symlinkSync,mkdirSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {spawn,spawnSync} from 'node:child_process';
@@ -9,7 +9,7 @@ import {saveFictionalExperiment,loadFictionalExperiment} from '../src/educationa
 import {reportFictionalExperiments} from '../src/educational-lab-report.mjs';
 import {compareFictionalExperiments,reviewFictionalConclusion} from '../src/educational-lab-comparison.mjs';
 const example=()=>({schema:'educational-lab-v2',fictional:true,experimentId:'invented-ruler',instrument:'FICTIONAL_LENGTH_MM',plannedCount:4,recordedAt:'2026-01-01T01:00:00.000Z',observations:[2,4,4,6].map((value,i)=>({index:i+1,status:'OBSERVED',value,observedAt:`2026-01-01T00:0${i}:00.000Z`}))});
-const directory=t=>{const root=mkdtempSync(join(tmpdir(),'fictional-integrity-'));t.after(()=>rmSync(root,{recursive:true,force:true}));return root;};
+const directory=t=>{const root=mkdtempSync(join(realpathSync(tmpdir()),'fictional-integrity-'));t.after(()=>rmSync(root,{recursive:true,force:true}));return root;};
 const moduleUrl=new URL('../src/educational-lab-registry.mjs',import.meta.url).href;
 
 test('descriptive statistics match independent hand calculations and preserve zero/empty/singleton semantics',()=>{
