@@ -1,5 +1,5 @@
-import {mkdtempSync,lstatSync} from 'node:fs';
-import {resolve,relative,isAbsolute,join,sep} from 'node:path';
+import {mkdtempSync,lstatSync,renameSync} from 'node:fs';
+import {resolve,relative,isAbsolute,join,sep,basename} from 'node:path';
 import {assertFictionalRoot,loadFictionalExperiment,saveFictionalExperiment} from './educational-lab-registry.mjs';
 import {reportFictionalExperiments} from './educational-lab-report.mjs';
 import {auditFictionalBackup} from './educational-lab-backup-audit.mjs';
@@ -29,11 +29,25 @@ export function copyVerifiedFictionalRegistry(source,destinationParent,manifest)
   const expected={schema:'educational-lab-inventory-v1',fictional:true,fingerprints:[...audit.matched]};
   const records=expected.fingerprints.map(id=>({id,record:loadFictionalExperiment(src,id).record}));
   if(auditFictionalBackup(src,expected).status!=='INVENTORY_MATCH')throw new TypeError('Fictional source changed during validation');
-  const destination=mkdtempSync(join(parent,'fictional-copy-'));
+  const staging=mkdtempSync(join(parent,'.pending-copy-'));
+  const stageName=basename(staging);
+  const destination=join(parent,'fictional-copy-'+stageName.slice('.pending-copy-'.length));
+  let published=false;
   try{
     for(const {id,record} of records){
-      if(saveFictionalExperiment(destination,record).fingerprint!==id)throw new Error('Fictional copied identity mismatch');
+      if(saveFictionalExperiment(staging,record).fingerprint!==id)throw new Error('Fictional copied identity mismatch');
     }
+    const staged=reportFictionalExperiments(staging);
+    const observed=staged.records.map(r=>r.fingerprint).sort();
+    if(staged.pending.length!==1||staged.pending[0]!==stageName||
+       staged.unreadable.length||staged.unrecognized.length||
+       observed.length!==expected.fingerprints.length||
+       observed.some((id,i)=>id!==expected.fingerprints[i]))
+      throw new Error('Fictional staging inventory mismatch');
+    // The parent must remain trusted and quiescent; this is not a concurrent-publisher lock.
+    if(lstatSync(destination,{throwIfNoEntry:false}))throw new Error('Fictional destination already exists');
+    renameSync(staging,destination);
+    published=true;
     const checked=auditFictionalBackup(destination,expected);
     if(checked.status!=='INVENTORY_MATCH')throw new Error('Fictional destination inventory mismatch');
     return {schema:'educational-lab-copy-v1',fictional:true,status:'VERIFIED_COPY',
@@ -42,7 +56,7 @@ export function copyVerifiedFictionalRegistry(source,destinationParent,manifest)
       hardwareDurabilityVerified:false};
   }catch(cause){
     const error=new Error('Fictional copy incomplete; inspect isolated destination',{cause});
-    error.destination=destination;
+    error.destination=published?destination:staging;
     throw error;
   }
 }
