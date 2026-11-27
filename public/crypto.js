@@ -6,6 +6,19 @@ const set=(id,value)=>{$(id).textContent=String(value);};
 const money=x=>typeof x==='number'&&Number.isFinite(x)?
   new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:4}).format(x):'—';
 
+// Track selection generations, not just selected values (A -> B -> A is a new selection).
+let candleGeneration=0,quoteGeneration=0;
+function clearCandles(){
+  for(const id of ['crypto-venue','crypto-count','crypto-excluded','crypto-gaps','crypto-close','crypto-retrieved'])set(id,'—');
+  set('crypto-quality','NO DATA');
+  set('crypto-reasons','No evidence for this request.');
+  set('crypto-chart-caption','No completed candle evidence displayed.');
+  chart.replaceChildren();
+  chart.setAttribute('aria-label','No validated public source candle data');
+}
+function clearQuote(){
+  for(const id of ['crypto-quote-bid','crypto-quote-ask','crypto-quote-last'])set(id,'—');
+}
 function renderClosedCandles(points){
   chart.replaceChildren();
   const valid=Array.isArray(points)?points.filter(x=>
@@ -49,6 +62,8 @@ async function inspectPublicCandles(event){
   const button=$('crypto-inspect');
   if(button.disabled)return;
   const pair=$('crypto-pair').value,interval=$('crypto-interval').value;
+  const generation=++candleGeneration;
+  clearCandles();
   button.disabled=true;
   set('crypto-status','Inspecting permitted public exchange candles…');
   try{
@@ -57,7 +72,9 @@ async function inspectPublicCandles(event){
       method:'GET',headers:{Accept:'application/json'},cache:'no-store'
     });
     const report=await response.json();
+    if(generation!==candleGeneration)return;
     if(!response.ok)throw new Error(report?.error||'The public source is unavailable');
+    if(report.pair!==pair||Number(report.intervalMinutes)!==Number(interval))throw new Error('Response selection mismatch');
     set('crypto-venue',report.venue+' · '+report.pair);
     set('crypto-count',report.completedCount);
     set('crypto-excluded',report.incompleteCandlesExcluded);
@@ -74,6 +91,8 @@ async function inspectPublicCandles(event){
       '-minute completed candles · UTC · raw venue prices. This is historical context, NOT a current executable quote.');
     renderClosedCandles(report.chartCandles);
   }catch(error){
+    if(generation!==candleGeneration)return;
+    clearCandles();
     set('crypto-status','Inspection unavailable: '+error.message);
     set('crypto-quality','SOURCE UNAVAILABLE');
     set('crypto-reasons','No quote accepted. The rest of StarNet remains unchanged.');
@@ -87,15 +106,20 @@ $('crypto-form').addEventListener('submit',inspectPublicCandles);
 async function inspectPublicQuote(){
   const button=$('crypto-quote-inspect');
   if(button.disabled)return;
+  const generation=++quoteGeneration,pair=$('crypto-pair').value;
+  clearQuote();
+  set('crypto-quote-evidence','No observation accepted for this request.');
   button.disabled=true;
   set('crypto-quote-status','Requesting one public venue observation…');
   try{
-    const query=new URLSearchParams({pair:$('crypto-pair').value});
+    const query=new URLSearchParams({pair});
     const response=await fetch('/api/crypto/public-ticker?'+query,{
       method:'GET',headers:{Accept:'application/json'},cache:'no-store'
     });
     const report=await response.json();
+    if(generation!==quoteGeneration)return;
     if(!response.ok)throw new Error(report?.error||'Public quote unavailable');
+    if(report.pair!==pair)throw new Error('Response selection mismatch');
     if(report.status!=='RECENT_BY_REPORTED_TIMESTAMPS_ONLY'||
        report.feedCoverage!=='SINGLE_EXCHANGE_ONLY')
       throw new Error('Source validation incomplete');
@@ -107,14 +131,23 @@ async function inspectPublicQuote(){
       ' · receipt: '+report.receivedAt+' · reported age: '+
       report.quoteAgeMs+' ms. No independent authentication, trading, or orders.');
   }catch(error){
-    for(const id of ['crypto-quote-bid','crypto-quote-ask','crypto-quote-last'])set(id,'—');
+    if(generation!==quoteGeneration)return;
+    clearQuote();
     set('crypto-quote-status','No current public quote accepted: '+error.message);
     set('crypto-quote-evidence','The source is unavailable, stale, or rate-limited. No previous price is silently reused. No orders possible.');
   }finally{button.disabled=false;}
 }
 $('crypto-quote-inspect').addEventListener('click',inspectPublicQuote);
+function invalidateCandles(){
+  candleGeneration++;
+  clearCandles();
+  set('crypto-status','Selection changed. Inspect to obtain new candle evidence.');
+}
+$('crypto-interval').addEventListener('change',invalidateCandles);
 $('crypto-pair').addEventListener('change',()=>{
-  for(const id of ['crypto-quote-bid','crypto-quote-ask','crypto-quote-last'])set(id,'—');
+  invalidateCandles();
+  quoteGeneration++;
+  clearQuote();
   set('crypto-quote-status','Pair changed. Inspect to obtain a new source observation.');
   set('crypto-quote-evidence','Previously viewed quotes are cleared when selecting another market.');
 });
