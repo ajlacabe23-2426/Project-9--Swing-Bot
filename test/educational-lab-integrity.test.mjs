@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {realpathSync,mkdtempSync,rmSync,readFileSync,writeFileSync,readdirSync,symlinkSync,mkdirSync} from 'node:fs';
 import {tmpdir} from 'node:os';
-import {join} from 'node:path';
+import {join,basename} from 'node:path';
 import {spawn,spawnSync} from 'node:child_process';
 import {summarizeFictionalLab} from '../src/educational-lab-summary.mjs';
 import {saveFictionalExperiment,loadFictionalExperiment} from '../src/educational-lab-registry.mjs';
@@ -99,4 +99,16 @@ test('bounded reporting fails explicitly instead of returning a partial oversize
   const root=directory(t);
   for(let i=0;i<21;i++)saveFictionalExperiment(root,{schema:'educational-lab-v1',fictional:true,experimentId:'bounded-'+i,instrument:'FICTIONAL_LENGTH_MM',plannedCount:1000,observations:Array.from({length:1000},(_,j)=>({index:j+1,status:'OBSERVED',value:j}))});
   assert.throws(()=>reportFictionalExperiments(root),/observation limit/);
+});
+
+// Model an OS-managed temporary-directory alias without trusting user-supplied registry aliases.
+test('trusted temporary base is canonicalized before fixture creation while aliased registry paths stay rejected',t=>{
+  const root=directory(t),base=join(root,'base'),alias=join(root,'system-temp-alias');
+  mkdirSync(base);symlinkSync(base,alias);
+  const fixture=mkdtempSync(join(realpathSync(alias),'fixture-'));
+  const saved=saveFictionalExperiment(fixture,example());
+  assert.deepEqual(loadFictionalExperiment(fixture,saved.fingerprint).record,example());
+  const aliased=join(alias,basename(fixture));
+  assert.throws(()=>saveFictionalExperiment(aliased,example()),/Unsafe fictional registry directory/);
+  assert.throws(()=>reportFictionalExperiments(aliased),/Unsafe fictional registry directory/);
 });
