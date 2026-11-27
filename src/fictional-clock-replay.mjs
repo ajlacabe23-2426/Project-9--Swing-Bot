@@ -24,23 +24,27 @@ export function replayClockFixture(fixture){
   if(!fixture||!allowed.has(fixture.scenario)||
      JSON.stringify(fixture)!==JSON.stringify(makeClockFixture(fixture.scenario)))
     throw new TypeError('Only exact built-in fictional observations are supported');
-  let missing=0,duplicates=0,reversed=0,previous=null;
+  let provisionalGaps=0,duplicates=0,reversed=0,previous=null;
+  const seen=new Set();
   const observations=[];
   for(const row of fixture.rows){
     const t=Date.parse(row.at);
     let status='OBSERVED';
     if(previous!==null){
       const delta=(t-previous)/step;
-      if(delta===0){duplicates++;status='DUPLICATE';}
+      if(seen.has(t)){duplicates++;status='DUPLICATE';}
       else if(delta<0){reversed++;status='REVERSED';}
-      else if(delta>1){missing+=delta-1;status='GAP_BEFORE';}
+      else if(delta>1){provisionalGaps+=delta-1;status='GAP_BEFORE';}
     }
+    seen.add(t);
     observations.push({at:row.at,status});
     // Preserve the latest chronological boundary; never move the clock backwards.
     previous=previous===null?t:Math.max(previous,t);
   }
+  // A late arrival can resolve a provisional gap without erasing the ordering error.
+  const missing=72-seen.size;
   return {schema,fictional:true,scenario:fixture.scenario,fixtureSha256:sha(JSON.stringify(fixture)),
-    received:fixture.rows.length,missing,duplicates,reversed,observations,
+    received:fixture.rows.length,missing,provisionalGaps,duplicates,reversed,observations,
     quality:missing||duplicates||reversed?'REVIEW_REQUIRED':'COMPLETE',
     marketDataUsed:false,transactionsEnabled:false};
 }
