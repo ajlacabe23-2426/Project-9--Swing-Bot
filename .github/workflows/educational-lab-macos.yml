@@ -1,0 +1,33 @@
+name: Educational lab macOS compatibility
+on:
+  push:
+    branches:
+      - feat/educational-experiment-records
+  pull_request:
+    paths:
+      - 'src/educational-lab-*.mjs'
+      - 'scripts/*educational-lab*.mjs'
+      - 'test/educational-lab-*.test.mjs'
+      - '.github/workflows/educational-lab-macos.yml'
+permissions:
+  contents: read
+jobs:
+  macos-educational-lab:
+    runs-on: macos-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '24.22.3'
+      - name: Record environment and verify exact runtime
+        run: |
+          sw_vers
+          uname -m
+          node --version
+          node -e "if (process.version !== 'v24.22.3') process.exit(1)"
+          node -e "console.log({ temporaryRoot: require('node:os').tmpdir(), physicalRoot: require('node:fs').realpathSync(require('node:os').tmpdir()) })"
+      - name: Run educational laboratory tests on macOS
+        run: npm run test:lab
