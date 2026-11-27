@@ -42,6 +42,9 @@
     "research:claims": "node scripts/starnet-review-claims.mjs",
     "research:learn": "node scripts/starnet-learn-methodology.mjs",
     "observe:public-crypto": "node scripts/observe-public-crypto.mjs",
-    "crypto:inspect": "node scripts/inspect-public-crypto-candles.mjs"
+    "crypto:inspect": "node scripts/inspect-public-crypto-candles.mjs",
+    "lab:demo": "node scripts/seed-educational-lab.mjs",
+    "lab:report": "node scripts/render-educational-lab.mjs",
+    "test:lab": "node --test test/educational-lab-*.test.mjs"
   }
 }

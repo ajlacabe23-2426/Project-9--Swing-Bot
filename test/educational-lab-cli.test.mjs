@@ -48,3 +48,12 @@ test('standalone CLI fails without output for unavailable input and incorrect ar
     assert.ok(result.stderr.length>0);
   }
 }));
+test('CLI comparison and repeatable fictional demo preserve old versions',()=>withRoot(root=>{
+ const seed=fileURLToPath(new URL('../scripts/seed-educational-lab.mjs',import.meta.url));
+ const first=spawnSync(process.execPath,[seed,root],{encoding:'utf8',timeout:10000});
+ assert.equal(first.status,0,first.stderr);const hashes=JSON.parse(first.stdout).versions;
+ const before=readdirSync(root);const second=spawnSync(process.execPath,[seed,root],{encoding:'utf8',timeout:10000});
+ assert.equal(second.status,0);assert.equal(first.stdout,second.stdout);assert.deepEqual(readdirSync(root),before);
+ const comparison=run(root,'--compare',...hashes);assert.equal(comparison.status,0,comparison.stderr);assert.match(comparison.stdout,/1 observation differences/);
+ assert.equal(run(root,'--compare',hashes[0],'invalid').status,1);
+}));

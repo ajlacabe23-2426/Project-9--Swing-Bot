@@ -34,3 +34,11 @@ test('unrecognized file names cannot inject markup into the dashboard',()=>withD
  assert.match(html,/Unrecognized entries: 1/);
  assert.doesNotMatch(html,/<img|onerror=bad/);
 }));
+test('comparison renders exact version differences, completeness and statistical explanations',()=>withDir(root=>{
+ const a={schema:'educational-lab-v1',fictional:true,experimentId:'versions',instrument:'FICTIONAL_LENGTH_MM',plannedCount:2,observations:[{index:1,status:'OBSERVED',value:0}]};
+ const first=saveFictionalExperiment(root,a);a.observations.push({index:2,status:'FAILED',value:null});const second=saveFictionalExperiment(root,a);
+ const html=renderFictionalLabDashboard(root,[first.fingerprint,second.fingerprint]);
+ assert.match(html,/1 observation differences/);assert.match(html,/<caption>Saved observations/);assert.match(html,/<meter /);assert.match(html,/Sample standard deviation/);assert.match(html,/Neither chronology nor scientific improvement is verified/);
+ assert.throws(()=>renderFictionalLabDashboard(root,[first.fingerprint]),/exactly two/);
+ assert.doesNotMatch(html,/<script|<iframe|https?:\/\//i);
+}));
