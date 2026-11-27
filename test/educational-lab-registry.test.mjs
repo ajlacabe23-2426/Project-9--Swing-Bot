@@ -1,11 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,readFileSync,writeFileSync,readdirSync,rmSync,symlinkSync} from 'node:fs';
+import {realpathSync,mkdtempSync,readFileSync,writeFileSync,readdirSync,rmSync,symlinkSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {saveFictionalExperiment,loadFictionalExperiment} from '../src/educational-lab-registry.mjs';
 const sample=()=>({schema:'educational-lab-v1',fictional:true,experimentId:'length-demo',instrument:'FICTIONAL_LENGTH_MM',plannedCount:4,observations:[{index:1,status:'OBSERVED',value:10},{index:2,status:'FAILED',value:null}]});
-const withDir=fn=>{const dir=mkdtempSync(join(tmpdir(),'fictional-lab-'));try{return fn(dir);}finally{rmSync(dir,{recursive:true,force:true});}};
+const withDir=fn=>{const dir=mkdtempSync(join(realpathSync(tmpdir()),'fictional-lab-'));try{return fn(dir);}finally{rmSync(dir,{recursive:true,force:true});}};
 test('saved incomplete experiments can be loaded without losing failures or gaps',()=>withDir(dir=>{
   const x=sample(),saved=saveFictionalExperiment(dir,x);
   const loaded=loadFictionalExperiment(dir,saved.fingerprint);
