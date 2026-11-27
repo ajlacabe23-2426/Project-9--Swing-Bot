@@ -1,5 +1,5 @@
-import {mkdirSync,mkdtempSync,writeFileSync,linkSync,rmSync,openSync,fstatSync,readSync,closeSync,constants} from 'node:fs';
-import {join} from 'node:path';
+import {mkdirSync,mkdtempSync,writeFileSync,linkSync,rmSync,openSync,fstatSync,readSync,closeSync,constants,fsyncSync,lstatSync} from 'node:fs';
+import {join,resolve,parse,sep} from 'node:path';
 import {summarizeFictionalLab} from './educational-lab-summary.mjs';
 
 // A local, caller-selected trusted directory for fictional length measurements.
@@ -9,10 +9,25 @@ function canonical(input){
   const summary=summarizeFictionalLab(input);
   const record={schema:input.schema,fictional:true,experimentId:input.experimentId,
     instrument:input.instrument,plannedCount:input.plannedCount,
-    observations:input.observations.map(o=>({index:o.index,status:o.status,value:o.value}))};
+    observations:input.observations.map(o=>({index:o.index,status:o.status,value:o.value,...(input.schema==='educational-lab-v2'?{observedAt:o.observedAt}:{})})),
+    ...(input.schema==='educational-lab-v2'?{recordedAt:input.recordedAt}:{})};
   return {summary,bytes:Buffer.from(JSON.stringify(record),'utf8')};
 }
+export function assertFictionalRoot(root){
+  if(typeof root!=='string'||!root.length)throw new TypeError('Invalid fictional registry root');
+  const absolute=resolve(root);let current=parse(absolute).root;
+  for(const part of absolute.slice(current.length).split(sep).filter(Boolean)){
+    current=join(current,part);
+    try{const info=lstatSync(current);if(info.isSymbolicLink()||!info.isDirectory())throw new TypeError('Unsafe fictional registry directory');}
+    catch(error){if(error.code!=='ENOENT')throw error;}
+  }
+}
+function syncDirectory(path){
+  const fd=openSync(path,constants.O_RDONLY|constants.O_DIRECTORY|constants.O_NOFOLLOW);
+  try{fsyncSync(fd);}finally{closeSync(fd);}
+}
 function recordPath(root,fingerprint){
+  assertFictionalRoot(root);
   if(typeof fingerprint!=='string'||!(/^[a-f0-9]{64}$/).test(fingerprint))
     throw new TypeError('Invalid fictional evidence fingerprint');
   return join(root,fingerprint+'.json');
@@ -43,14 +58,17 @@ export function loadFictionalExperiment(root,fingerprint){
 export function saveFictionalExperiment(root,input){
   const checked=canonical(input);
   if(checked.bytes.length>MAX_BYTES)throw new TypeError('Fictional evidence too large');
+  assertFictionalRoot(root);
   mkdirSync(root,{recursive:true,mode:0o700});
   const path=recordPath(root,checked.summary.fingerprint);
   const temp=mkdtempSync(join(root,'.pending-'));
   try{
     const pending=join(temp,'record.json');
-    writeFileSync(pending,checked.bytes,{flag:'wx',mode:0o600});
+    const fd=openSync(pending,'wx',0o600);
+    try{writeFileSync(fd,checked.bytes);fsyncSync(fd);}finally{closeSync(fd);}
     try{linkSync(pending,path);}
     catch(error){if(error.code!=='EEXIST')throw error;}
+    syncDirectory(root);
     // Never silently overwrite an existing or corrupted record.
     const saved=loadFictionalExperiment(root,checked.summary.fingerprint);
     return saved.summary;

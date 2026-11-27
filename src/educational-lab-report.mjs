@@ -1,8 +1,9 @@
 import {opendirSync} from 'node:fs';
-import {loadFictionalExperiment} from './educational-lab-registry.mjs';
+import {loadFictionalExperiment,assertFictionalRoot} from './educational-lab-registry.mjs';
 
 // Read-only reporting for the trusted local fictional laboratory directory.
 export function reportFictionalExperiments(root){
+  assertFictionalRoot(root);
   const entries=[];
   const dir=opendirSync(root);
   try{
@@ -11,13 +12,15 @@ export function reportFictionalExperiments(root){
       entries.push(entry.name);
     }
   }finally{dir.closeSync();}
-  const records=[],unreadable=[],unrecognized=[],pending=[];
+  const records=[],unreadable=[],unrecognized=[],pending=[],diagnostics=[];
+  let totalObservations=0;
   for(const name of entries.sort()){
     if(/^\.pending-[a-zA-Z0-9]+$/.test(name)){pending.push(name);continue;}
     if(!/^[a-f0-9]{64}\.json$/.test(name)){unrecognized.push(name);continue;}
     const fingerprint=name.slice(0,-5);
-    try{records.push(loadFictionalExperiment(root,fingerprint).summary);}
-    catch{unreadable.push(fingerprint);}
+    try{const loaded=loadFictionalExperiment(root,fingerprint);records.push({...loaded.summary,observations:loaded.record.observations});totalObservations+=loaded.record.observations.length;}
+    catch(error){unreadable.push(fingerprint);diagnostics.push({fingerprint,code:error instanceof SyntaxError?'MALFORMED_JSON':error.code==='ELOOP'?'UNSAFE_SYMLINK':error.code==='ENOENT'?'DISAPPEARED_DURING_SCAN':'INTEGRITY_OR_SCHEMA_FAILURE'});}
+    if(totalObservations>20000)throw new TypeError('Fictional report observation limit exceeded');
   }
   const completeCount=records.filter(r=>r.status==='COMPLETE_RECORD').length;
   const incompleteCount=records.length-completeCount;
@@ -26,6 +29,6 @@ export function reportFictionalExperiments(root){
     recordCount:records.length,completeCount,incompleteCount,
     failedObservationCount:records.reduce((n,r)=>n+r.failed.length,0),
     missingObservationCount:records.reduce((n,r)=>n+r.missing.length,0),
-    unreadable,unrecognized,pending,records,scientificValidityEstablished:false,
+    unreadable,unrecognized,pending,records,diagnostics,scientificValidityEstablished:false,
     pointInTimeSnapshotGuaranteed:false};
 }
