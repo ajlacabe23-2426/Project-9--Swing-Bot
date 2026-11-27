@@ -90,3 +90,29 @@ test('snapshot and multiple known symbols are handled, without connecting to a b
   assert.equal(arr[1].symbol,'ETH/USD');
   assert.ok(arr.every(x=>x.brokerageConnected===false&&x.signalGenerated===false));
 });
+
+
+test('impossible calendar and clock timestamps fail closed for fictional frames and receipts',()=>{
+  for(const timestamp of [
+    '2026-02-29T00:00:00Z','2026-04-31T00:00:00.123456Z',
+    '2026-11-25T24:00:00Z','2026-11-26T19:12:60Z',
+    '2026-00-26T19:12:59Z','2026-11-00T19:12:59Z'
+  ]){
+    assert.throws(()=>read(frame({timestamp})),/Invalid public ticker/);
+    assert.throws(()=>parseKrakenPublicTickerFrame(frame(),{receivedAt:timestamp}),/Canonical UTC receipt/);
+  }
+});
+
+test('valid UTC timestamps retain original fractional precision and leap-day validity',()=>{
+  for(const timestamp of [
+    '2024-02-29T19:12:59Z','2024-02-29T19:12:59.1Z',
+    '2024-02-29T19:12:59.123456789Z'
+  ]){
+    const [observation]=parseKrakenPublicTickerFrame(frame({timestamp}),{
+      receivedAt:'2024-02-29T19:13:00.000Z'
+    });
+    assert.equal(observation.exchangeTimestamp,timestamp);
+    assert.equal(observation.productionGate,'NO_GO');
+    assert.equal(observation.realOrdersCreated,0);
+  }
+});
