@@ -61,3 +61,15 @@ test('unexpected unreadable record is not mistaken for a match',t=>{
   assert.equal(result.status,'REVIEW_REQUIRED');
   assert.deepEqual(result.unexpected,[b]);
 });
+
+test('sparse inventories and inherited manifest fields cannot masquerade as evidence',t=>{
+  const root=fixture(t),a=save(root,'a');
+  const sparse=Array(2);sparse[0]=a;
+  const inherited=Object.assign(Object.create({schema:'educational-lab-inventory-v1'}),{fictional:true,fingerprints:[a],unrelated:true});
+  const wrong=[null];wrong.some=()=>false;
+  for(const candidate of [inventory(sparse),inventory(Array(1)),inherited,inventory(wrong),inventory([a+'\n'])]){
+    assert.throws(()=>auditFictionalBackup(root,candidate),/Invalid fictional backup manifest/);
+  }
+  assert.equal(auditFictionalBackup(root,inventory([a])).status,'INVENTORY_MATCH');
+  assert.deepEqual(readdirSync(root),[a+'.json']);
+});
