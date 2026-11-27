@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,rmSync,readFileSync,writeFileSync,readdirSync} from 'node:fs';
+import {realpathSync,mkdtempSync,rmSync,readFileSync,writeFileSync,readdirSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -11,7 +11,7 @@ import {renderFictionalLabDashboard} from '../src/educational-lab-dashboard.mjs'
 const script=fileURLToPath(new URL('../scripts/render-educational-lab.mjs',import.meta.url));
 const run=(...args)=>spawnSync(process.execPath,[script,...args],{encoding:'utf8',timeout:10000,maxBuffer:2*1024*1024});
 function withRoot(fn){
-  const root=mkdtempSync(join(tmpdir(),'fictional-cli-'));
+  const root=mkdtempSync(join(realpathSync(tmpdir()),'fictional-cli-'));
   try{return fn(root);}finally{rmSync(root,{recursive:true,force:true});}
 }
 const example=()=>({schema:'educational-lab-v1',fictional:true,experimentId:'length-check',instrument:'FICTIONAL_LENGTH_MM',plannedCount:3,observations:[{index:1,status:'OBSERVED',value:12},{index:2,status:'FAILED',value:null}]});
