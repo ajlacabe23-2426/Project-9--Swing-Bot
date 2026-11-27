@@ -112,3 +112,11 @@ screen-reader usability, physical Mac/Windows acceptance and independent
 security review remain unverified. Crash tests are process-death tests, not
 hardware power-cut tests. Keep independent backups: hashes cannot detect
 removal of all copies or authenticate a person who rewrites an entire registry.
+
+## Independent macOS review follow-up
+
+User-supplied review of `d91080aca01b0a9e817d8f7f25094587322b7ec2` on Node 24.22.3 reports 399 tests (376 pass, 21 fail, 2 skip), including 21 educational failures with `Unsafe fictional registry directory`. Security baseline and secret scan reportedly passed; educational browser acceptance was not run. These results supersede earlier acceptance claims for that candidate.
+
+The likely cause is an OS-managed symlink in the ancestry of `os.tmpdir()`, not necessarily `/private/tmp` itself. All six educational test fixtures that create temporary registry directories now resolve the trusted OS temporary base with `realpathSync(tmpdir())` before creating fresh directories. Added a regression case modeling a symlinked temporary base and verifying that raw aliased registry paths remain rejected. Runtime registry validation is unchanged: use an explicitly selected canonical, trusted local directory; do not automatically resolve arbitrary user-provided registry paths or relax symlink checks. On macOS, the operator can inspect the trusted directory's physical path (e.g. `pwd -P` from that directory) before choosing it.
+
+This is a targeted test-fixture compatibility correction, not verified macOS runtime acceptance. Rerun the educational suite on the same macOS/runtime and exact new revision, inspect any residual failure, and run the dedicated educational browser gate with sandbox protections intact. Until then: BLOCKED for full acceptance; no merge or deployment.
