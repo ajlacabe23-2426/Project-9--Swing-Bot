@@ -27,8 +27,11 @@ test('real Node reporter output distinguishes passed and skipped fixture tests',
   const root=await mkdtemp(join(tmpdir(),'classroom-tap-'));
   try{
     const path=join(root,'fixture.test.mjs');
+    const env={...process.env};
+    delete env.NODE_TEST_CONTEXT;
+    delete env.NODE_OPTIONS;
     const execute=()=>spawnSync(process.execPath,['--test-reporter=tap','--test',path],{
-      cwd:root,encoding:'utf8',timeout:10000,maxBuffer:1024*1024
+      cwd:root,env,encoding:'utf8',timeout:10000,maxBuffer:1024*1024
     });
     await writeFile(path,"import test from 'node:test';\ntest('runs',()=>{});\n");
     const passing=assess(execute());
