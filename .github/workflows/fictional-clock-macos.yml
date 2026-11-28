@@ -1,0 +1,26 @@
+name: Fictional classroom replay macOS acceptance
+on:
+  pull_request:
+  push:
+permissions:
+  contents: read
+jobs:
+  classroom:
+    runs-on: macos-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22'
+      - name: Verify local fictional replay, recovery and report
+        run: node --test tests/fictional-clock-replay.test.mjs tests/fictional-clock-crash.test.mjs tests/fictional-clock-evidence-audit.test.mjs tests/fictional-clock-audit-report.test.mjs
+      - name: Check preinstalled browser
+        run: test -x "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+      - name: Dedicated sandboxed report browser acceptance
+        env:
+          RUN_CLOCK_BROWSER: '1'
+          CHROME_BIN: /Applications/Google Chrome.app/Contents/MacOS/Google Chrome
+        run: node --test tests/browser-fictional-clock-report.test.mjs
