@@ -12,6 +12,10 @@ test('report separates observed integrity from complete fixture coverage',async(
     let html=await renderClockAuditReport(dir);
     assert.match(html,/Review required/);
     assert.match(html,/0 of 4/);
+    assert.match(html,/Descriptive statistics classroom examples/);
+    assert.match(html,/70 of 72 unique readings/);
+    assert.match(html,/independently of which local files are verified/);
+    assert.match(html,/not independent random samples, forecasts or causal evidence/);
     await saveClockEvidence(dir,'complete');
     html=await renderClockAuditReport(dir);
     assert.match(html,/Observed records match fixtures/);
