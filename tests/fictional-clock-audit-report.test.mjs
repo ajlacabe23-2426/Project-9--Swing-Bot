@@ -13,6 +13,11 @@ test('report separates observed integrity from complete fixture coverage',async(
     assert.match(html,/Review required/);
     assert.match(html,/0 of 4/);
     assert.match(html,/Descriptive statistics classroom examples/);
+    for(const section of ['integrity','files','statistics']){
+      assert.ok(html.includes('href="#'+section+'"'));
+      assert.ok(html.includes('id="'+section+'"'));
+    }
+    assert.match(html,/aria-label="Report sections"/);
     assert.match(html,/70 of 72 unique readings/);
     assert.match(html,/independently of which local files are verified/);
     assert.match(html,/not independent random samples, forecasts or causal evidence/);
