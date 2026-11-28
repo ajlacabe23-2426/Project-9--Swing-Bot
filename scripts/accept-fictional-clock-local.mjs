@@ -3,6 +3,7 @@ import {spawnSync} from 'node:child_process';
 import {platform,arch,release} from 'node:os';
 import {fileURLToPath} from 'node:url';
 import {resolve} from 'node:path';
+import {assessClassroomTestResult} from '../src/classroom-test-result.mjs';
 
 const root=fileURLToPath(new URL('../',import.meta.url));
 const args=process.argv.slice(2);
@@ -20,14 +21,15 @@ if(args.length!==0&&!(args.length===1&&args[0]==='--browser')){
     cleanCheckout:status.status===0&&status.stdout.trim()==='',checks:[],
     physicalDeviceIdentityVerified:false,independentReviewerVerified:false,
     marketDataUsed:false,transactionsEnabled:false};
-  const tests=['replay','crash','evidence-audit','statistics','audit-report','cli-acceptance']
+  const tests=['replay','crash','evidence-audit','statistics','audit-report','cli-acceptance','result-parser']
     .map(s=>resolve(root,'tests','fictional-clock-'+s+'.test.mjs'));
   function check(name,argv,env){
-    const r=run(process.execPath,argv,env);
-    const passed=r.status===0&&!r.error;
-    report.checks.push({name,result:passed?'PASS':'FAIL',exitCode:r.status,
-      summary:(r.stdout||'').split('\n').filter(x=>/^# (tests|pass|fail|skipped) /.test(x)),
-      error:passed?null:String(r.error?.message||r.stderr||r.stdout||'Unknown failure').slice(-2000)});
+    const cleanEnv={...process.env,...env};
+    delete cleanEnv.NODE_OPTIONS;
+    const r=run(process.execPath,['--test-reporter=tap',...argv],cleanEnv);
+    const assessment=assessClassroomTestResult(r);
+    report.checks.push({name,...assessment,exitCode:r.status,
+      error:assessment.result==='PASS'?null:String(r.error?.message||r.stderr||r.stdout||assessment.reason).slice(-2000)});
   }
   check('offline components',['--test',...tests]);
   if(args.includes('--browser')){
