@@ -1,5 +1,6 @@
 // Offline, script-free classroom report. No market data or transaction features.
 import {inspectClockEvidence} from './fictional-clock-evidence-audit.mjs';
+import {classroomScenarios,summarizeClockScenario} from './fictional-clock-statistics.mjs';
 const escape=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const statuses=new Map([
   ['VERIFIED_FIXTURE','Verified fixture'],
@@ -12,6 +13,12 @@ export async function renderClockAuditReport(directory){
   const count=state=>audit.records.filter(r=>r.status===state).length;
   const rows=audit.records.map(r=>'<tr><td><code>'+escape(r.name)+'</code></td><td>'+
     escape(statuses.get(r.status)??'Unknown')+'</td></tr>').join('');
+  const examples=classroomScenarios.map(scenario=>{
+    const s=summarizeClockScenario(scenario);
+    return '<li><strong>'+escape(scenario)+'</strong>: '+s.uniqueCount+' of 72 unique readings; mean '+
+      s.mean.toFixed(2)+'; median '+s.median.toFixed(2)+'; sample standard deviation '+
+      s.sampleStandardDeviation.toFixed(2)+'.</li>';
+  }).join('');
   return '<!doctype html><html lang="en"><head><meta charset="utf-8">'+
     '<meta name="viewport" content="width=device-width,initial-scale=1">'+
     '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; base-uri \'none\'; form-action \'none\'">'+
@@ -32,5 +39,9 @@ export async function renderClockAuditReport(directory){
     '<h2>Observed files</h2><table><caption>Local inspection results</caption><thead><tr><th scope="col">File</th><th scope="col">Status</th></tr></thead>'+
     '<tbody>'+(rows||'<tr><td colspan="2">No evidence found.</td></tr>')+'</tbody></table>'+
     '<p>Inspection is not an atomic snapshot. Pending writes are preserved; a pending file may belong to an active process. Hashes do not authenticate authors or prove power-loss durability.</p>'+
+    '<h2>Descriptive statistics classroom examples</h2>'+
+    '<p>These examples are recomputed from built-in invented sensor fixtures, independently of which local files are verified. Duplicate times count once; missing readings are not filled.</p>'+
+    '<ul>'+examples+'</ul>'+
+    '<p>All values are invented sensor units. These are descriptive summaries, not independent random samples, forecasts or causal evidence.</p>'+
     '</main></body></html>\n';
 }
