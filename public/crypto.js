@@ -6,11 +6,28 @@ const set=(id,value)=>{$(id).textContent=String(value);};
 const money=x=>typeof x==='number'&&Number.isFinite(x)?
   new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:4}).format(x):'—';
 
-function renderClosedCandles(points){
+// Track selection generations, not just selected values (A -> B -> A is a new selection).
+let candleGeneration=0,quoteGeneration=0;
+function clearCandles(){
+  for(const id of ['crypto-venue','crypto-count','crypto-excluded','crypto-gaps','crypto-close','crypto-retrieved'])set(id,'—');
+  set('crypto-quality','NO DATA');
+  set('crypto-reasons','No evidence for this request.');
+  set('crypto-chart-caption','No completed candle evidence displayed.');
   chart.replaceChildren();
-  const valid=Array.isArray(points)?points.filter(x=>
-    typeof x.close==='number'&&Number.isFinite(x.close)&&x.close>0):[];
-  if(valid.length<2){
+  chart.setAttribute('aria-label','No validated public source candle data');
+}
+function clearQuote(){
+  for(const id of ['crypto-quote-bid','crypto-quote-ask','crypto-quote-last'])set(id,'—');
+}
+function renderClosedCandles(points,intervalMinutes){
+  chart.replaceChildren();
+  const step=Number(intervalMinutes)*60_000;
+  const valid=Array.isArray(points)&&points.length<=48?points:[];
+  const times=valid.map(x=>Date.parse(x?.startUtc));
+  if(valid.length<2||!Number.isSafeInteger(step)||step<=0||
+     valid.some((x,i)=>!x||!Number.isFinite(x.close)||x.close<=0||
+       !Number.isFinite(times[i])||times[i]%step!==0||
+       (i>0&&(times[i]<=times[i-1]||(times[i]-times[i-1])%step!==0)))){
     chart.setAttribute('aria-label','Insufficient completed candles to display');
     return;
   }
@@ -30,25 +47,46 @@ function renderClosedCandles(points){
     grid.setAttribute('stroke-width','1');
     chart.append(grid);
   }
-  const line=document.createElementNS(ns,'polyline');
-  line.setAttribute('fill','none');
-  line.setAttribute('stroke','#6de4d4');
-  line.setAttribute('stroke-width','3');
-  line.setAttribute('stroke-linejoin','round');
-  line.setAttribute('stroke-linecap','round');
-  line.setAttribute('points',closes.map((v,i)=>
-    (margin+(i/(closes.length-1))*w).toFixed(1)+','+
-    (margin+(1-(v-min)/(max-min))*h).toFixed(1)).join(' '));
-  chart.append(line);
+  // Use elapsed UTC time rather than row index; never interpolate a missing interval.
+  const segments=[[]];
+  const span=times.at(-1)-times[0];
+  for(let i=0;i<closes.length;i++){
+    if(i>0&&times[i]-times[i-1]!==step)segments.push([]);
+    segments.at(-1).push([
+      (margin+(times[i]-times[0])/span*w).toFixed(1),
+      (margin+(1-(closes[i]-min)/(max-min))*h).toFixed(1)
+    ]);
+  }
+  for(const segment of segments){
+    if(segment.length===1){
+      const point=document.createElementNS(ns,'circle');
+      point.setAttribute('cx',segment[0][0]);
+      point.setAttribute('cy',segment[0][1]);
+      point.setAttribute('r','3');
+      point.setAttribute('fill','#6de4d4');
+      chart.append(point);
+      continue;
+    }
+    const line=document.createElementNS(ns,'polyline');
+    line.setAttribute('fill','none');
+    line.setAttribute('stroke','#6de4d4');
+    line.setAttribute('stroke-width','3');
+    line.setAttribute('stroke-linejoin','round');
+    line.setAttribute('stroke-linecap','round');
+    line.setAttribute('points',segment.map(x=>x.join(',')).join(' '));
+    chart.append(line);
+  }
   chart.setAttribute('aria-label',valid.length+
     ' completed historical crypto spot closing prices from '+valid[0].startUtc+
-    ' to '+valid.at(-1).startUtc+' UTC');
+    ' to '+valid.at(-1).startUtc+' UTC; '+(segments.length-1)+' visible interval gaps, not interpolated');
 }
 async function inspectPublicCandles(event){
   event.preventDefault();
   const button=$('crypto-inspect');
   if(button.disabled)return;
   const pair=$('crypto-pair').value,interval=$('crypto-interval').value;
+  const generation=++candleGeneration;
+  clearCandles();
   button.disabled=true;
   set('crypto-status','Inspecting permitted public exchange candles…');
   try{
@@ -57,7 +95,9 @@ async function inspectPublicCandles(event){
       method:'GET',headers:{Accept:'application/json'},cache:'no-store'
     });
     const report=await response.json();
+    if(generation!==candleGeneration)return;
     if(!response.ok)throw new Error(report?.error||'The public source is unavailable');
+    if(report.pair!==pair||Number(report.intervalMinutes)!==Number(interval))throw new Error('Response selection mismatch');
     set('crypto-venue',report.venue+' · '+report.pair);
     set('crypto-count',report.completedCount);
     set('crypto-excluded',report.incompleteCandlesExcluded);
@@ -72,8 +112,10 @@ async function inspectPublicCandles(event){
       ' completed, venue-specific historical candles. No trading actions performed.');
     set('crypto-chart-caption','Kraken '+report.pair+' · '+report.intervalMinutes+
       '-minute completed candles · UTC · raw venue prices. This is historical context, NOT a current executable quote.');
-    renderClosedCandles(report.chartCandles);
+    renderClosedCandles(report.chartCandles,report.intervalMinutes);
   }catch(error){
+    if(generation!==candleGeneration)return;
+    clearCandles();
     set('crypto-status','Inspection unavailable: '+error.message);
     set('crypto-quality','SOURCE UNAVAILABLE');
     set('crypto-reasons','No quote accepted. The rest of StarNet remains unchanged.');
@@ -87,15 +129,20 @@ $('crypto-form').addEventListener('submit',inspectPublicCandles);
 async function inspectPublicQuote(){
   const button=$('crypto-quote-inspect');
   if(button.disabled)return;
+  const generation=++quoteGeneration,pair=$('crypto-pair').value;
+  clearQuote();
+  set('crypto-quote-evidence','No observation accepted for this request.');
   button.disabled=true;
   set('crypto-quote-status','Requesting one public venue observation…');
   try{
-    const query=new URLSearchParams({pair:$('crypto-pair').value});
+    const query=new URLSearchParams({pair});
     const response=await fetch('/api/crypto/public-ticker?'+query,{
       method:'GET',headers:{Accept:'application/json'},cache:'no-store'
     });
     const report=await response.json();
+    if(generation!==quoteGeneration)return;
     if(!response.ok)throw new Error(report?.error||'Public quote unavailable');
+    if(report.pair!==pair)throw new Error('Response selection mismatch');
     if(report.status!=='RECENT_BY_REPORTED_TIMESTAMPS_ONLY'||
        report.feedCoverage!=='SINGLE_EXCHANGE_ONLY')
       throw new Error('Source validation incomplete');
@@ -107,14 +154,23 @@ async function inspectPublicQuote(){
       ' · receipt: '+report.receivedAt+' · reported age: '+
       report.quoteAgeMs+' ms. No independent authentication, trading, or orders.');
   }catch(error){
-    for(const id of ['crypto-quote-bid','crypto-quote-ask','crypto-quote-last'])set(id,'—');
+    if(generation!==quoteGeneration)return;
+    clearQuote();
     set('crypto-quote-status','No current public quote accepted: '+error.message);
     set('crypto-quote-evidence','The source is unavailable, stale, or rate-limited. No previous price is silently reused. No orders possible.');
   }finally{button.disabled=false;}
 }
 $('crypto-quote-inspect').addEventListener('click',inspectPublicQuote);
+function invalidateCandles(){
+  candleGeneration++;
+  clearCandles();
+  set('crypto-status','Selection changed. Inspect to obtain new candle evidence.');
+}
+$('crypto-interval').addEventListener('change',invalidateCandles);
 $('crypto-pair').addEventListener('change',()=>{
-  for(const id of ['crypto-quote-bid','crypto-quote-ask','crypto-quote-last'])set(id,'—');
+  invalidateCandles();
+  quoteGeneration++;
+  clearQuote();
   set('crypto-quote-status','Pair changed. Inspect to obtain a new source observation.');
   set('crypto-quote-evidence','Previously viewed quotes are cleared when selecting another market.');
 });
