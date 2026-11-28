@@ -16,7 +16,7 @@ jobs:
         with:
           node-version: '22'
       - name: Verify local fictional replay, recovery and report
-        run: node --test tests/fictional-clock-replay.test.mjs tests/fictional-clock-crash.test.mjs tests/fictional-clock-evidence-audit.test.mjs tests/fictional-clock-audit-report.test.mjs
+        run: node --test tests/fictional-clock-replay.test.mjs tests/fictional-clock-crash.test.mjs tests/fictional-clock-evidence-audit.test.mjs tests/fictional-clock-audit-report.test.mjs tests/fictional-clock-statistics.test.mjs
       - name: Check preinstalled browser
         run: test -x "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
       - name: Dedicated sandboxed report browser acceptance
