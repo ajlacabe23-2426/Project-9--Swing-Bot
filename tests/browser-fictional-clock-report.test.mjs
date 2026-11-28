@@ -85,6 +85,14 @@ test('sandboxed Chromium renders standalone fictional evidence report at desktop
         assert.match(info.body,/Interrupted or active write/);
         assert.match(info.body,/Unexpected entry/);
       }
+      for(const section of ['integrity','files','statistics']){
+        await evaluate("document.querySelector('nav a[href=\"#"+section+"\"]').click()");
+        await eventually(()=>evaluate("location.hash==='#"+section+"'"));
+        const target=await evaluate("document.getElementById('"+section+"').getBoundingClientRect().top");
+        assert.ok(target>=-2&&target<900,'Section heading is visible: '+section);
+      }
+      assert.equal(await evaluate("document.querySelectorAll('form,script,iframe').length"),0);
+      assert.match(await evaluate("document.body.innerText"),/70 of 72 unique readings/);
       assert.deepEqual(external,[]);assert.deepEqual(errors,[]);
     }finally{
       for(const cb of pending.values())clearTimeout(cb.timer);
