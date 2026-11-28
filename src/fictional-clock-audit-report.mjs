@@ -28,18 +28,20 @@ export async function renderClockAuditReport(directory){
     'dl div{padding:1rem;background:white;border:1px solid #bac5cc;border-radius:.5rem}dd{margin:0;font-size:1.5rem;font-weight:700}'+
     'table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{text-align:left;border-bottom:1px solid #bac5cc;padding:.65rem;overflow-wrap:anywhere}'+
     'caption{text-align:left}code{overflow-wrap:anywhere} .notice{border-left:4px solid #657581;padding-left:1rem}'+
+    'nav{display:flex;flex-wrap:wrap;gap:.75rem;margin:1rem 0}nav a{color:#164c6b;text-decoration:underline}a:focus-visible{outline:3px solid #164c6b;outline-offset:3px}'+ 
     '</style></head><body><main><h1>Classroom replay evidence audit</h1>'+
     '<p class="notice">Invented non-financial sensor observations only. Read-only inspection; no external connections or transactions.</p>'+
-    '<h2>Integrity: '+(audit.reviewRequired?'Review required':'Observed records match fixtures')+'</h2>'+
+    '<nav aria-label="Report sections"><a href="#integrity">Integrity overview</a><a href="#files">Observed files</a><a href="#statistics">Statistics examples</a></nav>'+
+    '<h2 id="integrity">Integrity: '+(audit.reviewRequired?'Review required':'Observed records match fixtures')+'</h2>'+
     '<dl><div><dt>Verified</dt><dd>'+audit.verified+'</dd></div>'+
     '<div><dt>Invalid</dt><dd>'+count('INVALID_EVIDENCE')+'</dd></div>'+
     '<div><dt>Pending</dt><dd>'+count('INTERRUPTED_OR_ACTIVE_WRITE')+'</dd></div>'+
     '<div><dt>Unexpected</dt><dd>'+count('UNEXPECTED_ENTRY')+'</dd></div></dl>'+
     '<p>Verified scenario coverage: '+audit.verified+' of 4 built-in fixtures. Record integrity does not establish full scenario coverage.</p>'+
-    '<h2>Observed files</h2><table><caption>Local inspection results</caption><thead><tr><th scope="col">File</th><th scope="col">Status</th></tr></thead>'+
+    '<h2 id="files">Observed files</h2><table><caption>Local inspection results</caption><thead><tr><th scope="col">File</th><th scope="col">Status</th></tr></thead>'+
     '<tbody>'+(rows||'<tr><td colspan="2">No evidence found.</td></tr>')+'</tbody></table>'+
     '<p>Inspection is not an atomic snapshot. Pending writes are preserved; a pending file may belong to an active process. Hashes do not authenticate authors or prove power-loss durability.</p>'+
-    '<h2>Descriptive statistics classroom examples</h2>'+
+    '<h2 id="statistics">Descriptive statistics classroom examples</h2>'+
     '<p>These examples are recomputed from built-in invented sensor fixtures, independently of which local files are verified. Duplicate times count once; missing readings are not filled.</p>'+
     '<ul>'+examples+'</ul>'+
     '<p>All values are invented sensor units. These are descriptive summaries, not independent random samples, forecasts or causal evidence.</p>'+
