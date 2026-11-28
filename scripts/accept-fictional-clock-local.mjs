@@ -26,6 +26,7 @@ if(args.length!==0&&!(args.length===1&&args[0]==='--browser')){
   function check(name,argv,env){
     const cleanEnv={...process.env,...env};
     delete cleanEnv.NODE_OPTIONS;
+    delete cleanEnv.NODE_TEST_CONTEXT;
     const r=run(process.execPath,['--test-reporter=tap',...argv],cleanEnv);
     const assessment=assessClassroomTestResult(r);
     report.checks.push({name,...assessment,exitCode:r.status,
