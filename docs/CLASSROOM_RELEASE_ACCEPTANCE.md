@@ -25,3 +25,7 @@ A single source cannot establish independent corroboration. A second source is o
 ## Decision
 
 Component CI passed on the baseline above. Physical Mac, independent external review, and whole-application acceptance remain outstanding. New changes require fresh exact-head CI. No deployment, private account connection or transaction capability is covered or enabled by this checklist.
+
+## Local acceptance runner
+
+From a clean checkout, run `node scripts/accept-fictional-clock-local.mjs --browser`. It reports the actual environment, revision, clean-checkout state, and offline component/browser test results. The command does not attest physical device identity or independent reviewer identity. A skipped browser or dirty checkout yields INCOMPLETE; a failing test yields FAIL. Record the JSON alongside the intended commit, not inside the evidence directory.
