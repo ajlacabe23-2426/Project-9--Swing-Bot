@@ -17,7 +17,8 @@ export async function renderClockAuditReport(directory){
     const s=summarizeClockScenario(scenario);
     return '<li><strong>'+escape(scenario)+'</strong>: '+s.uniqueCount+' of 72 unique readings; mean '+
       s.mean.toFixed(2)+'; median '+s.median.toFixed(2)+'; sample standard deviation '+
-      s.sampleStandardDeviation.toFixed(2)+'.</li>';
+      s.sampleStandardDeviation.toFixed(2)+'. Missing readings: '+s.missingCount+
+      '; duplicate observations: '+s.duplicateCount+'; out-of-order observations: '+s.reversedCount+'.</li>';
   }).join('');
   return '<!doctype html><html lang="en"><head><meta charset="utf-8">'+
     '<meta name="viewport" content="width=device-width,initial-scale=1">'+
